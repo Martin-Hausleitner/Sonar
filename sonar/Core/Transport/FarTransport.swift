@@ -2,9 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 
-#if canImport(LiveKitClient)
-import LiveKitClient
-#endif
+// LiveKit SDK will be imported in §10/7 once we actually consume it.
 
 /// LiveKit transport. Plan §10/7.
 final class FarTransport: Transport {

@@ -13,11 +13,13 @@ final class SpatialMixer {
     }
 
     func updateSpatialPosition(direction: simd_float3) {
-        environment.listenerAngularOrientation = AVAudio3DAngularOrientation(
-            yaw: atan2(direction.x, direction.z) * 180 / .pi,
-            pitch: asin(max(-1, min(1, direction.y))) * 180 / .pi,
-            roll: 0
-        )
+        let radToDeg: Float = 180 / .pi
+        let clampedY = max(Float(-1), min(Float(1), direction.y))
+        var orientation = AVAudio3DAngularOrientation()
+        orientation.yaw = atan2(direction.x, direction.z) * radToDeg
+        orientation.pitch = asin(clampedY) * radToDeg
+        orientation.roll = 0
+        environment.listenerAngularOrientation = orientation
         // TODO §10/11: move the AVAudioPlayerNode for the remote source to direction * 2.
     }
 }

@@ -46,13 +46,10 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         INFOPLIST_FILE: sonar/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: sonar/Resources/Sonar.entitlements
-    dependencies:
-      - package: LiveKit
-        product: LiveKitClient
-      - package: SwiftLog
-        product: Logging
-      - package: AsyncAlgorithms
-        product: AsyncAlgorithms
+    # SPM deps are intentionally empty. LiveKit will be added back in
+    # §10/7 when FarTransport actually consumes it. Adding heavy
+    # binary deps (WebRTC.xcframework via LiveKit) to a skeleton
+    # build risks linking issues that have nothing to do with our code.
 
   SonarTests:
     type: bundle.unit-test
@@ -61,14 +58,3 @@ targets:
       - sonarTests
     dependencies:
       - target: Sonar
-
-packages:
-  LiveKit:
-    url: https://github.com/livekit/client-sdk-swift
-    from: "2.13.0"
-  SwiftLog:
-    url: https://github.com/apple/swift-log
-    from: "1.5.4"
-  AsyncAlgorithms:
-    url: https://github.com/apple/swift-async-algorithms
-    from: "1.0.0"
