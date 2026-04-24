@@ -3,6 +3,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -12,22 +13,56 @@ jobs:
   build-and-test:
     name: Build & Test (iOS Simulator)
     runs-on: macos-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Print Xcode version
+      - name: Toolchain info
         run: |
           xcode-select -p
           xcodebuild -version
           swift --version
+          sw_vers
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          else
+            echo "xcodegen already installed: $(xcodegen --version)"
+          fi
 
       - name: Generate Xcode project
         run: xcodegen generate
+
+      - name: Show project structure
+        run: |
+          ls -la
+          ls -la Sonar.xcodeproj || true
+
+      - name: Pick first available iPhone simulator
+        id: pick-sim
+        run: |
+          set -e
+          xcrun simctl list devices available --json > sims.json
+          DEVICE_ID=$(python3 - <<'PY'
+          import json, sys
+          with open('sims.json') as f:
+              data = json.load(f)
+          for runtime, devs in data.get('devices', {}).items():
+              if 'iOS' not in runtime:
+                  continue
+              for d in devs:
+                  if d.get('isAvailable') and 'iPhone' in d.get('name',''):
+                      print(d['udid'])
+                      sys.exit(0)
+          sys.exit('no iPhone simulator available')
+          PY
+          )
+          echo "device-id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          echo "Picked simulator: $DEVICE_ID"
+          xcrun simctl list devices available | grep -A0 "$DEVICE_ID" || true
 
       - name: Resolve Swift packages
         run: |
@@ -35,40 +70,25 @@ jobs:
             -project Sonar.xcodeproj \
             -scheme Sonar
 
-      - name: List available simulators
-        run: |
-          xcrun simctl list devices available | head -50
-
       - name: Build (Debug, iOS Simulator)
         run: |
-          set -o pipefail
           xcodebuild build \
             -project Sonar.xcodeproj \
             -scheme Sonar \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=YES \
-            | xcbeautify --renderer github-actions || \
-          xcodebuild build \
-            -project Sonar.xcodeproj \
-            -scheme Sonar \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=YES
 
-      - name: Run unit tests (headless logic only)
+      - name: Run unit tests
         run: |
           xcodebuild test \
             -project Sonar.xcodeproj \
             -scheme Sonar \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \

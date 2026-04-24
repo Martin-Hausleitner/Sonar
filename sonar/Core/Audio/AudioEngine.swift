@@ -14,7 +14,7 @@ final class AudioEngine {
         try session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
-            options: [.mixWithOthers, .allowBluetoothHFP, .allowAirPlay]
+            options: [.mixWithOthers, .allowAirPlay]
         )
         try session.setActive(true, options: [])
 
