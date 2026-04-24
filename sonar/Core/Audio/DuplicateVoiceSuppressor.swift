@@ -1,6 +1,7 @@
 import AVFoundation
 import Accelerate
 import Foundation
+import QuartzCore
 
 /// The "doppel-Audio-Problem" solver. Plan §6.
 ///
@@ -45,7 +46,3 @@ final class DuplicateVoiceSuppressor {
         return currentSuppression
     }
 }
-
-#if canImport(QuartzCore)
-import QuartzCore
-#endif

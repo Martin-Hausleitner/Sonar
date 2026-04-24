@@ -30,48 +30,15 @@ targets:
       - path: sonar
         excludes:
           - "**/.DS_Store"
+          - "Resources/Info.plist"
+          - "Resources/Sonar.entitlements"
     resources:
       - path: sonar/Resources/Assets.xcassets
         optional: true
-    info:
-      path: sonar/Resources/Info.plist
-      properties:
-        CFBundleDisplayName: Sonar
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
-        UILaunchScreen: {}
-        UIRequiredDeviceCapabilities:
-          - arm64
-          - bluetooth-le
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        NSMicrophoneUsageDescription: >
-          Sonar braucht dein Mikro, damit du mit deinen Freunden reden kannst.
-        NSBluetoothAlwaysUsageDescription: >
-          Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner
-          Freunde zu finden.
-        NSLocalNetworkUsageDescription: >
-          Sonar redet direkt mit anderen iPhones in deinem WLAN oder in
-          Bluetooth-Reichweite, ohne Umweg über das Internet.
-        NSNearbyInteractionUsageDescription: >
-          Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem
-          Gesprächspartner zentimetergenau zu messen.
-        NSAppleMusicUsageDescription: >
-          Sonar mischt Musik aus deiner Apple-Music-Bibliothek im
-          Club-Modus dezent in den Hintergrund.
-        NSBonjourServices:
-          - _sonar._tcp
-          - _sonar._udp
-        UIBackgroundModes:
-          - audio
-          - voip
-          - processing
-        NSSupportsLiveActivities: true
-    entitlements:
-      path: sonar/Resources/Sonar.entitlements
-      properties:
-        com.apple.developer.networking.multipath: true
-        aps-environment: development
+    # Info.plist is hand-maintained at sonar/Resources/Info.plist —
+    # XcodeGen would otherwise overwrite it on every `xcodegen generate`.
+    # Same for entitlements — file is hand-maintained.
+    # path: sonar/Resources/Sonar.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.sonar.ios

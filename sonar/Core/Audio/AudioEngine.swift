@@ -6,7 +6,6 @@ import Foundation
 @MainActor
 final class AudioEngine {
     private let engine = AVAudioEngine()
-    private var inputTap: AVAudioNodeTapBlock?
 
     let captured = PassthroughSubject<AVAudioPCMBuffer, Never>()
 

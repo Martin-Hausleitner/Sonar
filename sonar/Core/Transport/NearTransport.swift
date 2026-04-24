@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 import MultipeerConnectivity
+import UIKit
 
 /// Multipeer Connectivity transport. Plan §10/4.
 /// Uses output streams (not `send(data:)`) for the audio path; see RESEARCH.md §1.
@@ -73,7 +74,3 @@ extension NearTransport: MCNearbyServiceBrowserDelegate {
     }
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
 }
-
-#if canImport(UIKit)
-import UIKit
-#endif

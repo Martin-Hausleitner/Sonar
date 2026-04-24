@@ -2,7 +2,6 @@ import AVFoundation
 import CoreBluetooth
 import NearbyInteraction
 import Network
-import SwiftUI
 
 /// Asks for the four permissions Sonar needs at first launch. Plan §10/2.
 ///
@@ -21,7 +20,6 @@ final class PermissionsManager: NSObject, ObservableObject {
 
     private var btManager: CBCentralManager?
     private var localNetBrowser: NWBrowser?
-    private var niProbe: NISession?
 
     var allGranted: Bool {
         microphone == .granted &&
@@ -78,13 +76,16 @@ final class PermissionsManager: NSObject, ObservableObject {
     }
 
     private func requestNearbyInteraction() {
+        // iOS only shows the NSNearbyInteractionUsageDescription dialog the
+        // first time `NISession.run(_:)` is called with a real peer token —
+        // reading `deviceCapabilities` does NOT trigger the prompt. We
+        // therefore can only check hardware capability here, not user consent.
+        // The actual prompt fires later, in NIRangingEngine.start(with:).
         let session = NISession()
-        session.delegate = self
-        // Running an empty config triggers the prompt. We immediately invalidate.
-        let cap = session.deviceCapabilities
-        nearbyInteraction = cap.supportsPreciseDistanceMeasurement ? .granted : .denied
+        nearbyInteraction = session.deviceCapabilities.supportsPreciseDistanceMeasurement
+            ? .granted
+            : .denied
         session.invalidate()
-        niProbe = nil
     }
 }
 
@@ -103,6 +104,3 @@ extension PermissionsManager: CBCentralManagerDelegate {
     }
 }
 
-extension PermissionsManager: NISessionDelegate {
-    nonisolated func session(_ session: NISession, didInvalidateWith error: Error) {}
-}
