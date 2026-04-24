@@ -83,12 +83,30 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=YES 2>&1 | tee build.log
 
+      - name: Test (Debug, iOS Simulator)
+        id: test
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Sonar.xcodeproj \
+            -scheme Sonar \
+            -configuration Debug \
+            -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES \
+            -resultBundlePath TestResults.xcresult 2>&1 | tee test.log
+
       - name: Extract diagnostics
         if: always()
         run: |
           {
-            echo "## Build outcome: ${{ steps.build.outcome }}"
             echo "## XcodeGen outcome: ${{ steps.xcodegen.outcome }}"
+            echo "## Build outcome: ${{ steps.build.outcome }}"
+            echo "## Test outcome: ${{ steps.test.outcome }}"
             echo
             echo "## XcodeGen log (tail 80)"
             tail -80 xcodegen.log 2>/dev/null || echo "(no xcodegen.log)"
@@ -96,8 +114,14 @@ jobs:
             echo "## Errors and warnings from build (last 60)"
             grep -E "(error:|warning:|note:|Undefined symbol|Failed |Linker command failed)" build.log 2>/dev/null | tail -60 || echo "(no build.log or no matches)"
             echo
-            echo "## Build log tail (last 120 lines)"
-            tail -120 build.log 2>/dev/null || echo "(no build.log)"
+            echo "## Errors and warnings from test (last 60)"
+            grep -E "(error:|warning:|FAIL|XCTAssert|Test Suite|Test Case)" test.log 2>/dev/null | tail -60 || echo "(no test.log or no matches)"
+            echo
+            echo "## Build log tail (last 80 lines)"
+            tail -80 build.log 2>/dev/null || echo "(no build.log)"
+            echo
+            echo "## Test log tail (last 80 lines)"
+            tail -80 test.log 2>/dev/null || echo "(no test.log)"
           } > diagnostics.txt
           cat diagnostics.txt
 
@@ -109,12 +133,14 @@ jobs:
           path: |
             xcodegen.log
             build.log
+            test.log
             diagnostics.txt
             sims.json
+            TestResults.xcresult
           if-no-files-found: ignore
 
       - name: Post issue if failed
-        if: failure() || steps.build.outcome == 'failure' || steps.xcodegen.outcome == 'failure'
+        if: failure() || steps.build.outcome == 'failure' || steps.xcodegen.outcome == 'failure' || steps.test.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
@@ -141,6 +167,6 @@ jobs:
               labels: ['ci-failure']
             });
 
-      - name: Fail the job if build failed
-        if: steps.build.outcome == 'failure' || steps.xcodegen.outcome == 'failure'
+      - name: Fail the job if any step failed
+        if: steps.build.outcome == 'failure' || steps.xcodegen.outcome == 'failure' || steps.test.outcome == 'failure'
         run: exit 1

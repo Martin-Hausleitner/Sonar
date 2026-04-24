@@ -78,14 +78,15 @@ final class PermissionsManager: NSObject, ObservableObject {
     private func requestNearbyInteraction() {
         // iOS only shows the NSNearbyInteractionUsageDescription dialog the
         // first time `NISession.run(_:)` is called with a real peer token —
-        // reading `deviceCapabilities` does NOT trigger the prompt. We
+        // reading deviceCapabilities does NOT trigger the prompt. We
         // therefore can only check hardware capability here, not user consent.
         // The actual prompt fires later, in NIRangingEngine.start(with:).
-        let session = NISession()
-        nearbyInteraction = session.deviceCapabilities.supportsPreciseDistanceMeasurement
+        //
+        // NISession.deviceCapabilities is a STATIC property in iOS 17+, not
+        // an instance property — earlier versions of this code had it wrong.
+        nearbyInteraction = NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
             ? .granted
             : .denied
-        session.invalidate()
     }
 }
 

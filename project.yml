@@ -49,6 +49,10 @@ targets:
     # binary deps (WebRTC.xcframework via LiveKit) to a skeleton
     # build risks linking issues that have nothing to do with our code.
 
-  # SonarTests target intentionally removed for this iteration to isolate
-  # whether failures are in the test bundle wiring or in the app target.
-  # Re-add once we have a green app build.
+  SonarTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - sonarTests
+    dependencies:
+      - target: Sonar

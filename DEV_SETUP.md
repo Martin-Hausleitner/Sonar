@@ -55,8 +55,7 @@ Console-Log ab und übertrage sie hierhin:
 ```swift
 // in SonarApp.swift, init()
 import NearbyInteraction
-let session = NISession()
-print("UWB caps:", session.deviceCapabilities)
+print("UWB caps:", NISession.deviceCapabilities)
 ```
 
 | Property | Erwartet (17 Pro) | Tatsächlich |

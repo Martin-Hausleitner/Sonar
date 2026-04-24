@@ -64,7 +64,7 @@ liegt der Wrapper als Stub, das Package wird in Schritt 3 gefüllt.
 **Code-Pfad.**
 
 ```swift
-let cap = NISession().deviceCapabilities
+let cap = NISession.deviceCapabilities
 guard cap.supportsExtendedDistanceMeasurement else {
     fallbackToRSSI()
     return
