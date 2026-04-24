@@ -3,8 +3,8 @@ import AppIntents
 enum ListeningMode: String, AppEnum {
     case off, transparency, noiseCancellation, adaptive
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "AirPods Listening Mode"
-    static var caseDisplayRepresentations: [Self: DisplayRepresentation] = [
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "AirPods Listening Mode"
+    static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
         .off: "Off",
         .transparency: "Transparency",
         .noiseCancellation: "Noise Cancellation",
@@ -13,7 +13,7 @@ enum ListeningMode: String, AppEnum {
 }
 
 struct SetListeningModeIntent: AppIntent {
-    static var title: LocalizedStringResource = "AirPods Listening Mode setzen"
+    static let title: LocalizedStringResource = "AirPods Listening Mode setzen"
 
     @Parameter(title: "Mode")
     var mode: ListeningMode
