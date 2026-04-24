@@ -1,0 +1,34 @@
+# Xcode / generated project
+Sonar.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+DerivedData/
+build/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Secrets
+*.env
+.env.*
+*.p12
+*.cer
+*.mobileprovision
+
+# Sentry
+.sentryclirc
+
+# Python (sonar-agent)
+sonar-agent/__pycache__/
+sonar-agent/.venv/
+*.pyc
+
+# Vapor (sonar-server)
+sonar-server/.build/
