@@ -3,12 +3,14 @@ import Accelerate
 import Foundation
 import QuartzCore
 
-/// The "doppel-Audio-Problem" solver. Plan §6.
+/// The "doppel-Audio-Problem" solver. Plan §6, LATENCY.md.
 ///
-/// Three mechanisms:
-///  1. Distance gate (§10/6): mute remote voice when partner is physically close.
-///  2. Voice-Processing-IO (handled by AudioEngine, §6.1).
-///  3. Cross-Device fingerprint correlation (this class, §6.1 mech. 3).
+/// Latency-relevant choices:
+///  - Correlation window 100 ms (was 200) — tight enough that the duck
+///    happens before the partner's voice has fully echoed back.
+///  - Threshold 0.6, gain on duck -30 dB — both pulled from LatencyBudget.
+///  - Fingerprint compute is O(n·log n) FFT; runs on the audio thread, so
+///    must complete inside the per-frame budget (~10 ms).
 final class DuplicateVoiceSuppressor {
     struct FingerPrint: Sendable {
         let timestamp: TimeInterval
@@ -39,10 +41,13 @@ final class DuplicateVoiceSuppressor {
 
     func analyzeIncomingMic(_ buffer: AVAudioPCMBuffer) -> Float {
         let mic = FingerPrint.compute(from: buffer)
-        let cutoff = mic.timestamp - 0.2
+        let windowSec = Double(LatencyBudget.duplicateSuppressorWindowMs) / 1000.0
+        let cutoff = mic.timestamp - windowSec
         let recent = ring.filter { $0.timestamp >= cutoff }
         let maxCorr = recent.map { mic.correlation(with: $0) }.max() ?? 0
-        currentSuppression = maxCorr > 0.6 ? 0.03 : 1.0
+        currentSuppression = maxCorr > LatencyBudget.duplicateSuppressorThreshold
+            ? LatencyBudget.duplicateSuppressorGainOnDuck
+            : 1.0
         return currentSuppression
     }
 }

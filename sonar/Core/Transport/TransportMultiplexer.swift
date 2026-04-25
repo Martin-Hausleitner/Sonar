@@ -2,7 +2,8 @@ import AVFoundation
 import Combine
 import Foundation
 
-/// Holds Near and Far in parallel and crossfades between them. Plan §10/8.
+/// Holds Near and Far in parallel and crossfades between them.
+/// Plan §10/8, LATENCY.md (`crossfadeMs = 100` — was 200).
 @MainActor
 final class TransportMultiplexer {
     private let near: NearTransport
@@ -15,10 +16,14 @@ final class TransportMultiplexer {
         self.far = far
     }
 
-    /// Decide which transport drives the audible output based on distance and link quality.
-    /// Crossfade target gain over `crossfade` seconds. Plan §10/8 default: 0.2 s.
-    func select(_ kind: TransportKind, crossfade: Double = 0.2) {
-        // TODO §10/8: hand crossfade off to AudioRouter.
+    /// Switch transports. Default crossfade pulled from LatencyBudget so the
+    /// recovery-lag stays well below the 150 ms Near alarm threshold.
+    func select(
+        _ kind: TransportKind,
+        crossfadeMs: Int = LatencyBudget.crossfadeMs
+    ) {
+        // TODO §10/8: hand crossfade off to AudioRouter using the supplied
+        //            duration so both transports overlap exactly that long.
         active = kind
     }
 }
