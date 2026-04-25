@@ -4,17 +4,21 @@ import Foundation
 import MultipeerConnectivity
 import UIKit
 
-/// Multipeer Connectivity transport. Plan §10/4.
+/// Multipeer Connectivity transport (WLAN / AWDL Bonjour). Plan §10/4, §2.2 Pfad 2.
 /// Uses output streams (not `send(data:)`) for the audio path; see RESEARCH.md §1.
-final class NearTransport: NSObject, Transport {
+/// Conforms to both the old Transport protocol and the new BondedPath protocol.
+final class NearTransport: NSObject, Transport, BondedPath {
     let kind: TransportKind = .near
+    let id: MultipathBonder.PathID = .multipeer
+    var estimatedCostPerByte: Double { 0.001 }   // WLAN: cheap but not free
 
     private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
-    private let inboundSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
     private let qualitySubject = CurrentValueSubject<Double, Never>(0)
 
     var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundSubject.eraseToAnyPublisher() }
+    var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundFrameSubject.eraseToAnyPublisher() }
     var qualityScore: AnyPublisher<Double, Never> { qualitySubject.eraseToAnyPublisher() }
 
     private let serviceType = "sonar-mpc"
@@ -45,8 +49,15 @@ final class NearTransport: NSObject, Transport {
         connectedSubject.send(false)
     }
 
-    func send(_ buffer: AVAudioPCMBuffer) async {
-        // TODO §10/4: encode to Opus, write to MCSession output stream per peer.
+    // Legacy AVAudioPCMBuffer send (kept for TransportMultiplexer compatibility).
+    func send(_ buffer: AVAudioPCMBuffer) async {}
+
+    // BondedPath send — writes wire-encoded AudioFrame to all connected peers.
+    func send(_ frame: AudioFrame) async {
+        let data = frame.wireData
+        let peers = session.connectedPeers
+        guard !peers.isEmpty else { return }
+        try? session.send(data, toPeers: peers, with: .unreliable)
     }
 }
 
@@ -54,10 +65,14 @@ extension NearTransport: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         connectedSubject.send(state == .connected)
     }
-    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {}
-    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
-        // TODO §10/4: read Opus frames from stream, decode into AVAudioPCMBuffer.
+
+    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        if let frame = AudioFrame(wireData: data) {
+            inboundFrameSubject.send(frame)
+        }
     }
+
+    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
     func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {}
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
 }

@@ -2,30 +2,45 @@ import AVFoundation
 import Combine
 import Foundation
 
-// LiveKit SDK will be imported in §10/7 once we actually consume it.
-
-/// LiveKit transport. Plan §10/7.
-final class FarTransport: Transport {
+/// Cellular / internet transport via MPQUIC. Plan §2.2 Pfad 3.
+/// Wraps MPQUICTransport and also satisfies the legacy Transport protocol
+/// for TransportMultiplexer compatibility.
+final class FarTransport: Transport, BondedPath {
     let kind: TransportKind = .far
+    let id: MultipathBonder.PathID = .mpquic
+    var estimatedCostPerByte: Double { 1.0 }
 
     private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
-    private let inboundSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
     private let qualitySubject = CurrentValueSubject<Double, Never>(0)
 
     var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundSubject.eraseToAnyPublisher() }
+    var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundFrameSubject.eraseToAnyPublisher() }
     var qualityScore: AnyPublisher<Double, Never> { qualitySubject.eraseToAnyPublisher() }
 
+    private var mpquic: MPQUICTransport?
+    private var cancellables = Set<AnyCancellable>()
+
+    func configure(host: String, port: UInt16) {
+        let t = MPQUICTransport(host: host, port: port)
+        mpquic = t
+        t.isConnected.subscribe(connectedSubject).store(in: &cancellables)
+        t.inboundFrames.subscribe(inboundFrameSubject).store(in: &cancellables)
+    }
+
     func start() async throws {
-        // TODO §10/7: request room token from sonar-server, connect Room,
-        // publish a custom AudioTrack fed from AudioEngine, subscribe peers.
+        mpquic?.connect()
     }
 
     func stop() async {
+        mpquic?.disconnect()
         connectedSubject.send(false)
     }
 
-    func send(_ buffer: AVAudioPCMBuffer) async {
-        // TODO §10/7: push PCM into LiveKit's custom audio source.
+    func send(_ buffer: AVAudioPCMBuffer) async {}
+
+    func send(_ frame: AudioFrame) async {
+        await mpquic?.send(frame)
     }
 }
