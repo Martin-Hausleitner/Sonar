@@ -1,5 +1,6 @@
-import XCTest
+import AVFoundation
 import Darwin
+import XCTest
 @testable import Sonar
 
 /// Headless tests for the latency budget contract. These verify that the
