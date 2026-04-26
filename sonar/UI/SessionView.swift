@@ -10,6 +10,12 @@ struct SessionView: View {
     @State private var sessionActive = false
     @State private var previewDistance: Double? = nil
 
+    // Live stats
+    @State private var sessionStart: Date?
+    @State private var sessionElapsed: String = "0:00"
+    @State private var latencyMs: Double?  = nil
+    private let statsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -61,10 +67,27 @@ struct SessionView: View {
                     coordinator.appState = appState
                     coordinator.start()
                     animateFakeDistance()
+                    sessionStart = Date()
                 } else {
                     coordinator.stop()
                     previewDistance = nil
+                    sessionStart = nil
+                    latencyMs = nil
                 }
+            }
+        }
+        .onReceive(statsTimer) { _ in
+            guard sessionActive else { return }
+            // Elapsed time
+            if let start = sessionStart {
+                let s = Int(Date().timeIntervalSince(start))
+                sessionElapsed = s < 3600
+                    ? String(format: "%d:%02d", s / 60, s % 60)
+                    : String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+            }
+            // Live latency
+            if let snap = Metrics.shared.percentiles(.captured, .rendered) {
+                latencyMs = snap.p50
             }
         }
     }
@@ -189,27 +212,27 @@ struct SessionView: View {
 
     private var liveConnectionCard: some View {
         VStack(spacing: 12) {
-            // Header row
+            // Header: label + score
             HStack {
                 Label("Verbindung", systemImage: "antenna.radiowaves.left.and.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 HStack(spacing: 4) {
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 6, height: 6)
-                    Text("\(appState.signalScore) / 100")
+                    Circle().fill(accentColor).frame(width: 6, height: 6)
+                    Text("\(appState.signalScore)/100")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(accentColor)
+                    Text(gradeLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             // Quality bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.08))
-                        .frame(height: 5)
+                    Capsule().fill(.white.opacity(0.08)).frame(height: 5)
                     Capsule()
                         .fill(LinearGradient(colors: [.cyan, accentColor], startPoint: .leading, endPoint: .trailing))
                         .frame(width: geo.size.width * CGFloat(appState.signalScore) / 100, height: 5)
@@ -218,7 +241,7 @@ struct SessionView: View {
             }
             .frame(height: 5)
 
-            // Path pills + REC indicator
+            // Active path pills + REC
             HStack(spacing: 6) {
                 pathPill("dot.radiowaves.left.and.right", "AWDL",     active: appState.activePathCount > 0)
                 pathPill("bluetooth",                     "Bluetooth", active: appState.activePathCount > 1)
@@ -231,21 +254,111 @@ struct SessionView: View {
                 }
             }
 
-            // Battery tier warning
-            if appState.batteryTier == .saver || appState.batteryTier == .critical {
-                Label(
-                    appState.batteryTier == .critical
-                        ? "Kritischer Akkustand – Qualität reduziert"
-                        : "Energiesparmodus – Redundanz reduziert",
-                    systemImage: "battery.25"
+            Divider().background(.white.opacity(0.08))
+
+            // 4-cell metrics grid
+            HStack(spacing: 0) {
+                statCell(
+                    icon: "timer",
+                    label: "Session",
+                    value: sessionStart != nil ? sessionElapsed : "—",
+                    color: .cyan
                 )
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                statCell(
+                    icon: "waveform.path.ecg",
+                    label: "Latenz",
+                    value: latencyMs != nil ? String(format: "%.0f ms", latencyMs!) : "—",
+                    color: latencyColor
+                )
+                statCell(
+                    icon: "location.fill",
+                    label: "Distanz",
+                    value: distanceLabel,
+                    color: .white
+                )
+                statCell(
+                    icon: batteryIcon,
+                    label: "Akku",
+                    value: batteryLabel,
+                    color: batteryColor
+                )
+            }
+
+            // Battery warning (only for critical states)
+            if appState.batteryTier == .critical {
+                Label("Kritischer Akkustand – Qualität stark reduziert", systemImage: "battery.0")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func statCell(icon: String, label: String, value: String, color: Color) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color.opacity(0.7))
+            Text(value)
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(color)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var gradeLabel: String {
+        switch appState.signalGrade {
+        case .excellent: return "Excellent"
+        case .good:      return "Good"
+        case .ok:        return "OK"
+        case .poor:      return "Poor"
+        case .unstable:  return "Unstable"
+        }
+    }
+
+    private var distanceLabel: String {
+        if let d = previewDistance { return String(format: "%.1f m", d) }
+        if case .near(let d) = appState.phase { return String(format: "%.1f m", d) }
+        return "—"
+    }
+
+    private var latencyColor: Color {
+        guard let ms = latencyMs else { return .secondary }
+        return ms < 40 ? .green : ms < 80 ? .yellow : .red
+    }
+
+    private var batteryLabel: String {
+        switch appState.batteryTier {
+        case .normal:   return "Normal"
+        case .eco:      return "Eco"
+        case .saver:    return "Sparen"
+        case .critical: return "Kritisch"
+        }
+    }
+
+    private var batteryIcon: String {
+        switch appState.batteryTier {
+        case .normal:   return "battery.100"
+        case .eco:      return "battery.75"
+        case .saver:    return "battery.25"
+        case .critical: return "battery.0"
+        }
+    }
+
+    private var batteryColor: Color {
+        switch appState.batteryTier {
+        case .normal: return .green
+        case .eco:    return .yellow
+        case .saver:  return .orange
+        case .critical: return .red
+        }
     }
 
     private func pathPill(_ icon: String, _ label: String, active: Bool) -> some View {
