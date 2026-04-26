@@ -83,5 +83,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Für Live-Transkription während der Session."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Für Sprachaufnahme während der Session."
     dependencies:
       - target: Sonar

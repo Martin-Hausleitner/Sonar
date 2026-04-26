@@ -28,6 +28,7 @@ final class SessionCoordinatorTests: XCTestCase {
         let c = SessionCoordinator()
         c.start()
         XCTAssertEqual(c.phase, .connecting)
+        c.stop()   // cancel background task to avoid leaking transcription into later tests
     }
 
     func testStopReturnsToIdle() {

@@ -6,15 +6,15 @@ import NearbyInteraction
 struct DeviceCapabilities: Sendable {
     let hasUWB: Bool
     let uwbGen: UWBGen?
-    let hasNeuralEngine: Bool   // A12 Bionic and later
+    let hasNeuralEngine: Bool
     let supportsSpatialAudio: Bool
 
     enum UWBGen: Sendable { case gen1, gen2 }
 
     enum SonarTier: Sendable {
         case a  // iPhone 17 Pro (U2) — full experience
-        case b  // iPhone 14-16 (U1) — ~80 %
-        case c  // No UWB / older — ~60 %
+        case b  // iPhone 14–16 (U1) — ~80%
+        case c  // No UWB / older  — ~60%
     }
 
     var sonarTier: SonarTier {
@@ -23,26 +23,24 @@ struct DeviceCapabilities: Sendable {
         return .c
     }
 
-    /// Detect from the current device.
     static func detect() -> DeviceCapabilities {
         let uwbSupported = NISession.deviceCapabilities.supportsDirectionMeasurement ||
                            NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
-
-        // U2 ships with iPhone 16 Pro and later (we can't distinguish U1/U2 at runtime via public API,
-        // so we approximate: check model identifier against known U2 models).
         let modelID = Self.modelIdentifier()
         let isU2Model = modelID.hasPrefix("iPhone17") || modelID.hasPrefix("iPhone18")
-
         let uwbGen: UWBGen? = uwbSupported ? (isU2Model ? .gen2 : .gen1) : nil
-
-        // Neural Engine: A12 Bionic (iPhone XS) and later. All devices that have UWB have NE.
         let hasNE = uwbSupported || Self.hasNeuralEngineHeuristic()
 
-        // Spatial Audio requires AirPods Pro 2/3 + iPhone 14+; we can't detect AirPods model
-        // at capabilities-detection time, so we use device model as a proxy.
-        let supportsSpatial = !modelID.hasPrefix("iPhone1") || modelID.hasPrefix("iPhone14") ||
-                               modelID.hasPrefix("iPhone15") || modelID.hasPrefix("iPhone16") ||
-                               modelID.hasPrefix("iPhone17")
+        // Spatial Audio requires iPhone 14+ hardware. Parse the model number
+        // so new generations (iPhone18, 19, ...) are automatically included.
+        let spatialMinGeneration = 14
+        let supportsSpatial: Bool = {
+            guard let numStr = modelID
+                .components(separatedBy: "iPhone").last?
+                .components(separatedBy: ",").first,
+                  let gen = Int(numStr) else { return false }
+            return gen >= spatialMinGeneration
+        }()
 
         return DeviceCapabilities(
             hasUWB: uwbSupported,
@@ -61,8 +59,6 @@ struct DeviceCapabilities: Sendable {
     }
 
     private static func hasNeuralEngineHeuristic() -> Bool {
-        // All iPhones since iPhone XS (2018) have the Neural Engine.
-        // If the device supports VoiceProcessing it's at least A-series modern enough.
         return AVAudioSession.sharedInstance().availableInputs?.isEmpty == false
     }
 }

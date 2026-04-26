@@ -41,6 +41,8 @@
     <string>Sonar redet direkt mit anderen iPhones in deinem WLAN oder in Bluetooth-Reichweite, ohne Umweg über das Internet.</string>
     <key>NSNearbyInteractionUsageDescription</key>
     <string>Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem Gesprächspartner zentimetergenau zu messen.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.</string>
     <key>NSAppleMusicUsageDescription</key>
     <string>Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund.</string>
 

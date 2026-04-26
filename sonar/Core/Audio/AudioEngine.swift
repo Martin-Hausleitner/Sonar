@@ -16,6 +16,11 @@ final class AudioEngine {
     /// transport/decode so glass-to-glass latency can be measured end-to-end.
     let captured = PassthroughSubject<(frameID: UInt64, buffer: AVAudioPCMBuffer), Never>()
 
+    /// Attach a SpatialMixer before the engine starts so its nodes are part of the graph.
+    func connect(spatialMixer: SpatialMixer) {
+        spatialMixer.prepare(engine: engine)
+    }
+
     func prepare() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(

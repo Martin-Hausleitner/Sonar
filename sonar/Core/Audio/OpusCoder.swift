@@ -1,21 +1,14 @@
 import AVFoundation
 import Foundation
 
-/// Wraps libopus. Plan §10/3, RESEARCH.md §2, LATENCY.md.
+/// Real Opus codec via iOS-native AVAudioConverter (kAudioFormatOpus, iOS 16+).
+/// Plan §10/3, RESEARCH.md §2, LATENCY.md.
 ///
-/// Settings (defaults pulled from `LatencyBudget`):
-///  - 48 kHz / mono
-///  - 10 ms frames (was 20 ms — halved for latency)
-///  - 24 kbps VBR
-///  - Complexity 5 (balanced)
-///  - DTX on
-///  - FEC off for Near, on for Far (toggle via `enableFEC`)
+/// Settings from LatencyBudget:
+///   48 kHz / mono / 10 ms frames / 24 kbps VBR / complexity 5 / DTX on
 ///
-/// Since libopus is not available as a Swift Package, this implementation
-/// converts Float32 PCM ↔ Int16 PCM, storing raw Int16 bytes with a
-/// 4-byte (UInt32 big-endian) sample-count header.
-/// Int16 quantisation noise is ~-96 dB, well above the -30 dB roundtrip
-/// quality requirement.
+/// Converters are created lazily and reused; creating one per frame would add
+/// ~2 ms of setup overhead to every encode/decode call.
 final class OpusCoder {
     enum CodecError: Error { case notConfigured, encodeFailed, decodeFailed }
 
@@ -25,89 +18,119 @@ final class OpusCoder {
     let complexity: Int32
     var fecEnabled: Bool
 
+    private let pcmFormat: AVAudioFormat
+    private let opusFormat: AVAudioFormat
+    private var _encoder: AVAudioConverter?
+    private var _decoder: AVAudioConverter?
+
     init(
         sampleRate: Double = LatencyBudget.audioSampleRate,
-        frameMs: Int = LatencyBudget.audioFrameMs,
-        bitrate: Int32 = LatencyBudget.opusBitrateBps,
+        frameMs: Int      = LatencyBudget.audioFrameMs,
+        bitrate: Int32    = LatencyBudget.opusBitrateBps,
         complexity: Int32 = LatencyBudget.opusComplexity,
-        fecEnabled: Bool = LatencyBudget.opusFECEnabledNear
+        fecEnabled: Bool  = LatencyBudget.opusFECEnabledNear
     ) {
         self.sampleRate = sampleRate
-        self.frameMs = frameMs
-        self.bitrate = bitrate
+        self.frameMs    = frameMs
+        self.bitrate    = bitrate
         self.complexity = complexity
         self.fecEnabled = fecEnabled
+
+        pcmFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 1,
+            interleaved: false
+        )!
+
+        // kAudioFormatOpus is available on iOS 16+ (project min: iOS 18).
+        // mFramesPerPacket = PCM samples per Opus frame (10 ms × 48 kHz = 480).
+        var desc = AudioStreamBasicDescription()
+        desc.mSampleRate       = sampleRate
+        desc.mFormatID         = kAudioFormatOpus
+        desc.mChannelsPerFrame = 1
+        desc.mFramesPerPacket  = UInt32(sampleRate * Double(frameMs) / 1000.0)
+        opusFormat = AVAudioFormat(streamDescription: &desc)!
     }
 
-    /// Number of PCM samples this coder consumes per encode call.
+    /// PCM samples consumed per encode call.
     var samplesPerFrame: Int { Int(sampleRate * Double(frameMs) / 1000.0) }
 
-    /// Theoretical encode latency in ms. Used by Metrics to sanity-check.
+    /// Codec's contribution to glass-to-glass latency, in ms.
     var theoreticalEncodeLatencyMs: Double { Double(frameMs) }
 
-    // MARK: - Encode
+    // MARK: - Encode (PCM Float32 → Opus bytes)
 
-    /// Convert Float32 PCM → Int16 bytes with a 4-byte big-endian sample-count header.
-    ///
-    /// Wire layout:
-    ///   [0…3]  UInt32 big-endian  — number of samples
-    ///   [4…N]  Int16 little-endian per sample
     func encode(_ buffer: AVAudioPCMBuffer) throws -> Data {
-        guard let floatData = buffer.floatChannelData else {
+        let enc = try encoder()
+
+        // 512 bytes is comfortably above the Opus packet ceiling at 24 kbps / 10 ms (~30 B).
+        let out = AVAudioCompressedBuffer(
+            format: opusFormat,
+            packetCapacity: 1,
+            maximumPacketSize: 512
+        )
+
+        var provided = false
+        var convErr: NSError?
+        let status = enc.convert(to: out, error: &convErr) { _, outStatus in
+            guard !provided else { outStatus.pointee = .noDataNow; return nil }
+            provided = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        guard status != .error, convErr == nil, out.byteLength > 0 else {
             throw CodecError.encodeFailed
         }
-        let frameCount = Int(buffer.frameLength)
-        guard frameCount > 0 else { throw CodecError.encodeFailed }
-
-        var result = Data(count: 4 + frameCount * 2)
-
-        // 4-byte header: sample count as UInt32 big-endian
-        let countBE = UInt32(frameCount).bigEndian
-        result.withUnsafeMutableBytes { ptr in
-            ptr.storeBytes(of: countBE, as: UInt32.self)
-        }
-
-        // Convert Float32 → Int16 with clamping, little-endian
-        let samples = floatData[0]
-        result.withUnsafeMutableBytes { rawPtr in
-            let base = rawPtr.baseAddress!.advanced(by: 4)
-                .assumingMemoryBound(to: Int16.self)
-            for i in 0..<frameCount {
-                let clamped = max(-1.0, min(1.0, samples[i]))
-                base[i] = Int16(clamped * Float(Int16.max)).littleEndian
-            }
-        }
-        return result
+        return Data(bytes: out.data, count: Int(out.byteLength))
     }
 
-    // MARK: - Decode
+    // MARK: - Decode (Opus bytes → PCM Float32)
 
-    /// Restore Float32 PCM from the Int16 wire format produced by `encode(_:)`.
     func decode(_ data: Data, into buffer: AVAudioPCMBuffer) throws {
-        guard data.count >= 4 else { throw CodecError.decodeFailed }
-        guard let floatData = buffer.floatChannelData else {
-            throw CodecError.decodeFailed
-        }
+        let dec = try decoder()
 
-        // Read 4-byte big-endian sample count
-        let frameCount: Int = data.withUnsafeBytes { rawPtr in
-            Int(rawPtr.loadUnaligned(fromByteOffset: 0, as: UInt32.self).bigEndian)
-        }
+        let inp = AVAudioCompressedBuffer(
+            format: opusFormat,
+            packetCapacity: 1,
+            maximumPacketSize: data.count
+        )
+        data.withUnsafeBytes { inp.data.copyMemory(from: $0.baseAddress!, byteCount: data.count) }
+        inp.byteLength   = UInt32(data.count)
+        inp.packetCount  = 1
+        inp.packetDescriptions?.pointee = AudioStreamPacketDescription(
+            mStartOffset: 0, mVariableFramesInPacket: 0, mDataByteSize: UInt32(data.count)
+        )
 
-        let expectedBytes = 4 + frameCount * 2
-        guard data.count >= expectedBytes else { throw CodecError.decodeFailed }
-        guard frameCount <= Int(buffer.frameCapacity) else { throw CodecError.decodeFailed }
-
-        // Convert Int16 little-endian → Float32
-        let samples = floatData[0]
-        let scale = 1.0 / Float(Int16.max)
-        data.withUnsafeBytes { rawPtr in
-            let base = rawPtr.baseAddress!.advanced(by: 4)
-                .assumingMemoryBound(to: Int16.self)
-            for i in 0..<frameCount {
-                samples[i] = Float(Int16(littleEndian: base[i])) * scale
-            }
+        var provided = false
+        var convErr: NSError?
+        let status = dec.convert(to: buffer, error: &convErr) { _, outStatus in
+            guard !provided else { outStatus.pointee = .noDataNow; return nil }
+            provided = true
+            outStatus.pointee = .haveData
+            return inp
         }
-        buffer.frameLength = AVAudioFrameCount(frameCount)
+        guard status != .error, convErr == nil else { throw CodecError.decodeFailed }
+    }
+
+    // MARK: - Private
+
+    private func encoder() throws -> AVAudioConverter {
+        if let e = _encoder { return e }
+        guard let e = AVAudioConverter(from: pcmFormat, to: opusFormat) else {
+            throw CodecError.notConfigured
+        }
+        e.bitRate = Int(bitrate)
+        _encoder = e
+        return e
+    }
+
+    private func decoder() throws -> AVAudioConverter {
+        if let d = _decoder { return d }
+        guard let d = AVAudioConverter(from: opusFormat, to: pcmFormat) else {
+            throw CodecError.notConfigured
+        }
+        _decoder = d
+        return d
     }
 }

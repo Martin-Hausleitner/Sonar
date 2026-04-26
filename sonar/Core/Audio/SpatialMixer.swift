@@ -27,22 +27,21 @@ final class SpatialMixer {
         engine.attach(environment)
         engine.attach(remotePlayer)
 
-        // Use the engine's main mixer output format as the connection format
-        // for the environment → main-mixer link so sample rates stay aligned.
-        let mainMixer = engine.mainMixerNode
-        let outputFormat = mainMixer.outputFormat(forBus: 0)
+        // Use fixed formats so prepare() is safe to call before the engine is started
+        // (mainMixer.outputFormat(forBus:) returns a bad format on an unconfigured engine).
+        let voiceFormat = AVAudioFormat(
+            standardFormatWithSampleRate: LatencyBudget.audioSampleRate, channels: 1
+        )!
+        // AVAudioEnvironmentNode outputs binaural stereo.
+        let stereoFormat = AVAudioFormat(
+            standardFormatWithSampleRate: LatencyBudget.audioSampleRate, channels: 2
+        )!
 
-        // Remote player → environment (spatial input)
-        // Use a standard 48 kHz mono format for the voice stream input bus.
-        if let voiceFormat = AVAudioFormat(
-            standardFormatWithSampleRate: LatencyBudget.audioSampleRate,
-            channels: 1
-        ) {
-            engine.connect(remotePlayer, to: environment, format: voiceFormat)
-        }
+        // Remote player → environment (spatial input, mono)
+        engine.connect(remotePlayer, to: environment, format: voiceFormat)
 
-        // Environment → main mixer (HOA / binaural output)
-        engine.connect(environment, to: mainMixer, format: outputFormat)
+        // Environment → main mixer (binaural stereo output)
+        engine.connect(environment, to: engine.mainMixerNode, format: stereoFormat)
 
         // Render the environment as binaural (works with or without AirPods).
         environment.renderingAlgorithm = .HRTFHQ
