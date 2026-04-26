@@ -48,6 +48,8 @@ final class SessionCoordinator: ObservableObject {
     private let airPods           = AirPodsController()
     private let musicDucker       = MusicDucker()
     private let vad               = VAD()
+    private let wakeWord          = WakeWordDetector()
+    private let agentConnector    = AgentConnector()
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
@@ -80,6 +82,7 @@ final class SessionCoordinator: ObservableObject {
         rangingEngine.stop()
         rssiFallback.stop()
         musicDucker.disable()
+        wakeWord.stop()
         Task {
             await near.stop()
             await far.stop()
@@ -138,6 +141,18 @@ final class SessionCoordinator: ObservableObject {
         bonder.addPath(near)
         bonder.addPath(far)
 
+        // MARK: Wake word → AI agent
+        wakeWord.start()
+        wakeWord.triggered
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                Task { [weak self] in
+                    try? await self?.agentConnector.ensureAgentInRoom()
+                    self?.appState?.aiActive = true
+                }
+            }
+            .store(in: &cancellables)
+
         // MARK: Profile application — apply initial profile and react to changes.
         applyProfile(SessionProfile.builtIn.first { $0.id == (appState?.profileID ?? "zimmer") })
 
@@ -167,6 +182,7 @@ final class SessionCoordinator: ObservableObject {
                 }
                 self.transcription.append(buffer)
                 self.recorder.append(buffer)
+                self.wakeWord.feed(buffer)
                 if let data = try? self.encoder.encode(buffer) {
                     Task { await self.bonder.send(opusData: data) }
                 }

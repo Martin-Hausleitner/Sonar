@@ -15,9 +15,10 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     /// BLE is free (no cellular cost), low priority for eco mode.
     var estimatedCostPerByte: Double { 0.0 }
 
-    // GATT UUIDs — Sonar-specific service + audio characteristic
-    private static let serviceUUID       = CBUUID(string: "B0B2-SONA")   // placeholder
-    private static let audioCharUUID     = CBUUID(string: "B0B2-AUD1")
+    // GATT UUIDs — Sonar-specific service + audio characteristic.
+    // Generated once (uuidgen); stable across builds so peers can discover each other.
+    private static let serviceUUID   = CBUUID(string: "A7F3E2B1-4C8D-4F9A-B6E0-1D2C3F4A5B6C")
+    private static let audioCharUUID = CBUUID(string: "B8C4F3C2-5D9E-4A0B-C7F1-2E3D4A5B6C7D")
 
     private var centralManager: CBCentralManager!
     private var peripheralManager: CBPeripheralManager!
