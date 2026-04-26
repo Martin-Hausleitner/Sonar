@@ -47,6 +47,7 @@
 		61881282D2DC92E30D527114 /* LatencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F657004C0F866368D589D7F1 /* LatencyTests.swift */; };
 		6458DC6EB942927C7BC8509F /* WhisperDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425355469D5556788F15481 /* WhisperDetectorTests.swift */; };
 		76B7D3E352A54A05985C0156 /* LiveTranscriptionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D6123FC22E4A77B106C26F /* LiveTranscriptionEngineTests.swift */; };
+		4945DBC8890A4E4FA675E17F /* LocalModelManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E32B5AC243BC4190A222F6E2 /* LocalModelManagerTests.swift */; };
 		670045A35E369058ED49E9F1 /* BatteryManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E11EFEFCC15B5595CB104B /* BatteryManagerTests.swift */; };
 		67822B91372101B38A370BB3 /* AirPodsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF43608835E7D99C6B730A43 /* AirPodsController.swift */; };
 		6A66B1651FD904672488E698 /* SonarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88DF1BC0D75E4AB0A7777D84 /* SonarApp.swift */; };
@@ -156,6 +157,7 @@
 		7F485BF755341E6F0C08CB1F /* SmartMuteDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartMuteDetectorTests.swift; sourceTree = "<group>"; };
 		8425355469D5556788F15481 /* WhisperDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperDetectorTests.swift; sourceTree = "<group>"; };
 		63D6123FC22E4A77B106C26F /* LiveTranscriptionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranscriptionEngineTests.swift; sourceTree = "<group>"; };
+		E32B5AC243BC4190A222F6E2 /* LocalModelManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelManagerTests.swift; sourceTree = "<group>"; };
 		86E9A616BAEA492E80EBF764 /* StartSessionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSessionIntent.swift; sourceTree = "<group>"; };
 		882B6C7B36F51C4F4C36CF7A /* AudioRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouter.swift; sourceTree = "<group>"; };
 		88DF1BC0D75E4AB0A7777D84 /* SonarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonarApp.swift; sourceTree = "<group>"; };
@@ -422,6 +424,7 @@
 				7DC0B08E50436501B01CB518 /* WakeWordDetectorTests.swift */,
 				8425355469D5556788F15481 /* WhisperDetectorTests.swift */,
 				63D6123FC22E4A77B106C26F /* LiveTranscriptionEngineTests.swift */,
+				E32B5AC243BC4190A222F6E2 /* LocalModelManagerTests.swift */,
 			);
 			path = sonarTests;
 			sourceTree = "<group>";
@@ -597,6 +600,7 @@
 				268F671BCADDE254BA39D1D2 /* WakeWordDetectorTests.swift in Sources */,
 				6458DC6EB942927C7BC8509F /* WhisperDetectorTests.swift in Sources */,
 				76B7D3E352A54A05985C0156 /* LiveTranscriptionEngineTests.swift in Sources */,
+				4945DBC8890A4E4FA675E17F /* LocalModelManagerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

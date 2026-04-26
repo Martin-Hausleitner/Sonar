@@ -24,17 +24,18 @@ final class LiveTranscriptionEngine: ObservableObject {
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var parakeet: ParakeetTranscriber?
+    private var openAIRealtime: OpenAIRealtimeTranscriber?
 
     func start(language: Locale = .current) async throws {
         currentEngine = pickEngine(language: language)
         switch currentEngine {
         case .appleSpeech, .local:
-            // .local: model is downloaded but on-device inference (WhisperKit) not yet
-            // integrated — fall back to Apple Speech so the pipeline stays functional.
+            // .local: model downloaded but WhisperKit inference not yet integrated.
             let authorized = await requestAuthorization()
             guard authorized else { return }
             currentEngine = .appleSpeech
             try startAppleSpeech(language: language)
+
         case .parakeet:
             let key = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
             parakeet = ParakeetTranscriber(apiKey: key) { [weak self] text in
@@ -42,19 +43,32 @@ final class LiveTranscriptionEngine: ObservableObject {
                 let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: true)
                 self.transcript.append(seg)
             }
+
         case .openAIRealtime:
-            // OpenAI Realtime API — WebSocket streaming not yet wired; fall back.
-            let authorized = await requestAuthorization()
-            guard authorized else { return }
-            currentEngine = .appleSpeech
-            try startAppleSpeech(language: language)
+            let key      = UserDefaults.standard.string(forKey: "sonar.openai.apiKey")      ?? ""
+            let endpoint = UserDefaults.standard.string(forKey: "sonar.openai.endpoint")    ?? ""
+            openAIRealtime = OpenAIRealtimeTranscriber(
+                apiKey: key, endpoint: endpoint
+            ) { [weak self] text, isFinal in
+                guard let self else { return }
+                let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: isFinal)
+                if isFinal {
+                    self.transcript.append(seg)
+                } else if let last = self.transcript.last, !last.isFinal {
+                    self.transcript[self.transcript.count - 1] = seg
+                } else {
+                    self.transcript.append(seg)
+                }
+            }
+            openAIRealtime?.connect()
         }
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
         switch currentEngine {
-        case .appleSpeech, .local, .openAIRealtime: request?.append(buffer)
-        case .parakeet:                              parakeet?.append(buffer)
+        case .appleSpeech, .local: request?.append(buffer)
+        case .parakeet:            parakeet?.append(buffer)
+        case .openAIRealtime:      openAIRealtime?.append(buffer)
         }
     }
 
@@ -64,6 +78,8 @@ final class LiveTranscriptionEngine: ObservableObject {
         request = nil
         parakeet?.flush()
         parakeet = nil
+        openAIRealtime?.disconnect()
+        openAIRealtime = nil
     }
 
     // MARK: - Engine selection (priority order)
@@ -114,6 +130,153 @@ final class LiveTranscriptionEngine: ObservableObject {
                 cont.resume(returning: status == .authorized)
             }
         }
+    }
+}
+
+// MARK: - OpenAIRealtimeTranscriber
+
+/// Streams PCM audio to the OpenAI Realtime API (wss) and returns incremental
+/// transcription via the server-VAD turn-detection model (whisper-1).
+/// Audio is resampled from the capture rate (16 kHz) to 24 kHz in-process.
+private final class OpenAIRealtimeTranscriber {
+    private let apiKey: String
+    private let wsURL: URL
+    private var wsTask: URLSessionWebSocketTask?
+    private let onSegment: (String, Bool) -> Void   // (text, isFinal), called on main
+    private var floatBuffer: [Float] = []
+    private let queue = DispatchQueue(label: "sonar.openai-rt", qos: .userInteractive)
+
+    private static let captureRate: Double = 16_000
+    private static let targetRate:  Double = 24_000
+    private static let chunkFrames: Int    = 1_600   // 100 ms @ 16 kHz
+
+    init(apiKey: String, endpoint: String, onSegment: @escaping (String, Bool) -> Void) {
+        let base = endpoint.isEmpty ? "https://api.openai.com/v1" : endpoint
+        let wsBase = base
+            .replacingOccurrences(of: "https://", with: "wss://")
+            .replacingOccurrences(of: "http://",  with: "ws://")
+        self.wsURL = URL(string: "\(wsBase)/realtime?model=gpt-4o-realtime-preview-2024-12-17")!
+        self.apiKey = apiKey
+        self.onSegment = onSegment
+    }
+
+    func connect() {
+        var req = URLRequest(url: wsURL)
+        req.setValue("Bearer \(apiKey)",  forHTTPHeaderField: "Authorization")
+        req.setValue("realtime=v1",       forHTTPHeaderField: "OpenAI-Beta")
+        wsTask = URLSession.shared.webSocketTask(with: req)
+        wsTask?.resume()
+        sendSessionConfig()
+        Task { [weak self] in await self?.receiveLoop() }
+    }
+
+    func disconnect() {
+        wsTask?.cancel(with: .goingAway, reason: nil)
+        wsTask = nil
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        guard let ch = buffer.floatChannelData?[0] else { return }
+        let count = Int(buffer.frameLength)
+        let samples = Array(UnsafeBufferPointer(start: ch, count: count))
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.floatBuffer.append(contentsOf: samples)
+            while self.floatBuffer.count >= Self.chunkFrames {
+                let chunk = Array(self.floatBuffer.prefix(Self.chunkFrames))
+                self.floatBuffer.removeFirst(Self.chunkFrames)
+                self.sendAudio(chunk)
+            }
+        }
+    }
+
+    // MARK: - Private
+
+    private func sendSessionConfig() {
+        let cfg: [String: Any] = [
+            "type": "session.update",
+            "session": [
+                "modalities": ["text"],
+                "input_audio_format": "pcm16",
+                "input_audio_transcription": ["model": "whisper-1"],
+                "turn_detection": [
+                    "type":                 "server_vad",
+                    "threshold":            0.5,
+                    "prefix_padding_ms":    300,
+                    "silence_duration_ms":  600
+                ]
+            ]
+        ]
+        send(json: cfg)
+    }
+
+    private func sendAudio(_ pcm16k: [Float]) {
+        let resampled = upsample(pcm16k,
+                                 from: Self.captureRate,
+                                 to:   Self.targetRate)
+        let int16 = resampled.map { Int16(clamping: Int32($0 * 32767)) }
+        let bytes = int16.withUnsafeBufferPointer { Data(buffer: $0) }
+        send(json: ["type": "input_audio_buffer.append",
+                    "audio": bytes.base64EncodedString()])
+    }
+
+    private func upsample(_ samples: [Float], from src: Double, to dst: Double) -> [Float] {
+        let ratio    = dst / src
+        let outCount = Int(Double(samples.count) * ratio)
+        var out      = [Float](repeating: 0, count: outCount)
+        let last     = samples.count - 1
+        for i in 0..<outCount {
+            let pos = Double(i) / ratio
+            let lo  = min(Int(pos), last)
+            let hi  = min(lo + 1, last)
+            let t   = Float(pos - Double(lo))
+            out[i]  = samples[lo] + t * (samples[hi] - samples[lo])
+        }
+        return out
+    }
+
+    private func send(json: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json),
+              let str  = String(data: data, encoding: .utf8) else { return }
+        wsTask?.send(.string(str)) { _ in }
+    }
+
+    private func receiveLoop() async {
+        while true {
+            guard let task = wsTask else { break }
+            do {
+                let msg = try await task.receive()
+                if case .string(let text) = msg { parseEvent(text) }
+            } catch { break }
+        }
+    }
+
+    private func parseEvent(_ raw: String) {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = json["type"] as? String else { return }
+
+        switch type {
+        case "conversation.item.input_audio_transcription.completed":
+            let text = json["transcript"] as? String ?? ""
+            if !text.isEmpty { fireSegment(text, isFinal: true) }
+
+        case "conversation.item.input_audio_transcription.delta":
+            let delta = json["delta"] as? String ?? ""
+            if !delta.isEmpty { fireSegment(delta, isFinal: false) }
+
+        case "error":
+            if let err = json["error"] as? [String: Any],
+               let msg = err["message"] as? String {
+                Log.ai.error("OpenAI Realtime: \(msg)")
+            }
+
+        default: break
+        }
+    }
+
+    private func fireSegment(_ text: String, isFinal: Bool) {
+        DispatchQueue.main.async { self.onSegment(text, isFinal) }
     }
 }
 

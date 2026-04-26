@@ -38,20 +38,38 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         let engine = LiveTranscriptionEngine()
         try await engine.start()
         XCTAssertEqual(engine.currentEngine, .parakeet,
-                       "Non-empty API key must activate Parakeet engine")
+                       "Non-empty NVIDIA key must activate Parakeet engine")
+        engine.stop()
+    }
+
+    func testOpenAIRealtimeSelectedWhenKeyPresent() async throws {
+        UserDefaults.standard.set("sk-proj-test", forKey: "sonar.openai.apiKey")
+        defer { UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey") }
+        let engine = LiveTranscriptionEngine()
+        try await engine.start()
+        XCTAssertEqual(engine.currentEngine, .openAIRealtime,
+                       "Non-empty OpenAI key must activate OpenAI Realtime engine")
+        engine.stop()
+    }
+
+    func testOpenAIRealtimeTakesPriorityOverParakeet() async throws {
+        UserDefaults.standard.set("sk-proj-test",         forKey: "sonar.openai.apiKey")
+        UserDefaults.standard.set("nvapi-test-key-1234",  forKey: apiKeyUD)
+        defer {
+            UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey")
+        }
+        let engine = LiveTranscriptionEngine()
+        try await engine.start()
+        XCTAssertEqual(engine.currentEngine, .openAIRealtime,
+                       "OpenAI Realtime must beat Parakeet in priority")
         engine.stop()
     }
 
     func testAppleSpeechSelectedWhenAPIKeyEmpty() async throws {
         UserDefaults.standard.set("", forKey: apiKeyUD)
         let engine = LiveTranscriptionEngine()
-        // start() with appleSpeech requires authorization — we verify only that
-        // the engine is NOT parakeet before calling start().
-        // (Authorization prompt would block on CI; we rely on the key check.)
         let key = UserDefaults.standard.string(forKey: apiKeyUD) ?? ""
-        XCTAssertTrue(key.isEmpty, "Precondition: empty key must be stored")
-        // Calling start() without a key should attempt appleSpeech, not parakeet.
-        // We just check it doesn't crash and doesn't switch to parakeet first.
+        XCTAssertTrue(key.isEmpty)
         XCTAssertEqual(engine.currentEngine, .appleSpeech)
     }
 
