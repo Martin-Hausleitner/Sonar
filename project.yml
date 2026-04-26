@@ -20,6 +20,26 @@ settings:
     Release:
       SWIFT_OPTIMIZATION_LEVEL: -O
 
+schemes:
+  Sonar:
+    build:
+      targets:
+        Sonar: all
+        SonarTests: [test]
+    test:
+      config: Debug
+      targets:
+        - SonarTests
+      commandLineArguments: {}
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
 targets:
   Sonar:
     type: application
