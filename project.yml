@@ -40,6 +40,11 @@ schemes:
     archive:
       config: Release
 
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    from: "2.0.0"
+
 targets:
   Sonar:
     type: application
@@ -66,10 +71,9 @@ targets:
         # any installed simulator runtime (not just the exact SDK version).
         ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION: ""
         ENABLE_ONLY_ACTIVE_RESOURCES: "NO"
-    # SPM deps are intentionally empty. LiveKit will be added back in
-    # §10/7 when FarTransport actually consumes it. Adding heavy
-    # binary deps (WebRTC.xcframework via LiveKit) to a skeleton
-    # build risks linking issues that have nothing to do with our code.
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
 
   SonarTests:
     type: bundle.unit-test
