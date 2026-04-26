@@ -2,25 +2,46 @@ import AVFoundation
 import Combine
 import Foundation
 import MultipeerConnectivity
+import NearbyInteraction
 import UIKit
 
 /// Multipeer Connectivity transport (WLAN / AWDL Bonjour). Plan §10/4, §2.2 Pfad 2.
-/// Uses output streams (not `send(data:)`) for the audio path; see RESEARCH.md §1.
-/// Conforms to both the old Transport protocol and the new BondedPath protocol.
+///
+/// Message framing: first byte is a MessageType tag so the same MPC data channel
+/// carries both audio frames and control messages (NI token exchange).
+///   0x01 — AudioFrame wire payload
+///   0x02 — NIDiscoveryToken (NSKeyedArchiver, for UWB ranging)
 final class NearTransport: NSObject, Transport, BondedPath {
+
+    // MARK: - Protocol requirements
+
     let kind: TransportKind = .near
     let id: MultipathBonder.PathID = .multipeer
-    var estimatedCostPerByte: Double { 0.001 }   // WLAN: cheap but not free
+    var estimatedCostPerByte: Double { 0.001 }
 
-    private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
-    private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let connectedSubject   = CurrentValueSubject<Bool, Never>(false)
+    private let inboundPCMSubject  = PassthroughSubject<AVAudioPCMBuffer, Never>()
     private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
-    private let qualitySubject = CurrentValueSubject<Double, Never>(0)
+    private let qualitySubject     = CurrentValueSubject<Double, Never>(0)
 
-    var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
+    var isConnected: AnyPublisher<Bool, Never>       { connectedSubject.eraseToAnyPublisher() }
     var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundPCMSubject.eraseToAnyPublisher() }
     var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundFrameSubject.eraseToAnyPublisher() }
-    var qualityScore: AnyPublisher<Double, Never> { qualitySubject.eraseToAnyPublisher() }
+    var qualityScore: AnyPublisher<Double, Never>    { qualitySubject.eraseToAnyPublisher() }
+
+    // MARK: - UWB token exchange callback
+
+    /// Called on main thread whenever a remote peer sends its NIDiscoveryToken.
+    /// SessionCoordinator uses this to start NIRangingEngine with the peer token.
+    var onReceivedNIToken: ((NIDiscoveryToken) -> Void)?
+
+    /// The local NIDiscoveryToken to advertise when a peer connects.
+    /// Set by SessionCoordinator once NIRangingEngine has started its session.
+    var localNIToken: NIDiscoveryToken?
+
+    // MARK: - MPC internals
+
+    private enum Msg: UInt8 { case audio = 0x01, niToken = 0x02 }
 
     private let serviceType = "sonar-mpc"
     private let peerID = MCPeerID(displayName: UIDevice.current.name)
@@ -31,9 +52,9 @@ final class NearTransport: NSObject, Transport, BondedPath {
     private lazy var advertiser = MCNearbyServiceAdvertiser(
         peer: peerID, discoveryInfo: nil, serviceType: serviceType
     )
-    private lazy var browser = MCNearbyServiceBrowser(
-        peer: peerID, serviceType: serviceType
-    )
+    private lazy var browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
+
+    // MARK: - Lifecycle
 
     func start() async throws {
         session.delegate = self
@@ -50,26 +71,58 @@ final class NearTransport: NSObject, Transport, BondedPath {
         connectedSubject.send(false)
     }
 
-    // Legacy AVAudioPCMBuffer send (kept for TransportMultiplexer compatibility).
-    func send(_ buffer: AVAudioPCMBuffer) async {}
+    // MARK: - Send
 
-    // BondedPath send — writes wire-encoded AudioFrame to all connected peers.
+    func send(_ buffer: AVAudioPCMBuffer) async {}  // legacy
+
     func send(_ frame: AudioFrame) async {
-        let data = frame.wireData
         let peers = session.connectedPeers
         guard !peers.isEmpty else { return }
-        try? session.send(data, toPeers: peers, with: .unreliable)
+        var msg = Data([Msg.audio.rawValue])
+        msg.append(frame.wireData)
+        try? session.send(msg, toPeers: peers, with: .unreliable)
+    }
+
+    // MARK: - Private helpers
+
+    private func sendLocalNIToken(to peers: [MCPeerID]) {
+        guard let token = localNIToken,
+              let tokenData = try? NSKeyedArchiver.archivedData(
+                  withRootObject: token, requiringSecureCoding: true
+              ) else { return }
+        var msg = Data([Msg.niToken.rawValue])
+        msg.append(tokenData)
+        try? session.send(msg, toPeers: peers, with: .reliable)
     }
 }
 
+// MARK: - MCSessionDelegate
+
 extension NearTransport: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        connectedSubject.send(state == .connected)
+        let connected = state == .connected
+        connectedSubject.send(connected)
+        // As soon as a peer connects, exchange NIDiscoveryTokens for UWB ranging.
+        if connected { sendLocalNIToken(to: [peerID]) }
     }
 
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        if let frame = AudioFrame(wireData: data) {
-            inboundFrameSubject.send(frame)
+        guard let typeRaw = data.first,
+              let type = Msg(rawValue: typeRaw) else { return }
+        let payload = data.dropFirst()
+
+        switch type {
+        case .audio:
+            if let frame = AudioFrame(wireData: Data(payload)) {
+                inboundFrameSubject.send(frame)
+            }
+        case .niToken:
+            guard let token = try? NSKeyedUnarchiver.unarchivedObject(
+                ofClass: NIDiscoveryToken.self, from: Data(payload)
+            ) else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.onReceivedNIToken?(token)
+            }
         }
     }
 
@@ -78,11 +131,15 @@ extension NearTransport: MCSessionDelegate {
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
 }
 
+// MARK: - MCNearbyServiceAdvertiserDelegate
+
 extension NearTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         invitationHandler(true, session)
     }
 }
+
+// MARK: - MCNearbyServiceBrowserDelegate
 
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {

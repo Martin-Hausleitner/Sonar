@@ -1,10 +1,17 @@
 import AVFoundation
 import Combine
 import Foundation
+import NearbyInteraction
+import simd
 
 /// Central state machine. Wires the full audio pipeline:
 ///   mic → VoiceProcessing → OpusCoder → MultipathBonder → NearTransport / FarTransport
 ///   NearTransport / FarTransport → MultipathBonder → JitterBuffer → OpusCoder → SpatialMixer
+///
+/// Distance pipeline (§10/16):
+///   NIRangingEngine (UWB) + RSSIFallback (BLE) → DistancePublisher
+///   → AppState.phase + SpatialMixer.updateSpatialPosition()
+///
 /// §14 Phase 1–4.
 @MainActor
 final class SessionCoordinator: ObservableObject {
@@ -31,6 +38,11 @@ final class SessionCoordinator: ObservableObject {
     private let whisperDetector  = WhisperDetector()
     private let smartMute        = SmartMuteDetector()
     private let ambientSharing   = AmbientSharing()
+
+    // Distance pipeline (§10/16)
+    private let rangingEngine    = NIRangingEngine()
+    private let rssiFallback     = RSSIFallback()
+    private let distancePublisher = DistancePublisher()
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
@@ -60,6 +72,8 @@ final class SessionCoordinator: ObservableObject {
         transcription.stop()
         _ = recorder.stopSession()
         spatialMixer.stopRemotePlayer()
+        rangingEngine.stop()
+        rssiFallback.stop()
         Task {
             await near.stop()
             await far.stop()
@@ -85,15 +99,40 @@ final class SessionCoordinator: ObservableObject {
 
         spatialMixer.startRemotePlayer()
 
-        // Register both transports with the bonder.
-        // NearTransport auto-discovers via Multipeer; start it unconditionally.
+        // MARK: Distance pipeline (§10/16)
+        distancePublisher.bind(uwb: rangingEngine, rssi: rssiFallback)
+
+        // When NearTransport gets a peer's NIDiscoveryToken, start UWB ranging.
+        near.onReceivedNIToken = { [weak self] token in
+            guard let self else { return }
+            self.rangingEngine.start(with: token)
+            // Publish our local token back so the peer can start ranging too.
+            self.near.localNIToken = self.rangingEngine.localToken
+        }
+
+        // MARK: Distance → AppState.phase + SpatialMixer
+        distancePublisher.$distance
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] distance in
+                self?.handleDistanceUpdate(distance)
+            }
+            .store(in: &cancellables)
+
+        // Update spatial direction when UWB provides it.
+        rangingEngine.direction
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] direction in
+                guard let direction else { return }
+                self?.spatialMixer.updateSpatialPosition(direction: direction)
+            }
+            .store(in: &cancellables)
+
+        // MARK: Transport setup
         try? await near.start()
         bonder.addPath(near)
-        // FarTransport connects only when configure(serverURL:tokenProvider:) has been called;
-        // adding it now lets the bonder track it once the app wires in credentials.
         bonder.addPath(far)
 
-        // SEND CHAIN: mic → pre-processing → Opus encode → bonder → transports.
+        // MARK: SEND CHAIN: mic → pre-processing → Opus encode → bonder → transports.
         audioEngine.captured
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] (_, buffer) in
@@ -109,7 +148,7 @@ final class SessionCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer.
+        // MARK: RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer.
         bonder.inboundFrames
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] frame in
@@ -117,7 +156,7 @@ final class SessionCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Drain the jitter buffer at the audio frame rate and schedule decoded PCM for playback.
+        // Drain the jitter buffer at the audio frame rate and schedule decoded PCM.
         playbackTimer = Timer.scheduledTimer(
             withTimeInterval: Double(LatencyBudget.audioFrameMs) / 1_000.0,
             repeats: true
@@ -125,7 +164,7 @@ final class SessionCoordinator: ObservableObject {
             self?.drainJitterBuffer()
         }
 
-        // Battery tier → bonder mode + appState.
+        // MARK: Battery tier → bonder mode + appState.
         battery.$tier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tier in
@@ -135,7 +174,7 @@ final class SessionCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Active paths → appState.
+        // MARK: Active paths → appState.
         bonder.$activePaths
             .receive(on: DispatchQueue.main)
             .sink { [weak self] paths in
@@ -143,7 +182,7 @@ final class SessionCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Signal score → appState.
+        // MARK: Signal score → appState.
         signalCalc.$score
             .receive(on: DispatchQueue.main)
             .sink { [weak self] s in self?.appState?.signalScore = s }
@@ -154,7 +193,7 @@ final class SessionCoordinator: ObservableObject {
             .sink { [weak self] g in self?.appState?.signalGrade = g }
             .store(in: &cancellables)
 
-        // Privacy mode → remove cellular path immediately.
+        // MARK: Privacy mode → remove cellular path immediately.
         NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
             .sink { [weak self] _ in self?.bonder.removePath(.mpquic) }
             .store(in: &cancellables)
@@ -166,6 +205,31 @@ final class SessionCoordinator: ObservableObject {
         phase = .far
     }
 
+    // MARK: - Distance → Phase
+
+    private func handleDistanceUpdate(_ distance: Double?) {
+        guard let distance else {
+            // No reading — stay in current phase or fall back to far.
+            if case .near = phase { phase = .far }
+            return
+        }
+
+        let threshold = activeProfile?.nearFarThreshold ?? 8.0
+
+        if distance <= threshold {
+            phase = .near(distance: distance)
+            appState?.phase = .near(distance: distance)
+        } else {
+            if case .near = phase { phase = .far }
+            if case .near = appState?.phase ?? .idle { appState?.phase = .far }
+        }
+    }
+
+    private var activeProfile: SessionProfile? {
+        guard let id = appState?.profileID else { return nil }
+        return SessionProfile.builtIn.first { $0.id == id }
+    }
+
     // MARK: - Jitter buffer drain (runs on main thread via Timer)
 
     private func drainJitterBuffer() {
@@ -173,7 +237,6 @@ final class SessionCoordinator: ObservableObject {
             decodeAndSchedule(frame)
         } else if jitterBuffer.needsConcealment {
             jitterBuffer.advanceOnConceal()
-            // PLC: skip — AVAudioPlayerNode produces silence for gaps automatically.
         }
     }
 
@@ -190,7 +253,7 @@ final class SessionCoordinator: ObservableObject {
 
     private func applyBatteryTier(_ tier: BatteryManager.Tier) {
         switch tier {
-        case .normal, .eco:    bonder.mode = .redundant
+        case .normal, .eco:     bonder.mode = .redundant
         case .saver, .critical: bonder.mode = .primaryStandby
         }
         if !tier.transcriptionEnabled { transcription.stop() }

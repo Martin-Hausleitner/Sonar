@@ -414,8 +414,9 @@ struct SessionView: View {
 
     // MARK: - Simulator fake distance animation
 
+    /// Animates the radar ring on simulator where UWB/BLE distance is not available.
+    /// AppState.phase is driven exclusively by SessionCoordinator on real devices.
     private func animateFakeDistance() {
-        // Slowly animate a fake distance for simulator demo
         let distances: [Double] = [8.0, 5.5, 3.2, 1.8, 1.0, 0.8, 1.2, 2.4, 4.0, 6.0]
         for (i, d) in distances.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 1.5) {
@@ -423,15 +424,9 @@ struct SessionView: View {
                 withAnimation(.easeInOut(duration: 1.0)) {
                     self.previewDistance = d
                 }
-                if d < 1.0 {
-                    // Simulate near phase
-                    self.appState.phase = .near(distance: d)
-                } else {
-                    self.appState.phase = .far
-                }
             }
         }
-        // Simulate signal score changes
+        // Simulate signal score changes for the Live badge.
         let scores = [100, 94, 87, 78, 65, 82, 91, 96]
         for (i, s) in scores.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 2.0) {
