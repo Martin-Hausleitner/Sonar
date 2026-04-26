@@ -21,7 +21,7 @@ final class RSSIFallback: NSObject {
     // MARK: - Private constants
 
     /// Sonar's GATT service UUID — must match BluetoothMeshTransport.
-    private static let serviceUUID = CBUUID(string: "B0B2-SONA")
+    private static let serviceUUID = CBUUID(string: "A7F3E2B1-4C8D-4F9A-B6E0-1D2C3F4A5B6C")
 
     /// RSSI at 1 metre (dBm).  Typical value for iPhone / AirPods hardware.
     private static let txPower: Double = -59
