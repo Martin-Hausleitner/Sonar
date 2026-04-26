@@ -8,7 +8,7 @@ Spatial audio · Ultra-Wideband ranging · Multipath mesh · AI transcription
 [![Swift](https://img.shields.io/badge/Swift-5.10-FA7343?logo=swift&logoColor=white)](https://swift.org)
 [![iOS](https://img.shields.io/badge/iOS-18.0+-000000?logo=apple&logoColor=white)](https://developer.apple.com/ios/)
 [![Xcode](https://img.shields.io/badge/Xcode-26.4-1575F9?logo=xcode&logoColor=white)](https://developer.apple.com/xcode/)
-[![Tests](https://img.shields.io/badge/Tests-174%20passing-4CAF50?logo=checkmarx&logoColor=white)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-216%20passing-4CAF50?logo=checkmarx&logoColor=white)](#tests)
 [![Latency](https://img.shields.io/badge/Latenz-P95%20%E2%89%A4%2080ms-00E5FF)](#latency-budget)
 
 ---
@@ -284,30 +284,34 @@ Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
 ## Tests
 
 ```
-  174 Tests · 20 Suites · alle grün ✓
+  216 Tests · 24 Suites · alle grün ✓
 
-  Suite                          Tests  Abdeckung
-  ─────────────────────────────  ─────  ──────────────────────────────
-  AudioFrameTests                  12   Wire-Format, Codec-ID, Seq
-  JitterBufferTests                11   Playout, PLC, Overflow
-  MultipathBonderTests             10   Pfade, Failover, Dedup
-  OpusCodingTests                  10   Encode/Decode, FEC, Latenz
-  DistancePublisherTests           10   UWB/BLE Priorität, Mathe
-  WakeWordDetectorTests             7   Energie, Fenster, Reset
-  SmartMuteDetectorTests            7   Adaptive Schwellwerte
-  MessageFramingTests               6   Framing 0x01 / 0x02
-  ProfileTests                      6   FEC, ANC-Zuordnung
-  BatteryManagerTests               5   Tier-Übergänge
-  SignalScoreCalculatorTests        5   RSSI, Drops, Grade
-  PreCaptureBufferTests             5   Ringpuffer, Overflow
-  AppStateTests                     5   Phase-Übergänge
-  PrivacyModeTests                  5   Aktivierung, Pfad-Trennung
-  LatencyTests                      4   Budget-Compliance
-  TransportSwitchingTests           4   Pfad-Wechsel
-  FrameDeduplicatorTests            4   Duplikat-Erkennung
-  DuplicateVoiceSuppressorTests     4   Unterdrückung
-  FarTransportTests                 3   LiveKit Stubs
-  AILogicTests                      3   AgentConnector
+  Suite                            Tests  Abdeckung
+  ───────────────────────────────  ─────  ──────────────────────────────
+  AudioFrameTests                    12   Wire-Format, Codec-ID, Seq
+  SignalScoreCalculatorTests         11   Gewichte, Grade-Grenzen, Clamp
+  JitterBufferTests                  11   Playout, PLC, Overflow
+  WhisperDetectorTests               10   SPL-Formel, Window, Zero-Buffer
+  AppStateConnectionTypeTests        10   Labels, Icons, @Published
+  MultipathBonderTests               10   Pfade, Failover, Dedup
+  OpusCodingTests                    10   Encode/Decode, FEC, Latenz
+  DistancePublisherTests             10   UWB/BLE Priorität, Mathe
+  RSSIFallbackMathTests              15   Pfadverlust, EMA, Guard-Range
+  WakeWordDetectorTests               7   Energie, Fenster, Reset
+  SmartMuteDetectorTests              7   Adaptive Schwellwerte
+  DeviceCapabilitiesTests             7   Tier A/B/C, detect()-Konsistenz
+  MessageFramingTests                 6   Framing 0x01 / 0x02
+  ProfileTests                        6   FEC, ANC-Zuordnung
+  BatteryManagerTests                 5   Tier-Übergänge
+  PreCaptureBufferTests               5   Ringpuffer, Overflow
+  AppStateTests                       5   Phase-Übergänge
+  PrivacyModeTests                    5   Aktivierung, Pfad-Trennung
+  LatencyTests                        4   Budget-Compliance
+  TransportSwitchingTests             4   Pfad-Wechsel
+  FrameDeduplicatorTests              4   Duplikat-Erkennung
+  DuplicateVoiceSuppressorTests       4   Unterdrückung
+  FarTransportTests                   3   LiveKit Stubs
+  AILogicTests                        3   AgentConnector
 ```
 
 ---
