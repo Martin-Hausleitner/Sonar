@@ -350,16 +350,55 @@ und transient geboosted.
 
 Was **nicht** in diesem Runbook getestet wird, weil noch nicht gebaut:
 
-- §10 Schritt 3 (AVAudioEngine + Opus): noch Stub
-- §10 Schritt 4–8 (Transport, Mux, Switching): noch Stub
-- §10 Schritt 9–15: noch Stub
+- ~~§10 Schritt 3 (AVAudioEngine + Opus): noch Stub~~ **FERTIG** — OpusCoder voll implementiert, Unit-Tests in `OpusCodingTests.swift`
+- ~~§10 Schritt 4–8 (Transport, Mux, Switching): noch Stub~~ **FERTIG** — AudioFrame, FrameDeduplicator, MultipathBonder, JitterBuffer, TransportMultiplexer implementiert und getestet
+- §10 Schritt 9–15: teilweise fertig
+  - ~~Schritt 9 (DeviceCapabilities)~~: **FERTIG** — `DeviceCapabilities.detect()` implementiert
+  - ~~Schritt 10 (SignalScoreCalculator)~~: **FERTIG** — Unit-Tests in `SignalScoreCalculatorTests.swift`
+  - ~~Schritt 11 (BatteryManager / Power-Tiers)~~: **FERTIG** — Unit-Tests in `BatteryManagerTests.swift`
+  - ~~Schritt 12 (PreCaptureBuffer / SmartMuteDetector)~~: **FERTIG** — Unit-Tests vorhanden
+  - ~~Schritt 13 (PrivacyMode)~~: **FERTIG** — Unit-Tests in `PrivacyModeTests.swift`
+  - Schritte 14–15 (LiveKit-Far / KI-Layer): noch nicht implementiert
 - §12.* Extra-Features: noch nicht entschieden, welche in v0.1 reinkommen
 
-Entsprechend: TC-03 bis TC-23 sind heute ALLE blockiert. Was heute (nach
-Schritt 1+2) testbar ist:
+Entsprechend testbar (Stand 2026-04-26):
 
 - TC-01 Permissions Onboarding
 - TC-02 Permission verweigert
+- TC-05 Audio-Latenz Near (Latenz-Budget per XCTest verifiziert)
+- TC-10 Near → Far Crossfade (TransportMultiplexer implementiert, Crossfade-Logik Stub)
 
-Beim Fortschritt der §10-Schritte erweitert sich die testbare Menge.
-Diesen Plan dann §-für-§ durchgehen.
+Noch blockiert (erfordert reale Hardware oder nicht-implementierte Features):
+- TC-03, TC-04 (Multipeer — 2 Geräte), TC-06 bis TC-09 (UWB), TC-11 (AirPods Shortcut),
+  TC-12–TC-15 (KI-Layer), TC-16–TC-18 (Resilienz-Hardware), TC-19–TC-23 (Field-Tests)
+
+---
+
+## §M. Unit-Test Coverage
+
+Stand 2026-04-26 — folgende Komponenten sind durch automatisierte XCTest-Tests abgedeckt:
+
+| Datei | Testklasse | Was wird getestet |
+|-------|-----------|-------------------|
+| `AudioFrame.swift` | `AudioFrameTests` | Init, wireData-Encoding/Decoding-Roundtrip, zu kurze Daten → nil, UInt32-Overflow |
+| `FrameDeduplicator.swift` | `FrameDeduplicatorTests` | Erstes Frame durch, Duplikat verworfen, verschiedene Seqs, FIFO-Eviction, reset() |
+| `MultipathBonder.swift` | `MultipathBonderTests` | Leere activePaths, addPath connected/disconnected, .redundant alle Pfade, .primaryStandby nur erster Pfad, Inbound-Dedup |
+| `JitterBuffer.swift` | `JitterBufferTests` | enqueue/dequeue in-order, Duplikat-enqueue, needsConcealment, advanceOnConceal |
+| `BatteryManager.Tier` | `BatteryManagerTests` | activePaths je Tier, recordingEnabled, transcriptionEnabled, Comparable, opusBitrateKbps-Ordering |
+| `SignalScoreCalculator.swift` | `SignalScoreCalculatorTests` | Score-Mathematik (loss/RTT/jitter/paths), Grade-Grenzen, update() publiziert Änderungen, Clamp 0-100 |
+| `PreCaptureBuffer.swift` | `PreCaptureBufferTests` | push/drain, Over-Capacity-Eviction (FIFO), drain nach drain → leer |
+| `SmartMuteDetector.swift` | `SmartMuteDetectorTests` | Stille → kein Mute, Impuls (hoher Crest-Factor) → Mute, Constant-Loud → kein Mute, Publisher-Emission |
+| `PrivacyMode.swift` | `PrivacyModeTests` | activate/deactivate/toggle, Notifications bei Zustandsänderung |
+| `OpusCoder.swift` | `OpusCodingTests` | Init, Defaults, Encode-Decode-Roundtrip (1 kHz Sinus, RMS-Error < 0.01) |
+| `AppState.swift` | `AppStateTests` | Default-Phase idle, Phase-Equality |
+| `SessionCoordinator.swift` | `SessionCoordinatorTests` | start() → .connecting, stop() → .idle |
+| `TransportMultiplexer.swift` | `TransportSwitchingTests` | Initial .near, select(.far) → .far |
+| `LatencyBudget` / `Metrics` | `LatencyBudgetTests`, `MetricsTests`, `E2EAudioPipelineTests` | Frame-Größe, Jitter-Buffer, TraceIDs, Percentile, PCM-Buffer-Shape |
+| `SessionProfile` / `ProfileManager` | `ProfileTests` | 5 Built-in-Profile, JSON-Roundtrip, select, ignore unknown |
+
+**Nicht durch Unit-Tests abgedeckt (erfordert Hardware):**
+- `BatteryManager.shared` (UIDevice.batteryLevel — kein Simulator-Support)
+- `LocalRecorder` (AVAudioFile-Schreibzugriff — erzeugt Seiteneffekte auf dem Dateisystem)
+- `WhisperDetector` (indirekt durch SmartMuteDetector-Pattern abgedeckt)
+- `DeviceCapabilities.detect()` (NISession / sysctlbyname — Simulator-Ergebnis nicht repräsentativ)
+- `LiveTranscriptionEngine`, `AmbientSharing`, `AudioEngine` (AVAudioEngine-Hardware)
