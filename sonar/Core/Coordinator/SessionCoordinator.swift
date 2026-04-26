@@ -40,9 +40,14 @@ final class SessionCoordinator: ObservableObject {
     private let ambientSharing   = AmbientSharing()
 
     // Distance pipeline (§10/16)
-    private let rangingEngine    = NIRangingEngine()
-    private let rssiFallback     = RSSIFallback()
+    private let rangingEngine     = NIRangingEngine()
+    private let rssiFallback      = RSSIFallback()
     private let distancePublisher = DistancePublisher()
+
+    // Profile-driven subsystems
+    private let airPods           = AirPodsController()
+    private let musicDucker       = MusicDucker()
+    private let vad               = VAD()
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
@@ -74,6 +79,7 @@ final class SessionCoordinator: ObservableObject {
         spatialMixer.stopRemotePlayer()
         rangingEngine.stop()
         rssiFallback.stop()
+        musicDucker.disable()
         Task {
             await near.stop()
             await far.stop()
@@ -132,6 +138,20 @@ final class SessionCoordinator: ObservableObject {
         bonder.addPath(near)
         bonder.addPath(far)
 
+        // MARK: Profile application — apply initial profile and react to changes.
+        applyProfile(SessionProfile.builtIn.first { $0.id == (appState?.profileID ?? "zimmer") })
+
+        if let appState {
+            appState.$profileID
+                .dropFirst()           // skip initial value, already applied above
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] id in
+                    let profile = SessionProfile.builtIn.first { $0.id == id }
+                    self?.applyProfile(profile)
+                }
+                .store(in: &cancellables)
+        }
+
         // MARK: SEND CHAIN: mic → pre-processing → Opus encode → bonder → transports.
         audioEngine.captured
             .receive(on: DispatchQueue.global(qos: .userInteractive))
@@ -140,6 +160,11 @@ final class SessionCoordinator: ObservableObject {
                 self.preCaptureBuffer.push(buffer)
                 self.whisperDetector.process(buffer)
                 self.smartMute.process(buffer)
+                // VAD drives music ducking when voice is detected.
+                let speaking = self.vad.feed(buffer)
+                Task { @MainActor [weak self] in
+                    self?.musicDucker.duckOnVoice(active: speaking)
+                }
                 self.transcription.append(buffer)
                 self.recorder.append(buffer)
                 if let data = try? self.encoder.encode(buffer) {
@@ -247,6 +272,29 @@ final class SessionCoordinator: ObservableObject {
         ) else { return }
         guard (try? decoder.decode(frame.payload, into: buf)) != nil else { return }
         spatialMixer.scheduleBuffer(buf)
+    }
+
+    // MARK: - Profile application
+
+    private func applyProfile(_ profile: SessionProfile?) {
+        guard let profile else { return }
+
+        // ANC / transparency mode for AirPods.
+        Task { await airPods.apply(profile: profile) }
+
+        // Music ducking: enable with the profile's mix level, or disable.
+        if profile.musicMix > 0 {
+            Task {
+                try? await musicDucker.enable(targetGain: profile.musicMix)
+                musicDucker.duck()
+            }
+        } else {
+            musicDucker.disable()
+        }
+
+        // Encoder FEC: on for outdoor/noisy profiles, off for quiet ones.
+        let fecProfiles: Set<String> = ["roller", "festival", "club"]
+        encoder.fecEnabled = fecProfiles.contains(profile.id)
     }
 
     // MARK: - Battery adaptation
