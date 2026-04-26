@@ -22,53 +22,48 @@ struct SessionView: View {
 
     var body: some View {
         ZStack {
-            // MARK: Background
-            backgroundGradient
+            // Full-screen background — explicitly ignores safe areas so
+            // the dark gradient bleeds under the status bar and tab bar.
+            backgroundGradient.ignoresSafeArea()
+            glowLayer.ignoresSafeArea().allowsHitTesting(false)
 
-            // MARK: Ambient glow reacting to signal
-            glowLayer
-
-            // MARK: Content
+            // Content — no ignoresSafeArea here, so it stays inside the
+            // tab-bar safe-area inset automatically.
             VStack(spacing: 0) {
                 topBar
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
 
                 Spacer(minLength: 12)
 
-                // Radar
                 DistanceRingView(
                     distance: previewDistance,
                     direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
                 )
-                .frame(maxWidth: 320, maxHeight: 320)
+                .frame(maxWidth: 300, maxHeight: 300)
                 .padding(.horizontal, 24)
 
                 Spacer(minLength: 12)
 
-                // Phase label
                 phaseLabel
 
-                // Waveform strip
                 waveformStrip
                     .padding(.horizontal, 24)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
 
-                // Transcript strip (if active)
                 if !appState.transcriptSegments.isEmpty {
                     transcriptStrip
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
                 bottomControls
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
+                    .padding(.bottom, 12)
             }
         }
-        .ignoresSafeArea()
         .foregroundStyle(.white)
         .sheet(isPresented: $showLiveData) {
             LiveDataSheet()
@@ -126,31 +121,27 @@ struct SessionView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
-        .ignoresSafeArea()
     }
 
     private var glowLayer: some View {
         ZStack {
-            // Top glow — teal when connected, red when degrading
             RadialGradient(
                 colors: [glowColor.opacity(sessionActive ? 0.28 : 0.06), .clear],
                 center: .top,
                 startRadius: 0,
-                endRadius: 320
+                endRadius: 360
             )
-            .ignoresSafeArea()
             .animation(.easeInOut(duration: 1.2), value: sessionActive)
             .animation(.easeInOut(duration: 0.8), value: appState.signalScore)
 
-            // Bottom accent
             RadialGradient(
                 colors: [Color(red: 0.0, green: 0.4, blue: 0.6).opacity(0.08), .clear],
                 center: .bottom,
                 startRadius: 0,
-                endRadius: 250
+                endRadius: 280
             )
-            .ignoresSafeArea()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var glowColor: Color {
@@ -166,19 +157,21 @@ struct SessionView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            // App name
-            Text("SONAR")
-                .font(.system(size: 15, weight: .black, design: .monospaced))
-                .tracking(4)
-                .foregroundStyle(.white.opacity(0.7))
+        HStack(spacing: 10) {
+            // Wordmark
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.0, green: 0.89, blue: 1.0))
+                Text("SONAR")
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .tracking(5)
+                    .foregroundStyle(.white.opacity(0.85))
+            }
 
             Spacer()
 
-            // AI badge
-            AIAvatarBadge(isActive: appState.aiActive)
-
-            // Signal badge
+            // Signal status (only when connected)
             if sessionActive {
                 ConnectionStatusBadge(
                     score: appState.signalScore,
@@ -187,16 +180,20 @@ struct SessionView: View {
                 )
             }
 
+            // AI badge
+            AIAvatarBadge(isActive: appState.aiActive)
+
             // Settings
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(width: 36, height: 36)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .frame(width: 34, height: 34)
                     .background(.white.opacity(0.06), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1))
             }
         }
-        .padding(.top, 56)
+        .padding(.top, 8)
     }
 
     // MARK: - Phase Label
