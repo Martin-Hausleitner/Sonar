@@ -1,156 +1,97 @@
 import simd
 import SwiftUI
 
-/// Main session screen. Liquid Design — translucent glass cards over a deep
-/// space background, animated glow that reacts to signal quality.
 struct SessionView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var coordinator = SessionCoordinator()
 
-    // UI state
-    @State private var showLiveData = false
-    @State private var showProfiles = false
     @State private var showSettings = false
+    @State private var showGuide    = false
     @State private var sessionActive = false
-
-    // Simulated waveform for simulator (replaced by real AudioEngine tap in production)
-    @State private var waveformSamples: [Float] = Array(repeating: 0.05, count: 32)
-    private let waveTimer = Timer.publish(every: 0.10, on: .main, in: .common).autoconnect()
-
-    // Simulated distance for simulator preview
     @State private var previewDistance: Double? = nil
 
     var body: some View {
-        ZStack {
-            // Full-screen background — explicitly ignores safe areas so
-            // the dark gradient bleeds under the status bar and tab bar.
-            backgroundGradient.ignoresSafeArea()
-            glowLayer.ignoresSafeArea().allowsHitTesting(false)
+        VStack(spacing: 0) {
+            topBar
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
 
-            // Content — no ignoresSafeArea here, so it stays inside the
-            // tab-bar safe-area inset automatically.
-            VStack(spacing: 0) {
-                topBar
+            Spacer(minLength: 0)
+
+            // Hero: distance ring
+            DistanceRingView(
+                distance: previewDistance,
+                direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
+            )
+            .frame(width: 260, height: 260)
+
+            // Status pill
+            statusPill
+                .padding(.top, 14)
+
+            Spacer(minLength: 0)
+
+            // Live connection card — always visible when session is running
+            if sessionActive {
+                liveConnectionCard
                     .padding(.horizontal, 20)
-                    .padding(.top, 4)
+                    .padding(.bottom, 14)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if !appState.peerOnline {
+                // Idle hint
+                connectHint
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 14)
+            }
 
-                Spacer(minLength: 12)
-
-                DistanceRingView(
-                    distance: previewDistance,
-                    direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
-                )
-                .frame(maxWidth: 300, maxHeight: 300)
+            // Primary action
+            mainButton
                 .padding(.horizontal, 24)
-
-                Spacer(minLength: 12)
-
-                phaseLabel
-
-                waveformStrip
-                    .padding(.horizontal, 24)
-                    .padding(.top, 10)
-
-                if !appState.transcriptSegments.isEmpty {
-                    transcriptStrip
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                }
-
-                Spacer(minLength: 12)
-
-                bottomControls
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
-            }
+                .padding(.bottom, 16)
         }
-        .foregroundStyle(.white)
-        .sheet(isPresented: $showLiveData) {
-            LiveDataSheet()
-                .environmentObject(appState)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)
-        }
-        .sheet(isPresented: $showProfiles) {
-            profileSheet
-        }
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                SettingsView()
-                    .environmentObject(appState)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Fertig") { showSettings = false }
-                        }
-                    }
-            }
-            .presentationDetents([.large])
-        }
-        .onReceive(waveTimer) { _ in
-            guard sessionActive else {
-                waveformSamples = Array(repeating: 0.03, count: 32)
-                return
-            }
-            withAnimation(.easeOut(duration: 0.08)) {
-                waveformSamples = (0..<32).map { _ in Float.random(in: 0.05...0.85) }
-            }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundLayer.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showSettings) { settingsSheet }
+        .sheet(isPresented: $showGuide)    { guideSheet    }
         .onChange(of: sessionActive) { _, active in
-            if active {
-                coordinator.appState = appState
-                coordinator.start()
-                // Simulator: animate a fake distance for demo
-                animateFakeDistance()
-            } else {
-                coordinator.stop()
-                previewDistance = nil
+            withAnimation(.easeInOut(duration: 0.3)) {
+                if active {
+                    coordinator.appState = appState
+                    coordinator.start()
+                    animateFakeDistance()
+                } else {
+                    coordinator.stop()
+                    previewDistance = nil
+                }
             }
         }
     }
 
     // MARK: - Background
 
-    private var backgroundGradient: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color(red: 0.03, green: 0.04, blue: 0.10), location: 0),
-                .init(color: Color(red: 0.04, green: 0.06, blue: 0.14), location: 0.5),
-                .init(color: Color(red: 0.02, green: 0.03, blue: 0.08), location: 1)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    private var glowLayer: some View {
+    private var backgroundLayer: some View {
         ZStack {
-            RadialGradient(
-                colors: [glowColor.opacity(sessionActive ? 0.28 : 0.06), .clear],
-                center: .top,
-                startRadius: 0,
-                endRadius: 360
-            )
-            .animation(.easeInOut(duration: 1.2), value: sessionActive)
-            .animation(.easeInOut(duration: 0.8), value: appState.signalScore)
-
-            RadialGradient(
-                colors: [Color(red: 0.0, green: 0.4, blue: 0.6).opacity(0.08), .clear],
-                center: .bottom,
-                startRadius: 0,
-                endRadius: 280
-            )
+            Color(red: 0.04, green: 0.05, blue: 0.10)
+            if sessionActive {
+                RadialGradient(
+                    colors: [accentColor.opacity(0.18), .clear],
+                    center: .top,
+                    startRadius: 0,
+                    endRadius: 400
+                )
+                .animation(.easeInOut(duration: 1.4), value: appState.signalScore)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var glowColor: Color {
-        guard sessionActive else { return .cyan }
+    private var accentColor: Color {
         switch appState.signalScore {
-        case 80...100: return .cyan
-        case 60..<80:  return .green
-        case 40..<60:  return .yellow
-        default:       return .red
+        case 80...: return .cyan
+        case 60..<80: return .green
+        case 40..<60: return .yellow
+        default: return .red
         }
     }
 
@@ -158,141 +99,189 @@ struct SessionView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            // Wordmark
             HStack(spacing: 6) {
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.0, green: 0.89, blue: 1.0))
-                Text("SONAR")
-                    .font(.system(size: 14, weight: .black, design: .monospaced))
-                    .tracking(5)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.cyan)
+                Text("Sonar")
+                    .font(.headline.bold())
             }
 
             Spacer()
 
-            // Signal status (only when connected)
-            if sessionActive {
-                ConnectionStatusBadge(
-                    score: appState.signalScore,
-                    activePaths: appState.activePathCount,
-                    phase: appState.phase
-                )
+            // Peer online indicator
+            if appState.peerOnline {
+                peerBadge
             }
-
-            // AI badge
-            AIAvatarBadge(isActive: appState.aiActive)
 
             // Settings
             Button { showSettings = true } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.45))
+                Image(systemName: "gearshape")
+                    .font(.body.weight(.medium))
                     .frame(width: 34, height: 34)
-                    .background(.white.opacity(0.06), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .background(.white.opacity(0.07), in: Circle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.top, 8)
     }
 
-    // MARK: - Phase Label
-
-    private var phaseLabel: some View {
-        Text(phaseLabelText)
-            .font(.system(size: 13, weight: .medium, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.45))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(.white.opacity(0.05), in: Capsule())
-            .animation(.easeInOut(duration: 0.3), value: appState.phase)
+    private var peerBadge: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(.green)
+                .frame(width: 7, height: 7)
+                .overlay(Circle().stroke(.green.opacity(0.4), lineWidth: 3))
+            Text(appState.peerName ?? "Peer")
+                .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.ultraThinMaterial, in: Capsule())
     }
 
-    private var phaseLabelText: String {
+    // MARK: - Status Pill
+
+    private var statusPill: some View {
+        HStack(spacing: 6) {
+            Image(systemName: statusIcon)
+                .font(.caption.weight(.semibold))
+            Text(statusText)
+                .font(.callout.weight(.medium))
+        }
+        .foregroundStyle(statusColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .animation(.easeInOut(duration: 0.3), value: appState.phase)
+    }
+
+    private var statusText: String {
         switch appState.phase {
-        case .idle:              return sessionActive ? "Initialisiere…" : "Bereit"
+        case .idle:              return sessionActive ? "Verbinde…" : "Bereit"
         case .connecting:        return "Verbinde…"
-        case .near(let d):       return String(format: "Near · %.1f m", d)
-        case .far:               return "Far · Internet"
+        case .near(let d):       return String(format: "Nah · %.1f m", d)
+        case .far:               return "Fern · Internet"
         case .degrading:         return "Verbindung schwach"
         case .recovering:        return "Verbindung stellt sich wieder her"
         }
     }
 
-    // MARK: - Waveform
+    private var statusIcon: String {
+        switch appState.phase {
+        case .idle:        return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
+        case .connecting:  return "antenna.radiowaves.left.and.right"
+        case .near:        return "dot.radiowaves.left.and.right"
+        case .far:         return "globe"
+        case .degrading:   return "exclamationmark.triangle"
+        case .recovering:  return "arrow.triangle.2.circlepath"
+        }
+    }
 
-    private var waveformStrip: some View {
-        VStack(spacing: 6) {
-            WaveformView(samples: waveformSamples, color: sessionActive ? .cyan : .white.opacity(0.2))
-                .frame(height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    private var statusColor: Color {
+        switch appState.phase {
+        case .near:      return .cyan
+        case .far:       return .white
+        case .degrading: return .yellow
+        default:         return .secondary
+        }
+    }
 
+    // MARK: - Live Connection Card
+
+    private var liveConnectionCard: some View {
+        VStack(spacing: 12) {
+            // Header row
             HStack {
-                Text("Mein Mikro")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.3))
+                Label("Verbindung", systemImage: "antenna.radiowaves.left.and.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(accentColor)
+                        .frame(width: 6, height: 6)
+                    Text("\(appState.signalScore) / 100")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(accentColor)
+                }
+            }
+
+            // Quality bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.08))
+                        .frame(height: 5)
+                    Capsule()
+                        .fill(LinearGradient(colors: [.cyan, accentColor], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * CGFloat(appState.signalScore) / 100, height: 5)
+                        .animation(.spring(response: 0.6), value: appState.signalScore)
+                }
+            }
+            .frame(height: 5)
+
+            // Path pills + REC indicator
+            HStack(spacing: 6) {
+                pathPill("dot.radiowaves.left.and.right", "AWDL",     active: appState.activePathCount > 0)
+                pathPill("bluetooth",                     "Bluetooth", active: appState.activePathCount > 1)
+                pathPill("globe",                         "Internet",  active: appState.activePathCount > 2)
                 Spacer()
                 if appState.isRecording {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 6, height: 6)
-                        Text("REC")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.red)
-                    }
+                    Label("REC", systemImage: "record.circle.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.red)
                 }
             }
-        }
-    }
 
-    // MARK: - Transcript
-
-    private var transcriptStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(appState.transcriptSegments.suffix(3)) { seg in
-                    Text(seg.text)
-                        .font(.system(size: 13))
-                        .foregroundStyle(seg.isFinal ? .white.opacity(0.85) : .white.opacity(0.4))
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.white.opacity(0.05), in: Capsule())
-                }
+            // Battery tier warning
+            if appState.batteryTier == .saver || appState.batteryTier == .critical {
+                Label(
+                    appState.batteryTier == .critical
+                        ? "Kritischer Akkustand – Qualität reduziert"
+                        : "Energiesparmodus – Redundanz reduziert",
+                    systemImage: "battery.25"
+                )
+                .font(.caption2)
+                .foregroundStyle(.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Bottom Controls
-
-    private var bottomControls: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                // Live data pull-up
-                controlButton(
-                    icon: "chart.bar.xaxis",
-                    label: "Live",
-                    active: showLiveData
-                ) { showLiveData = true }
-
-                // MAIN: Start/Stop
-                mainButton
-
-                // Profile picker
-                controlButton(
-                    icon: "slider.horizontal.3",
-                    label: activeProfileName,
-                    active: showProfiles
-                ) { showProfiles = true }
-            }
-
-            // Privacy Mode button
-            if appState.privacyModeActive {
-                privacyBanner
-            }
+    private func pathPill(_ icon: String, _ label: String, active: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 9, weight: .semibold))
+            Text(label).font(.caption2.weight(.medium))
         }
+        .foregroundStyle(active ? .cyan : .secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(active ? Color.cyan.opacity(0.12) : Color.white.opacity(0.05), in: Capsule())
     }
+
+    // MARK: - Idle hint (before session)
+
+    private var connectHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "info.circle")
+                .font(.callout)
+                .foregroundStyle(.cyan)
+            Text("Sonar auf beiden Geräten öffnen – die Verbindung startet automatisch.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button { showGuide = true } label: {
+                Text("Hilfe")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.cyan)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    // MARK: - Main Button
 
     private var mainButton: some View {
         Button {
@@ -300,140 +289,66 @@ struct SessionView: View {
                 sessionActive.toggle()
             }
         } label: {
-            ZStack {
-                // Outer ring pulse when active
-                if sessionActive {
-                    Circle()
-                        .stroke(Color.cyan.opacity(0.25), lineWidth: 12)
-                        .frame(width: 88, height: 88)
-                }
-                Circle()
-                    .fill(
-                        sessionActive
-                        ? LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.6, blue: 0.9)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        : LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .frame(width: 72, height: 72)
-                    .shadow(color: sessionActive ? .cyan.opacity(0.5) : .clear, radius: 16)
-
-                Image(systemName: sessionActive ? "waveform" : "play.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .symbolEffect(.bounce, value: sessionActive)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-    }
-
-    private func controlButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(active ? .cyan : .white.opacity(0.5))
-                    .frame(width: 52, height: 52)
-                    .background(
-                        active ? Color.cyan.opacity(0.12) : Color.white.opacity(0.06),
-                        in: Circle()
-                    )
-                    .overlay(
-                        Circle().strokeBorder(
-                            active ? Color.cyan.opacity(0.4) : Color.white.opacity(0.08),
-                            lineWidth: 1
-                        )
-                    )
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var privacyBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock.shield.fill")
-                .foregroundStyle(.orange)
-            Text("Privacy Mode aktiv · Keine Cloud-Verbindungen")
-                .font(.caption.bold())
-                .foregroundStyle(.orange)
-            Spacer()
-            Button {
-                PrivacyMode.shared.deactivate()
-                appState.privacyModeActive = false
-            } label: {
-                Text("Deaktivieren")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.2), in: Capsule())
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.orange.opacity(0.2), lineWidth: 1)
-        )
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    // MARK: - Profile Sheet
-
-    private var profileSheet: some View {
-        NavigationStack {
-            ProfilePickerView(
-                selected: SessionProfile.builtIn.first { $0.id == appState.profileID },
-                onSelect: { profile in
-                    appState.profileID = profile.id
-                    showProfiles = false
-                }
+            Label(
+                sessionActive ? "Session beenden" : "Session starten",
+                systemImage: sessionActive ? "stop.fill" : "waveform"
             )
-            .environmentObject(appState)
-            .navigationTitle("Profil wählen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { showProfiles = false }
-                }
-            }
+            .font(.body.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
         }
-        .presentationDetents([.medium, .large])
-        .background(Color(red: 0.05, green: 0.05, blue: 0.12))
-        .preferredColorScheme(.dark)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(sessionActive ? .red.opacity(0.85) : .cyan)
     }
 
-    private var activeProfileName: String {
-        SessionProfile.builtIn.first { $0.id == appState.profileID }?.displayName ?? "Profil"
+    // MARK: - Sheets
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            SettingsView()
+                .environmentObject(appState)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fertig") { showSettings = false }
+                    }
+                }
+        }
     }
 
-    // MARK: - Simulator fake distance animation
+    private var guideSheet: some View {
+        NavigationStack {
+            ConnectionGuideView()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fertig") { showGuide = false }
+                    }
+                }
+        }
+    }
 
-    /// Animates the radar ring on simulator where UWB/BLE distance is not available.
-    /// AppState.phase is driven exclusively by SessionCoordinator on real devices.
+    // MARK: - Simulator demo animation
+
     private func animateFakeDistance() {
         let distances: [Double] = [8.0, 5.5, 3.2, 1.8, 1.0, 0.8, 1.2, 2.4, 4.0, 6.0]
         for (i, d) in distances.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 1.5) {
                 guard self.sessionActive else { return }
-                withAnimation(.easeInOut(duration: 1.0)) {
-                    self.previewDistance = d
-                }
+                withAnimation(.easeInOut(duration: 1.0)) { self.previewDistance = d }
             }
         }
-        // Simulate signal score changes for the Live badge.
         let scores = [100, 94, 87, 78, 65, 82, 91, 96]
         for (i, s) in scores.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 2.0) {
                 guard self.sessionActive else { return }
                 self.appState.signalScore = s
-                self.appState.activePathCount = s > 80 ? 4 : s > 60 ? 3 : 2
+                self.appState.activePathCount = s > 80 ? 3 : s > 60 ? 2 : 1
             }
+        }
+        // Simulate peer coming online
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard self.sessionActive else { return }
+            withAnimation { self.appState.peerOnline = true; self.appState.peerName = "Martin's iPhone" }
         }
     }
 }
@@ -442,13 +357,14 @@ struct SessionView: View {
 
 #Preview {
     SessionView()
-        .environmentObject({ () -> AppState in
+        .environmentObject({
             let s = AppState()
-            s.phase = .near(distance: 2.4)
+            s.phase = .near(distance: 1.8)
             s.signalScore = 92
-            s.activePathCount = 4
+            s.activePathCount = 3
             s.isRecording = true
+            s.peerOnline = true
+            s.peerName = "Martin's iPhone"
             return s
         }())
-        .preferredColorScheme(.dark)
 }

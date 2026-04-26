@@ -37,4 +37,33 @@ final class AppState: ObservableObject {
 
     // V30 — privacy mode
     @Published var privacyModeActive: Bool = false
+
+    // Peer discovery (passive — updated by SessionCoordinator even before session starts)
+    @Published var peerOnline: Bool = false
+    @Published var peerName: String? = nil
+
+    // Connection type shown in status
+    @Published var connectionType: ConnectionType = .none
+
+    enum ConnectionType {
+        case none, awdl, bluetooth, wifi, internet
+        var label: String {
+            switch self {
+            case .none:      return "Kein Signal"
+            case .awdl:      return "AWDL · Lokal"
+            case .bluetooth: return "Bluetooth"
+            case .wifi:      return "WLAN · Lokal"
+            case .internet:  return "Internet"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .none:      return "antenna.radiowaves.left.and.right.slash"
+            case .awdl:      return "dot.radiowaves.left.and.right"
+            case .bluetooth: return "bluetooth"
+            case .wifi:      return "wifi"
+            case .internet:  return "globe"
+            }
+        }
+    }
 }
