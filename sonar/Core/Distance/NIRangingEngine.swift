@@ -8,6 +8,11 @@ final class NIRangingEngine: NSObject {
     let distance = CurrentValueSubject<Double?, Never>(nil)
     let direction = CurrentValueSubject<simd_float3?, Never>(nil)
 
+    /// Called on the main queue when the NISession is invalidated (e.g. hardware
+    /// unavailable, peer disconnected).  DistancePublisher uses this to start
+    /// RSSIFallback.  Plan §14.1.
+    var onInvalidated: (() -> Void)?
+
     private var session: NISession?
 
     func start(with token: NIDiscoveryToken) {
@@ -39,6 +44,12 @@ extension NIRangingEngine: NISessionDelegate {
     }
 
     func session(_ session: NISession, didInvalidateWith error: Error) {
-        // TODO §14.1: trigger RSSIFallback on invalidate.
+        // Clear published values so downstream knows UWB is gone.
+        distance.send(nil)
+        direction.send(nil)
+        // §14.1: notify DistancePublisher to activate RSSIFallback.
+        DispatchQueue.main.async { [weak self] in
+            self?.onInvalidated?()
+        }
     }
 }

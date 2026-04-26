@@ -1,0 +1,4 @@
+// Disable simulator runtime thinning so build works with any installed runtime
+ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION =
+ENABLE_ONLY_ACTIVE_RESOURCES = NO
+ASSETCATALOG_COMPILER_OPTIMIZATION = space

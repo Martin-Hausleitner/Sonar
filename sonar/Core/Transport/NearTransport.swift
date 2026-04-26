@@ -18,6 +18,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
     private let qualitySubject = CurrentValueSubject<Double, Never>(0)
 
     var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
+    var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundPCMSubject.eraseToAnyPublisher() }
     var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundFrameSubject.eraseToAnyPublisher() }
     var qualityScore: AnyPublisher<Double, Never> { qualitySubject.eraseToAnyPublisher() }
 

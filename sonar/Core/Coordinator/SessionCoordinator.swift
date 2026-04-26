@@ -9,13 +9,13 @@ final class SessionCoordinator: ObservableObject {
     @Published private(set) var phase: AppState.Phase = .idle
 
     // MARK: - Sub-systems
-    private let audioEngine     = AudioEngine()
-    private let bonder          = MultipathBonder()
-    private let battery         = BatteryManager.shared
-    private let signalCalc      = SignalScoreCalculator()
-    private let recorder        = LocalRecorder()
-    private let transcription   = LiveTranscriptionEngine()
-    private let privacy         = PrivacyMode.shared
+    private let audioEngine      = AudioEngine()
+    private let bonder           = MultipathBonder()
+    private let battery          = BatteryManager.shared
+    private let signalCalc       = SignalScoreCalculator()
+    private let recorder         = LocalRecorder()
+    private let transcription    = LiveTranscriptionEngine()
+    private let privacy          = PrivacyMode.shared
 
     // Smart improvements
     private let preCaptureBuffer = PreCaptureBuffer()
@@ -24,13 +24,35 @@ final class SessionCoordinator: ObservableObject {
     private let ambientSharing   = AmbientSharing()
 
     private var cancellables = Set<AnyCancellable>()
+    private var audioTask: Task<Void, Never>?
 
     weak var appState: AppState?
 
     // MARK: - Lifecycle
 
-    func start() async {
+    /// Synchronous entry point — sets phase = .connecting immediately so tests
+    /// that call start() without await see the state change. Audio setup runs async.
+    func start() {
         phase = .connecting
+        audioTask = Task { [weak self] in
+            await self?.startAudioPipeline()
+        }
+    }
+
+    func stop() {
+        audioTask?.cancel()
+        audioTask = nil
+        audioEngine.stop()
+        transcription.stop()
+        _ = recorder.stopSession()
+        cancellables.removeAll()
+        phase = .idle
+        appState?.isRecording = false
+    }
+
+    // MARK: - Internal async setup
+
+    private func startAudioPipeline() async {
         do {
             try audioEngine.prepare()
         } catch {
@@ -38,7 +60,7 @@ final class SessionCoordinator: ObservableObject {
             return
         }
 
-        // Wire AudioEngine output to pipeline.
+        // Wire AudioEngine output → full pipeline.
         audioEngine.captured
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] (_, buffer) in
@@ -48,11 +70,15 @@ final class SessionCoordinator: ObservableObject {
                 self.smartMute.process(buffer)
                 self.transcription.append(buffer)
                 self.recorder.append(buffer)
-                // TODO: encode with OpusCoder, then bonder.send()
+                // Encode with OpusCoder then send on all paths.
+                let coder = OpusCoder()
+                if let data = try? coder.encode(buffer) {
+                    Task { await self.bonder.send(opusData: data) }
+                }
             }
             .store(in: &cancellables)
 
-        // Battery tier → bonder mode.
+        // Battery tier → bonder mode + appState.
         battery.$tier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tier in
@@ -73,10 +99,15 @@ final class SessionCoordinator: ObservableObject {
         // Signal score → appState.
         signalCalc.$score
             .receive(on: DispatchQueue.main)
-            .assign(to: \.signalScore, on: appState ?? AppState())
+            .sink { [weak self] s in self?.appState?.signalScore = s }
             .store(in: &cancellables)
 
-        // Privacy mode → bonder.
+        signalCalc.$grade
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] g in self?.appState?.signalGrade = g }
+            .store(in: &cancellables)
+
+        // Privacy mode → remove cellular path.
         NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
             .sink { [weak self] _ in self?.bonder.removePath(.mpquic) }
             .store(in: &cancellables)
@@ -88,30 +119,22 @@ final class SessionCoordinator: ObservableObject {
         // Start transcription.
         Task { try? await transcription.start() }
 
-        phase = .far    // will be updated by distance/bonder events
-    }
-
-    func stop() {
-        audioEngine.stop()
-        transcription.stop()
-        _ = recorder.stopSession()
-        cancellables.removeAll()
-        phase = .idle
-        appState?.isRecording = false
+        phase = .far
     }
 
     // MARK: - Battery adaptation
 
     private func applyBatteryTier(_ tier: BatteryManager.Tier) {
         switch tier {
-        case .normal:
+        case .normal, .eco:
             bonder.mode = .redundant
-        case .eco:
-            bonder.mode = .redundant   // still redundant but on 2 paths max
         case .saver, .critical:
             bonder.mode = .primaryStandby
         }
         if !tier.transcriptionEnabled { transcription.stop() }
-        if !tier.recordingEnabled { _ = recorder.stopSession(); appState?.isRecording = false }
+        if !tier.recordingEnabled {
+            _ = recorder.stopSession()
+            appState?.isRecording = false
+        }
     }
 }

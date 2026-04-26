@@ -4,7 +4,7 @@ options:
   deploymentTarget:
     iOS: "18.0"
   developmentLanguage: de
-  xcodeVersion: "16.4"
+  xcodeVersion: "26.4"
 
 settings:
   base:
@@ -30,9 +30,7 @@ targets:
           - "**/.DS_Store"
           - "Resources/Info.plist"
           - "Resources/Sonar.entitlements"
-    resources:
-      - path: sonar/Resources/Assets.xcassets
-        optional: true
+          - "Resources/Assets.xcassets"
     # Info.plist is hand-maintained at sonar/Resources/Info.plist —
     # XcodeGen would otherwise overwrite it on every `xcodegen generate`.
     # Same for entitlements — file is hand-maintained.
@@ -44,6 +42,10 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         INFOPLIST_FILE: sonar/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: sonar/Resources/Sonar.entitlements
+        # Disable asset-catalog per-device thinning so the build works with
+        # any installed simulator runtime (not just the exact SDK version).
+        ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION: ""
+        ENABLE_ONLY_ACTIVE_RESOURCES: "NO"
     # SPM deps are intentionally empty. LiveKit will be added back in
     # §10/7 when FarTransport actually consumes it. Adding heavy
     # binary deps (WebRTC.xcframework via LiveKit) to a skeleton
@@ -54,5 +56,8 @@ targets:
     platform: iOS
     sources:
       - sonarTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
       - target: Sonar

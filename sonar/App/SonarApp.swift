@@ -10,7 +10,7 @@ struct SonarApp: App {
         WindowGroup {
             Group {
                 if onboarded {
-                    SessionView()
+                    MainTabView()
                 } else {
                     OnboardingView(permissions: permissions) {
                         onboarded = true
@@ -19,6 +19,7 @@ struct SonarApp: App {
             }
             .environmentObject(appState)
             .environmentObject(permissions)
+            .preferredColorScheme(.dark)
         }
     }
 }
