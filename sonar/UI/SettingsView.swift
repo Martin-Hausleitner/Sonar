@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage("sonar.settings.retentionDays")  private var retentionDays: Int = 30
     @AppStorage("sonar.settings.fecEnabled")     private var fecEnabled: Bool = false
     @AppStorage("sonar.settings.profileID")      private var profileID: String = "zimmer"
+    @AppStorage("sonar.parakeet.apiKey")         private var parakeetAPIKey: String = ""
 
     @State private var privacyActive: Bool = PrivacyMode.shared.isActive
     @State private var latency: (p50: Double, p95: Double, p99: Double)? = nil
@@ -18,6 +19,7 @@ struct SettingsView: View {
         Form {
             connectionSection
             audioSection
+            transcriptionSection
             profileSection
             privacySection
             diagnosticsSection
@@ -100,6 +102,34 @@ struct SettingsView: View {
             Text("Audio")
         } footer: {
             Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. Empfohlen für Outdoor-Nutzung.")
+        }
+    }
+
+    // MARK: - Transcription
+
+    private var transcriptionSection: some View {
+        Section {
+            HStack {
+                Label("Engine", systemImage: "waveform.and.mic")
+                Spacer()
+                Text(parakeetAPIKey.isEmpty ? "Apple Speech" : "Parakeet (NVIDIA)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(parakeetAPIKey.isEmpty ? Color.secondary : Color.cyan)
+            }
+
+            HStack {
+                Label("NVIDIA API Key", systemImage: "key.fill")
+                Spacer()
+                SecureField("nvapi-…", text: $parakeetAPIKey)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 180)
+            }
+        } header: {
+            Text("Transkription")
+        } footer: {
+            Text("Ohne API Key nutzt Sonar **Apple Speech** (on-device). Mit einem NVIDIA NIM Key wird **nvidia/parakeet-ctc-1.1b** genutzt — präziser, aber Cloud-basiert. Key unter build.nvidia.com erstellen.")
         }
     }
 
