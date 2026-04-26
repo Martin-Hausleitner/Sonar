@@ -34,8 +34,8 @@ extension AudioFrame {
 
     init?(wireData: Data) {
         guard wireData.count >= 13 else { return nil }
-        self.seq       = wireData[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).byteSwapped }
-        self.timestamp = wireData[4..<12].withUnsafeBytes { $0.load(as: UInt64.self).byteSwapped }
+        self.seq       = wireData[0..<4].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).byteSwapped }
+        self.timestamp = wireData[4..<12].withUnsafeBytes { $0.loadUnaligned(as: UInt64.self).byteSwapped }
         guard let codec = CodecID(rawValue: wireData[12]) else { return nil }
         self.codecID = codec
         self.payload = wireData[13...]

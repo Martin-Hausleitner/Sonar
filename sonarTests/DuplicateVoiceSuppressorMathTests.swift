@@ -26,15 +26,17 @@ final class DuplicateVoiceSuppressorMathTests: XCTestCase {
     }
 
     func testCorrelationOfPartialMatch() {
+        // Cosine similarity of a vector with itself is always 1.0, regardless of magnitude.
         let a = FP(timestamp: 0, mfcc: [0.5, 0.5, 0, 0, 0, 0, 0, 0])
         let b = FP(timestamp: 0, mfcc: [0.5, 0.5, 0, 0, 0, 0, 0, 0])
-        XCTAssertEqual(a.correlation(with: b), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(a.correlation(with: b), 1.0, accuracy: 1e-6)
     }
 
     func testCorrelationHandlesDifferentLengths() {
+        // Correlation uses min(len) elements. [1,1] vs first 2 of [1,1,1,1] → cosine = 1.0.
         let a = FP(timestamp: 0, mfcc: [1, 1])
         let b = FP(timestamp: 0, mfcc: [1, 1, 1, 1])
-        XCTAssertEqual(a.correlation(with: b), 2, accuracy: 1e-6)
+        XCTAssertEqual(a.correlation(with: b), 1.0, accuracy: 1e-6)
     }
 
     // MARK: - Ring Buffer
