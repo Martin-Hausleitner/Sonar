@@ -291,6 +291,24 @@ struct SessionView: View {
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            // Live transcript (last 2 final segments)
+            let finalSegs = appState.transcriptSegments.filter(\.isFinal).suffix(2)
+            if !finalSegs.isEmpty {
+                Divider().background(.white.opacity(0.08))
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Transkript", systemImage: "text.bubble")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(finalSegs) { seg in
+                        Text(seg.text)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
         }
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

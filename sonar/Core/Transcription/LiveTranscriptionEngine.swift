@@ -4,10 +4,10 @@ import Foundation
 import Speech
 
 /// Drives transcription via the best available engine.
-/// Priority: NVIDIA Parakeet (when API key configured) → Apple SFSpeechRecognizer.
+/// Priority: OpenAI Realtime → NVIDIA Parakeet → Local Whisper → Apple Speech.
 @MainActor
 final class LiveTranscriptionEngine: ObservableObject {
-    enum Engine { case appleSpeech, parakeet }
+    enum Engine { case appleSpeech, parakeet, local, openAIRealtime }
 
     struct Segment: Sendable, Identifiable {
         let id = UUID()
@@ -28,9 +28,12 @@ final class LiveTranscriptionEngine: ObservableObject {
     func start(language: Locale = .current) async throws {
         currentEngine = pickEngine(language: language)
         switch currentEngine {
-        case .appleSpeech:
+        case .appleSpeech, .local:
+            // .local: model is downloaded but on-device inference (WhisperKit) not yet
+            // integrated — fall back to Apple Speech so the pipeline stays functional.
             let authorized = await requestAuthorization()
             guard authorized else { return }
+            currentEngine = .appleSpeech
             try startAppleSpeech(language: language)
         case .parakeet:
             let key = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
@@ -39,13 +42,19 @@ final class LiveTranscriptionEngine: ObservableObject {
                 let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: true)
                 self.transcript.append(seg)
             }
+        case .openAIRealtime:
+            // OpenAI Realtime API — WebSocket streaming not yet wired; fall back.
+            let authorized = await requestAuthorization()
+            guard authorized else { return }
+            currentEngine = .appleSpeech
+            try startAppleSpeech(language: language)
         }
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
         switch currentEngine {
-        case .appleSpeech: request?.append(buffer)
-        case .parakeet:    parakeet?.append(buffer)
+        case .appleSpeech, .local, .openAIRealtime: request?.append(buffer)
+        case .parakeet:                              parakeet?.append(buffer)
         }
     }
 
@@ -57,11 +66,22 @@ final class LiveTranscriptionEngine: ObservableObject {
         parakeet = nil
     }
 
-    // MARK: - Engine selection
+    // MARK: - Engine selection (priority order)
 
     private func pickEngine(language: Locale) -> Engine {
-        let key = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
-        if !key.isEmpty { return .parakeet }
+        let openAIKey = UserDefaults.standard.string(forKey: "sonar.openai.apiKey") ?? ""
+        if !openAIKey.isEmpty { return .openAIRealtime }
+
+        let parakeetKey = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
+        if !parakeetKey.isEmpty { return .parakeet }
+
+        let localID = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
+        if !localID.isEmpty,
+           let model = LocalModelManager.availableModels.first(where: { $0.id == localID }),
+           LocalModelManager.shared.localURL(for: model) != nil {
+            return .local
+        }
+
         return .appleSpeech
     }
 

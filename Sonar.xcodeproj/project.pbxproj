@@ -38,6 +38,7 @@
 		4221D19A6E20FCC971ED09BD /* FarTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2255356D11E59AA4ADE342 /* FarTransport.swift */; };
 		4CFE8F4BA099E0C34C1CFF81 /* ConversationBoostToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DEB69222E4881844795E1A /* ConversationBoostToggle.swift */; };
 		4EEE3F22764EF58746BC6D00 /* LiveTranscriptionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 910F3EE400FC312D252516C2 /* LiveTranscriptionEngine.swift */; };
+		EB1C12FA3B62422395022BCC /* LocalModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E79F366A65C4571904F31C8 /* LocalModelManager.swift */; };
 		515193EF94648F690DE090F1 /* LiveDataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69DD620D0079025122744502 /* LiveDataSheet.swift */; };
 		52EFCF0CA34FAEFE0C0AE7C6 /* PrivacyModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5B5A59BA1D091FC84AEC05A /* PrivacyModeTests.swift */; };
 		541A16B8EEF570E839739B1F /* ListeningModeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC3E131DAE58F13DFE052BD1 /* ListeningModeDetector.swift */; };
@@ -159,6 +160,7 @@
 		882B6C7B36F51C4F4C36CF7A /* AudioRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouter.swift; sourceTree = "<group>"; };
 		88DF1BC0D75E4AB0A7777D84 /* SonarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonarApp.swift; sourceTree = "<group>"; };
 		910F3EE400FC312D252516C2 /* LiveTranscriptionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranscriptionEngine.swift; sourceTree = "<group>"; };
+		7E79F366A65C4571904F31C8 /* LocalModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelManager.swift; sourceTree = "<group>"; };
 		921BB6A70922E4916BCC5440 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		94770ADBAEB26B3A2B20EB41 /* OpusCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusCodingTests.swift; sourceTree = "<group>"; };
 		99AA37ED7088D6108CF93914 /* ProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTests.swift; sourceTree = "<group>"; };
@@ -358,6 +360,7 @@
 			isa = PBXGroup;
 			children = (
 				910F3EE400FC312D252516C2 /* LiveTranscriptionEngine.swift */,
+				7E79F366A65C4571904F31C8 /* LocalModelManager.swift */,
 			);
 			path = Transcription;
 			sourceTree = "<group>";
@@ -627,6 +630,7 @@
 				541A16B8EEF570E839739B1F /* ListeningModeDetector.swift in Sources */,
 				515193EF94648F690DE090F1 /* LiveDataSheet.swift in Sources */,
 				4EEE3F22764EF58746BC6D00 /* LiveTranscriptionEngine.swift in Sources */,
+				EB1C12FA3B62422395022BCC /* LocalModelManager.swift in Sources */,
 				871E6A031DB3A070B1BEF18C /* LocalRecorder.swift in Sources */,
 				F17A2C94D7F940264715DBEA /* Logger.swift in Sources */,
 				DAAEDCA0002059FD2EC426E1 /* MPQUICTransport.swift in Sources */,

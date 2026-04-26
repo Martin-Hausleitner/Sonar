@@ -243,6 +243,12 @@ final class SessionCoordinator: ObservableObject {
         appState?.isRecording = true
         Task { try? await transcription.start() }
 
+        // Live transcript → AppState (drives UI)
+        transcription.$transcript
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] segs in self?.appState?.transcriptSegments = segs }
+            .store(in: &cancellables)
+
         phase = .far
     }
 
