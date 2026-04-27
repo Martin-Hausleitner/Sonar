@@ -281,6 +281,9 @@ final class SessionCoordinator: ObservableObject {
                 case .appleSpeech, .local:
                     break
                 }
+                // Clear any cloud-sourced live transcript so stale text doesn't
+                // linger in the UI after the user pulls the kill switch.
+                self.appState?.transcriptSegments = []
             }
             .store(in: &cancellables)
 
