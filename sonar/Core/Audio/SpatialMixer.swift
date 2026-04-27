@@ -81,9 +81,41 @@ final class SpatialMixer {
     }
 
     /// Start / stop the remote player.
-    func startRemotePlayer() { remotePlayer.play() }
+    func startRemotePlayer() {
+        remotePlayer.volume = Self.currentOutputVolume
+        remotePlayer.play()
+    }
     func stopRemotePlayer()  { remotePlayer.stop() }
 
     /// Expose the underlying player so callers can query `isPlaying`.
     var remotePlayerNode: AVAudioPlayerNode { remotePlayer }
+
+    // MARK: - Output volume (Settings → Sonar-Lautstärke)
+
+    /// Last value written by Settings. Read on next `startRemotePlayer()` and
+    /// pushed to all live mixer instances by `applyOutputVolume(_:)`.
+    nonisolated(unsafe) private static var currentOutputVolume: Float = {
+        let stored = UserDefaults.standard.object(forKey: "sonar.audio.outputVolume") as? Double
+        return Float(stored ?? 1.0)
+    }()
+
+    /// Hook for Settings: apply a new output volume live to the active mix.
+    /// Called from the slider in `SettingsView`. Persistence is handled by
+    /// `@AppStorage`; this just propagates the change to every live mixer.
+    nonisolated static func applyOutputVolume(_ volume: Float) {
+        let clamped = max(0, min(1, volume))
+        currentOutputVolume = clamped
+        Task { @MainActor in
+            for mixer in liveMixers.allObjects {
+                mixer.remotePlayer.volume = clamped
+            }
+        }
+    }
+
+    /// Weak-ref pool so a non-isolated static can reach all active mixers.
+    @MainActor private static let liveMixers = NSHashTable<SpatialMixer>.weakObjects()
+
+    init() {
+        Self.liveMixers.add(self)
+    }
 }

@@ -25,8 +25,12 @@ final class AppState: ObservableObject {
     @Published var signalScore: Int = 100
     @Published var signalGrade: SignalScoreCalculator.Grade = .excellent
 
-    // §2.4 — active multipath count
+    // §2.4 — active multipath count + which specific paths are live
     @Published var activePathCount: Int = 0
+    /// Set of currently-connected transports (raw values: "multipeer", "bluetooth",
+    /// "mpquic", "tailscale", "simulatorRelay"). Drives the per-path icon row on
+    /// the main screen so the user sees *which* transports are up, not just how many.
+    @Published var activePathIDs: Set<String> = []
 
     // §9.2 — hardware tier
     let deviceCapabilities: DeviceCapabilities = DeviceCapabilities.detect()
@@ -68,7 +72,7 @@ final class AppState: ObservableObject {
             switch self {
             case .none:      return "antenna.radiowaves.left.and.right.slash"
             case .awdl:      return "dot.radiowaves.left.and.right"
-            case .bluetooth: return "bluetooth"
+            case .bluetooth: return "wave.3.right.circle.fill"
             case .wifi:      return "wifi"
             case .internet:  return "globe"
             case .simulatorRelay: return "desktopcomputer.and.iphone"

@@ -17,7 +17,7 @@ struct ConnectionGuideView: View {
             case .auto:      return "sparkles"
             case .tailscale: return "network.badge.shield.half.filled"
             case .wifi:      return "wifi"
-            case .bluetooth: return "bluetooth"
+            case .bluetooth: return "wave.3.right.circle.fill"
             }
         }
         var color: Color {
@@ -137,7 +137,7 @@ struct ConnectionGuideView: View {
 
     private var bluetoothSteps: some View {
         Group {
-            step(n: 1, icon: "bluetooth", color: .cyan,
+            step(n: 1, icon: "antenna.radiowaves.left.and.right", color: .cyan,
                  title: "Bluetooth einschalten",
                  detail: "Aktiviere Bluetooth auf beiden Geräten. Sonar nutzt BLE (Bluetooth Low Energy) als Fallback-Pfad, wenn WLAN oder Internet nicht verfügbar sind.")
 
@@ -166,7 +166,7 @@ struct ConnectionGuideView: View {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }
             HStack {
-                Label("Bluetooth", systemImage: "bluetooth")
+                Label("Bluetooth", systemImage: "wave.3.right.circle.fill")
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }

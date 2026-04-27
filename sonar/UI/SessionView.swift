@@ -5,6 +5,12 @@ struct SessionView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var coordinator = SessionCoordinator()
 
+    /// Demo mode is OFF by default. Toggle in Settings → "Demo-Modus".
+    /// When enabled, a synthetic peer (`Demo Peer · FAKE`) and animated
+    /// distance/score values are shown so the UI can be screenshot/demoed
+    /// without two real devices. In production this MUST stay false.
+    @AppStorage("sonar.devmode.fakeDemo") private var fakeDemoEnabled: Bool = false
+
     @State private var showSettings = false
     @State private var showGuide    = false
     @State private var sessionActive = false
@@ -66,7 +72,9 @@ struct SessionView: View {
                 if active {
                     coordinator.appState = appState
                     coordinator.start()
-                    if !appState.testIdentity.isSimulatorRelayEnabled {
+                    // Demo mode: only when explicitly opted-in via Settings AND
+                    // we're not already on a real simulator-relay link.
+                    if fakeDemoEnabled, !appState.testIdentity.isSimulatorRelayEnabled {
                         animateFakeDistance()
                     }
                     sessionStart = Date()
@@ -255,14 +263,22 @@ struct SessionView: View {
             }
             .frame(height: 5)
 
-            // Active path pills + REC
+            // Active path pills + REC — driven by the live `activePathIDs`
+            // set so each transport's pill lights up only when *that specific*
+            // path is connected, not based on a count threshold.
             HStack(spacing: 6) {
                 if appState.connectionType == .simulatorRelay {
-                    pathPill("desktopcomputer.and.iphone", "Simulator", active: appState.activePathCount > 0 || appState.peerOnline)
+                    pathPill("desktopcomputer.and.iphone", "Simulator",
+                             active: appState.activePathIDs.contains("simulatorRelay") || appState.peerOnline)
                 } else {
-                    pathPill("dot.radiowaves.left.and.right", "AWDL", active: appState.activePathCount > 0)
-                    pathPill("bluetooth", "Bluetooth", active: appState.activePathCount > 1)
-                    pathPill("globe", "Internet", active: appState.activePathCount > 2)
+                    pathPill("dot.radiowaves.left.and.right", "AWDL",
+                             active: appState.activePathIDs.contains("multipeer"))
+                    pathPill("wave.3.right.circle.fill", "Bluetooth",
+                             active: appState.activePathIDs.contains("bluetooth"))
+                    pathPill("network.badge.shield.half.filled", "Tailscale",
+                             active: appState.activePathIDs.contains("tailscale"))
+                    pathPill("globe", "Internet",
+                             active: appState.activePathIDs.contains("mpquic"))
                 }
                 Spacer()
                 if appState.isRecording {

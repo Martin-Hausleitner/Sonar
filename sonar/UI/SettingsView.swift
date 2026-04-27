@@ -11,6 +11,10 @@ struct SettingsView: View {
     @AppStorage("sonar.parakeet.apiKey")         private var parakeetAPIKey: String = ""
     @AppStorage("sonar.openai.apiKey")           private var openAIKey: String = ""
     @AppStorage("sonar.openai.endpoint")         private var openAIEndpoint: String = ""
+    @AppStorage("sonar.devmode.fakeDemo")         private var fakeDemoEnabled: Bool = false
+    /// Output volume of Sonar's voice mix (0.0–1.0). Independent from system volume so
+    /// the user can keep music loud and turn the peer's voice down (or vice-versa).
+    @AppStorage("sonar.audio.outputVolume")       private var outputVolume: Double = 1.0
 
     @State private var privacyActive: Bool = PrivacyMode.shared.isActive
     @State private var latency: (p50: Double, p95: Double, p99: Double)? = nil
@@ -28,6 +32,7 @@ struct SettingsView: View {
             profileSection
             privacySection
             diagnosticsSection
+            developerSection
             appInfoSection
         }
         .navigationTitle("Einstellungen")
@@ -94,6 +99,30 @@ struct SettingsView: View {
                 Text("FLAC").tag(AudioFormat.flac)
             }
             .pickerStyle(.segmented)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Sonar-Lautstärke", systemImage: "speaker.wave.2.fill")
+                    Spacer()
+                    Text("\(Int(outputVolume * 100)) %")
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 10) {
+                    Image(systemName: "speaker.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Slider(value: $outputVolume, in: 0.0...1.0, step: 0.01)
+                        .onChange(of: outputVolume) { _, v in
+                            // Live-apply to the active mix node so the user
+                            // hears the change instantly without restarting.
+                            SpatialMixer.applyOutputVolume(Float(v))
+                        }
+                    Image(systemName: "speaker.wave.3.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+            }
 
             Toggle("Vorwärtsfehlerkorrektur (FEC)", isOn: $fecEnabled)
 
@@ -364,6 +393,25 @@ struct SettingsView: View {
             Text("Diagnose")
         } footer: {
             Text("P50/P95/P99 sind statistische Latenzmessungen (50 %, 95 %, 99 % der Frames liegen unter diesem Wert). Das Budget beträgt 80 ms P95.")
+        }
+    }
+
+    // MARK: - Developer
+
+    private var developerSection: some View {
+        Section {
+            Toggle(isOn: $fakeDemoEnabled) {
+                Label("Demo-Modus", systemImage: "theatermasks")
+            }
+            if fakeDemoEnabled {
+                Text("⚠️ Demo aktiv — Distanz, Signal-Score und Peer-Name (\"Demo Peer · FAKE\") sind synthetisch animiert. Echte Verbindungen laufen parallel weiter.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Entwickler")
+        } footer: {
+            Text("Im Demo-Modus simuliert die App einen Peer ohne dass ein zweites Gerät verbunden ist — nur für Screenshots / Marketing. Standard: aus.")
         }
     }
 

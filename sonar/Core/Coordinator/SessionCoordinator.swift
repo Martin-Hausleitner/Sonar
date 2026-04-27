@@ -103,6 +103,8 @@ final class SessionCoordinator: ObservableObject {
         appState?.peerLastSeen = nil
         appState?.connectionType = .none
         appState?.connectionIsSimulated = false
+        appState?.activePathIDs = []
+        appState?.activePathCount = 0
     }
 
     // MARK: - Internal async setup
@@ -245,11 +247,12 @@ final class SessionCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // MARK: Active paths → appState.
+        // MARK: Active paths → appState (count + per-path Set for the live icon row).
         bonder.$activePaths
             .receive(on: DispatchQueue.main)
             .sink { [weak self] paths in
                 self?.appState?.activePathCount = paths.count
+                self?.appState?.activePathIDs = Set(paths.map(\.rawValue))
             }
             .store(in: &cancellables)
 
