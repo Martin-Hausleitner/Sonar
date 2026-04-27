@@ -45,7 +45,15 @@ struct SettingsView: View {
     private var connectionSection: some View {
         Section {
             NavigationLink {
+                PairingView()
+                    .environmentObject(appState)
+            } label: {
+                Label("QR-Pairing", systemImage: "qrcode.viewfinder")
+            }
+
+            NavigationLink {
                 ConnectionGuideView()
+                    .environmentObject(appState)
             } label: {
                 Label("Verbindung einrichten", systemImage: "network.badge.shield.half.filled")
             }

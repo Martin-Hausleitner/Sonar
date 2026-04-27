@@ -13,6 +13,7 @@ struct SessionView: View {
 
     @State private var showSettings = false
     @State private var showGuide    = false
+    @State private var showPairing  = false
     @State private var sessionActive = false
     @State private var previewDistance: Double? = nil
 
@@ -67,6 +68,7 @@ struct SessionView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { settingsSheet }
         .sheet(isPresented: $showGuide)    { guideSheet    }
+        .sheet(isPresented: $showPairing)  { pairingSheet  }
         .onChange(of: sessionActive) { _, active in
             withAnimation(.easeInOut(duration: 0.3)) {
                 if active {
@@ -501,6 +503,33 @@ struct SessionView: View {
                 }
                 Spacer()
             }
+            Button { showPairing = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.callout.weight(.semibold))
+                    Text("QR-Pairing starten")
+                        .font(.callout.weight(.semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.cyan.opacity(0.7))
+                }
+                .foregroundStyle(.cyan)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.cyan.opacity(0.18))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.cyan.opacity(0.45), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
             Button { showGuide = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link.badge.plus")
@@ -526,7 +555,6 @@ struct SessionView: View {
                 )
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -567,9 +595,22 @@ struct SessionView: View {
         }
     }
 
+    private var pairingSheet: some View {
+        NavigationStack {
+            PairingView()
+                .environmentObject(appState)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Fertig") { showPairing = false }
+                    }
+                }
+        }
+    }
+
     private var guideSheet: some View {
         NavigationStack {
             ConnectionGuideView()
+                .environmentObject(appState)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Fertig") { showGuide = false }

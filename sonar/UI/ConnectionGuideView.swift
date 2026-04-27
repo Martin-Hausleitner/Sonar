@@ -4,6 +4,7 @@ import SwiftUI
 struct ConnectionGuideView: View {
 
     @State private var selected: Method = .auto
+    @State private var showPairing: Bool = false
 
     enum Method: String, CaseIterable, Identifiable {
         case auto      = "Automatisch"
@@ -63,12 +64,53 @@ struct ConnectionGuideView: View {
         }
         .navigationTitle("Verbindung einrichten")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPairing) {
+            NavigationStack {
+                PairingView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Fertig") { showPairing = false }
+                        }
+                    }
+            }
+        }
+    }
+
+    // MARK: - QR pairing entry
+
+    private var qrPairingButton: some View {
+        Button { showPairing = true } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(Color.cyan.opacity(0.18)).frame(width: 38, height: 38)
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.cyan)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("QR-Pairing starten")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Code anzeigen oder scannen — Sekunden statt Setup.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Auto
 
     private var autoSteps: some View {
         Group {
+            qrPairingButton
+
             step(n: 1, icon: "iphone",       color: .cyan,
                  title: "Sonar auf beiden Geräten öffnen",
                  detail: "Starte Sonar auf Gerät A und Gerät B. Die App erkennt den Partner automatisch – kein manuelles Pairen nötig.")
@@ -226,6 +268,7 @@ struct ConnectionGuideView: View {
 #Preview {
     NavigationStack {
         ConnectionGuideView()
+            .environmentObject(AppState())
     }
     .preferredColorScheme(.dark)
 }

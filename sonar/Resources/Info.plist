@@ -50,6 +50,8 @@
     <string>Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.</string>
     <key>NSAppleMusicUsageDescription</key>
     <string>Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Sonar nutzt die Kamera, um den QR-Code des Pairing-Partners zu scannen.</string>
 
     <key>NSBonjourServices</key>
     <array>
