@@ -19,6 +19,22 @@ Spatial audio · Ultra-Wideband ranging · Multipath mesh · AI transcription
 
 ---
 
+## Quick Start
+
+```
+Drop the IPA into SideStore  →  scan QR-Code from the other phone  →  talk.
+```
+
+1. `Sonar-unsigned-iOS26.ipa` (im Repo-Root) auf beide iPhones via SideStore sideloaden.
+2. Sonar auf beiden Geräten öffnen.
+3. Auf Gerät A: TopBar → **Verbinden** → **Anzeigen** (QR wird gerendert).
+4. Auf Gerät B: TopBar → **Verbinden** → **Scannen** → QR von Gerät A scannen.
+5. Reden.
+
+Bonjour/AWDL findet Peers in den meisten Fällen automatisch — QR ist nur für Spezialfälle nötig (laute Umgebung mit vielen Sonar-Geräten, Tailscale-Setup, BLE-Erstkontakt). Details: [`docs/pairing.md`](docs/pairing.md).
+
+---
+
 ## Was ist Sonar?
 
 Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit **räumlichem Klang**, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Das Mikrofon des anderen klingt so, als käme es wirklich von dort, wo die Person steht.
@@ -157,6 +173,15 @@ PCM 16 kHz · mono · Float32
 ```
 
 ---
+
+## Verbinden
+
+Sonar bietet vier Verbindungs-Pfade (AWDL → BLE → Tailscale → MPQUIC), die parallel laufen und nach Latenz priorisiert werden. Für tiefere Details:
+
+- [`docs/connection-guide.md`](docs/connection-guide.md) — Pfad-Prioritäten, Bonjour/NIToken-Austausch, Tailscale-Walkthrough mit häufigen Stolperfallen, WLAN-Hotspot, reines BLE, Diagnose-Checkliste.
+- [`docs/pairing.md`](docs/pairing.md) — manuelles QR-Pairing über die TopBar (Anzeigen/Scannen), `PairingToken`-Schema und Sicherheits-Implikationen.
+
+Kurzfassung der drei Standard-Methoden:
 
 ## Verbindung aufbauen
 
@@ -426,6 +451,21 @@ xcodebuild test -scheme Sonar \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
 # Erwartet: ** TEST SUCCEEDED ** (174 Tests)
 ```
+
+---
+
+## Releases
+
+Aktueller Build: [`Sonar-unsigned-iOS26.ipa`](Sonar-unsigned-iOS26.ipa) im Repo-Root — unsigned, für SideStore / AltStore-Sideloading.
+
+```bash
+# Sideload via SideStore:
+#   1. SideStore auf dem iPhone installieren (siehe sidestore.io).
+#   2. IPA öffnen → "Mit SideStore öffnen" → Apple-ID eingeben.
+#   3. Sonar erscheint im Home-Screen, alle 7 Tage erneut signieren.
+```
+
+Frühere Builds liegen unter [`releases/`](releases/) — ältere IPA-Snapshots zur Referenz und für Bisecting bei Regressionen.
 
 ---
 
