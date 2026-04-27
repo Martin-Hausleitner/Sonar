@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var modelManager = LocalModelManager.shared
+    @StateObject private var tailscale    = TailscaleDetector.shared
 
     @AppStorage("sonar.settings.audioFormat")    private var audioFormat: AudioFormat = .opus
     @AppStorage("sonar.settings.retentionDays")  private var retentionDays: Int = 30
@@ -22,13 +23,14 @@ struct SettingsView: View {
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
 
+    /// Section ordering: connection setup first (most important for new users),
+    /// then audio + transcription configuration, then per-session profile,
+    /// privacy, live diagnostics, and finally developer/app metadata at the bottom.
     var body: some View {
         Form {
             connectionSection
             audioSection
-            realtimeAPISection
-            transcriptionSection
-            localModelSection
+            transcriptionMasterSection
             profileSection
             privacySection
             diagnosticsSection
@@ -37,13 +39,18 @@ struct SettingsView: View {
         }
         .navigationTitle("Einstellungen")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { latency = Metrics.shared.percentiles(.captured, .rendered) }
+        .onAppear {
+            latency = Metrics.shared.percentiles(.captured, .rendered)
+            tailscale.refresh()
+        }
     }
 
-    // MARK: - Connection
+    // MARK: - Connection (top of the screen — first thing the user sees)
 
     private var connectionSection: some View {
         Section {
+            // "Verbindung einrichten" link is the primary call-to-action for
+            // new users — keeping it as the first row of the first section.
             NavigationLink {
                 PairingView()
                     .environmentObject(appState)
@@ -69,10 +76,12 @@ struct SettingsView: View {
                 Spacer()
                 signalBadge
             }
+
+            tailscaleRow
         } header: {
             Text("Verbindung")
         } footer: {
-            Text("Sonar wählt automatisch zwischen AWDL (lokal), Bluetooth und Internet. Die Verbindung startet, sobald beide Geräte die App öffnen.")
+            Text("Sonar wählt automatisch zwischen AWDL (lokal), Bluetooth, Tailscale und Internet. Die Verbindung startet, sobald beide Geräte die App öffnen. Tailscale wird automatisch erkannt, wenn dein Gerät eine 100.x-Adresse aus dem CGNAT-Bereich hat.")
         }
     }
 
@@ -96,6 +105,23 @@ struct SettingsView: View {
         return Text("\(appState.signalScore) / 100")
             .font(.caption.weight(.bold).monospaced())
             .foregroundStyle(color)
+    }
+
+    @ViewBuilder
+    private var tailscaleRow: some View {
+        HStack {
+            Label("Tailscale", systemImage: "network.badge.shield.half.filled")
+            Spacer()
+            if tailscale.isAvailable, let ip = tailscale.localTailscaleIP {
+                Text(ip)
+                    .font(.caption.weight(.medium).monospaced())
+                    .foregroundStyle(.green)
+            } else {
+                Text("Nicht erkannt")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     // MARK: - Audio
@@ -147,10 +173,25 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Realtime API
+    // MARK: - Transcription (merged: Realtime API + Cloud + Local model)
 
-    private var realtimeAPISection: some View {
+    /// Combined section containing all transcription-engine config:
+    /// OpenAI Realtime, NVIDIA Parakeet, and on-device Whisper models.
+    /// Previously these lived in three separate sections that asked
+    /// repetitive questions ("Engine", "Active engine", "API key…"); merging
+    /// them removes that redundancy while keeping every individual control.
+    private var transcriptionMasterSection: some View {
         Section {
+            // Active engine indicator — single source of truth.
+            HStack {
+                Label("Aktive Engine", systemImage: "waveform.and.mic")
+                Spacer()
+                Text(activeEngineLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(activeEngineColor)
+            }
+
+            // OpenAI Realtime — highest priority.
             HStack {
                 Label("OpenAI API Key", systemImage: "key.fill")
                 Spacer()
@@ -160,9 +201,8 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 180)
             }
-
             HStack {
-                Label("Endpoint", systemImage: "link")
+                Label("OpenAI Endpoint", systemImage: "link")
                 Spacer()
                 TextField("https://api.openai.com/v1", text: $openAIEndpoint)
                     .multilineTextAlignment(.trailing)
@@ -173,17 +213,25 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
             }
 
+            // NVIDIA Parakeet — secondary cloud option.
             HStack {
-                Label("Aktive Engine", systemImage: "waveform.and.mic")
+                Label("NVIDIA API Key", systemImage: "key.fill")
                 Spacer()
-                Text(activeEngineLabel)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(activeEngineColor)
+                SecureField("nvapi-…", text: $parakeetAPIKey)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 180)
+            }
+
+            // On-device Whisper models.
+            ForEach(LocalModelManager.availableModels) { model in
+                localModelRow(model)
             }
         } header: {
-            Text("Realtime API")
+            Text("Transkription")
         } footer: {
-            Text("OpenAI Realtime API ermöglicht Echtzeit-Sprache mit GPT-4o. Kompatibel mit Azure OpenAI und selbst gehosteten Endpoints. **Priorität:** Realtime API → Parakeet → Lokales Modell → Apple Speech.")
+            Text("Sonar wählt die Engine automatisch nach Priorität: **OpenAI Realtime → Parakeet → Lokales Whisper-Modell → Apple Speech**. Lokale Whisper-Modelle (~75–466 MB) laufen vollständig auf dem Gerät — kein API Key nötig. Cloud-Engines sind präziser, brauchen aber Internet.")
         }
     }
 
@@ -203,20 +251,6 @@ struct SettingsView: View {
         let lid = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
         if !lid.isEmpty { return .yellow }
         return Color.secondary
-    }
-
-    // MARK: - Local Model
-
-    private var localModelSection: some View {
-        Section {
-            ForEach(LocalModelManager.availableModels) { model in
-                localModelRow(model)
-            }
-        } header: {
-            Text("Lokales Modell")
-        } footer: {
-            Text("Whisper-Modelle laufen vollständig auf dem Gerät — keine Cloud, kein API Key nötig. **Tiny** (~75 MB) ist schnell, **Base** (~142 MB) genauer, **Small** (~466 MB) am präzisesten. Das ausgewählte Modell wird genutzt, wenn kein API Key hinterlegt ist.")
-        }
     }
 
     private func localModelRow(_ model: LocalModelManager.ModelInfo) -> some View {
@@ -287,34 +321,6 @@ struct SettingsView: View {
         return "\(bytes) B"
     }
 
-    // MARK: - Transcription
-
-    private var transcriptionSection: some View {
-        Section {
-            HStack {
-                Label("Engine", systemImage: "waveform.and.mic")
-                Spacer()
-                Text(parakeetAPIKey.isEmpty ? "Apple Speech" : "Parakeet (NVIDIA)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(parakeetAPIKey.isEmpty ? Color.secondary : Color.cyan)
-            }
-
-            HStack {
-                Label("NVIDIA API Key", systemImage: "key.fill")
-                Spacer()
-                SecureField("nvapi-…", text: $parakeetAPIKey)
-                    .multilineTextAlignment(.trailing)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: 180)
-            }
-        } header: {
-            Text("Transkription")
-        } footer: {
-            Text("Ohne API Key nutzt Sonar **Apple Speech** (on-device). Mit einem NVIDIA NIM Key wird **nvidia/parakeet-ctc-1.1b** genutzt — präziser, aber Cloud-basiert. Key unter build.nvidia.com erstellen.")
-        }
-    }
-
     // MARK: - Profile
 
     private var profileSection: some View {
@@ -373,17 +379,29 @@ struct SettingsView: View {
     }
 
     // MARK: - Diagnostics
+    //
+    // Every value below is read DIRECTLY from `appState` (an
+    // `@EnvironmentObject`) so SwiftUI re-evaluates this body whenever any of
+    // the underlying `@Published` props fire `objectWillChange`. The previous
+    // implementation already did this — there is no stale-state copy. To make
+    // the live-update behaviour explicit we (a) read each metric inline in
+    // the row builder and (b) tag the latency rows as the only manual-refresh
+    // metrics in the footer.
 
     private var diagnosticsSection: some View {
         Section {
-            metricRow("Signal Score",    "\(appState.signalScore) / 100")
-            metricRow("Aktive Pfade",    "\(appState.activePathCount)")
-            metricRow("Dieses Gerät",    appState.testIdentity.displayName)
-            metricRow("Peer",            appState.peerName ?? "—")
-            metricRow("Verbindung",      appState.connectionType.label)
-            metricRow("Quelle",          appState.connectionIsSimulated ? "Simuliert" : "Echt")
-            metricRow("Akku-Modus",      batteryLabel)
-            metricRow("Geräteprofil",    appState.deviceCapabilities.hasUWB ? "UWB · High-End" : "Standard")
+            // Each row reads `appState.<prop>` inline — value re-computes on
+            // every body invocation, which SwiftUI triggers when the
+            // ObservableObject publishes.
+            metricRow("Signal Score",  "\(appState.signalScore) / 100")
+            metricRow("Aktive Pfade",  "\(appState.activePathCount)")
+            metricRow("Dieses Gerät",  appState.testIdentity.displayName)
+            metricRow("Peer",          appState.peerName ?? "—")
+            metricRow("Verbindung",    appState.connectionType.label)
+            metricRow("Quelle",        appState.connectionIsSimulated ? "Simuliert" : "Echt")
+            metricRow("Akku-Modus",    batteryLabel)
+            metricRow("Geräteprofil",  appState.deviceCapabilities.hasUWB ? "UWB · High-End" : "Standard")
+            metricRow("Tailscale",     tailscale.isAvailable ? (tailscale.localTailscaleIP ?? "ja") : "Nein")
 
             if let lat = latency {
                 metricRow("Latenz P50",  fmtMs(lat.p50))
@@ -395,12 +413,13 @@ struct SettingsView: View {
 
             Button("Aktualisieren") {
                 latency = Metrics.shared.percentiles(.captured, .rendered)
+                tailscale.refresh()
             }
             .font(.footnote)
         } header: {
             Text("Diagnose")
         } footer: {
-            Text("P50/P95/P99 sind statistische Latenzmessungen (50 %, 95 %, 99 % der Frames liegen unter diesem Wert). Das Budget beträgt 80 ms P95.")
+            Text("Signal, Pfade, Peer und Verbindung aktualisieren sich live. **Latenz P50/P95/P99** (50 %, 95 %, 99 % der Frames liegen unter diesem Wert; Budget: 80 ms P95) wird nur beim Tippen auf *Aktualisieren* neu berechnet, um Akku zu sparen.")
         }
     }
 
@@ -423,7 +442,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - App Info
+    // MARK: - App Info (always last)
 
     private var appInfoSection: some View {
         Section("App") {

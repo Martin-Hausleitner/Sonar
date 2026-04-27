@@ -52,6 +52,10 @@ final class SessionCoordinator: ObservableObject {
     private let wakeWord          = WakeWordDetector()
     private let agentConnector    = AgentConnector()
 
+    // Tailscale presence detector — drives `connectionType = .tailscale`
+    // when no peer-driven (simulator-relay) type is otherwise active.
+    private let tailscale         = TailscaleDetector.shared
+
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
     private var playbackTimer: Timer?
@@ -168,6 +172,31 @@ final class SessionCoordinator: ObservableObject {
             guard !Task.isCancelled else { return }
             bonder.addPath(near)
             bonder.addPath(far)
+
+            // Tailscale presence: if a 100.x CGNAT interface is up, treat
+            // Tailscale as the umbrella connection type — it transparently
+            // subsumes WiFi / Internet for end-to-end peer reachability.
+            // Never override `.simulatorRelay` (handled in the if-branch above).
+            tailscale.startMonitoring()
+            tailscale.refresh()
+            if tailscale.isAvailable {
+                appState?.connectionType = .tailscale
+            }
+            // Keep `connectionType` in sync as the tailnet interface
+            // appears / disappears (Wi-Fi reconnect, VPN toggle, etc.).
+            tailscale.$localTailscaleIP
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] ip in
+                    guard let self, let appState = self.appState else { return }
+                    // Don't override simulator-relay (test harness owns it).
+                    if appState.connectionType == .simulatorRelay { return }
+                    if ip != nil {
+                        appState.connectionType = .tailscale
+                    } else if appState.connectionType == .tailscale {
+                        appState.connectionType = .none
+                    }
+                }
+                .store(in: &cancellables)
         }
         guard !Task.isCancelled else { return }
 

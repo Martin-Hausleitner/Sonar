@@ -64,13 +64,14 @@ final class AppState: ObservableObject {
     @Published var pendingPairing: PairingToken? = nil
 
     enum ConnectionType {
-        case none, awdl, bluetooth, wifi, internet, simulatorRelay
+        case none, awdl, bluetooth, wifi, tailscale, internet, simulatorRelay
         var label: String {
             switch self {
             case .none:      return "Kein Signal"
             case .awdl:      return "AWDL · Lokal"
             case .bluetooth: return "Bluetooth"
             case .wifi:      return "WLAN · Lokal"
+            case .tailscale: return "Tailscale"
             case .internet:  return "Internet"
             case .simulatorRelay: return "Simulator Relay"
             }
@@ -81,6 +82,7 @@ final class AppState: ObservableObject {
             case .awdl:      return "dot.radiowaves.left.and.right"
             case .bluetooth: return "wave.3.right.circle.fill"
             case .wifi:      return "wifi"
+            case .tailscale: return "network.badge.shield.half.filled"
             case .internet:  return "globe"
             case .simulatorRelay: return "desktopcomputer.and.iphone"
             }
