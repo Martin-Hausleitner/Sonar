@@ -32,3 +32,6 @@ sonar-agent/.venv/
 
 # Vapor (sonar-server)
 sonar-server/.build/
+
+# Generated coverage report (re-run scripts/coverage/measure.sh)
+docs/coverage.md
