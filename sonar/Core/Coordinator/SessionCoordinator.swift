@@ -56,6 +56,9 @@ final class SessionCoordinator: ObservableObject {
     // when no peer-driven (simulator-relay) type is otherwise active.
     private let tailscale         = TailscaleDetector.shared
 
+    // QR pairing — observes AppState.pendingPairing and reacts.
+    private let pairingService    = PairingService()
+
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
     private var playbackTimer: Timer?
@@ -199,6 +202,14 @@ final class SessionCoordinator: ObservableObject {
                 .store(in: &cancellables)
         }
         guard !Task.isCancelled else { return }
+
+        // MARK: QR pairing — observe AppState.pendingPairing and translate
+        // a successful scan into peerOnline + a Bonjour-host hint for the
+        // transport layer. (The targeted-invite integration in NearTransport
+        // is a follow-up; for now the hint is a NotificationCenter event.)
+        if let appState {
+            pairingService.bind(appState: appState, near: near)
+        }
 
         // MARK: Wake word → AI agent
         wakeWord.start()
