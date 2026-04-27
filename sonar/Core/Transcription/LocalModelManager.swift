@@ -81,26 +81,21 @@ final class LocalModelManager: ObservableObject {
         Task {
             await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
                 let delegate = DownloadDelegate(
+                    destination: dest,
                     onProgress: { [weak self] p in
                         Task { @MainActor [weak self] in
                             self?.states[id] = .downloading(p)
                         }
                     },
-                    onComplete: { [weak self] tempURL, error in
+                    onComplete: { [weak self] movedURL, error in
                         Task { @MainActor [weak self] in
                             defer { cont.resume() }
-                            guard let tempURL, error == nil else {
+                            guard let movedURL, error == nil else {
                                 self?.states[id] = .failed(error?.localizedDescription ?? "Fehler")
                                 return
                             }
-                            do {
-                                try? FileManager.default.removeItem(at: dest)
-                                try FileManager.default.moveItem(at: tempURL, to: dest)
-                                let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64) ?? 0
-                                self?.states[id] = .ready(size)
-                            } catch {
-                                self?.states[id] = .failed(error.localizedDescription)
-                            }
+                            let size = (try? FileManager.default.attributesOfItem(atPath: movedURL.path)[.size] as? Int64) ?? 0
+                            self?.states[id] = .ready(size)
                         }
                     }
                 )
@@ -135,10 +130,20 @@ final class LocalModelManager: ObservableObject {
 // MARK: - URLSession download delegate
 
 private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    let destination: URL
     let onProgress: (Double) -> Void
+    /// Called with the final on-disk URL after the temp file has already been
+    /// moved into place — `nil` URL signals failure.
     let onComplete: (URL?, Error?) -> Void
 
-    init(onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL?, Error?) -> Void) {
+    /// Guards against `onComplete` running twice (didFinish + didCompleteWithError
+    /// can both fire on certain failure orderings).
+    private var didReport = false
+
+    init(destination: URL,
+         onProgress: @escaping (Double) -> Void,
+         onComplete: @escaping (URL?, Error?) -> Void) {
+        self.destination = destination
         self.onProgress = onProgress
         self.onComplete = onComplete
     }
@@ -152,10 +157,23 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
-        onComplete(location, nil)
+        // URLSession deletes the temp file as soon as this delegate method
+        // returns — so we MUST move it synchronously here, before any actor
+        // hop, otherwise the file is gone by the time the move runs.
+        guard !didReport else { return }
+        didReport = true
+        do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: location, to: destination)
+            onComplete(destination, nil)
+        } catch {
+            onComplete(nil, error)
+        }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error { onComplete(nil, error) }
+        guard let error, !didReport else { return }
+        didReport = true
+        onComplete(nil, error)
     }
 }
