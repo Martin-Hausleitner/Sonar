@@ -2,7 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 
-enum TransportKind: Sendable { case near, far }
+enum TransportKind: Sendable { case near, far, simulator }
 
 protocol Transport: AnyObject {
     var kind: TransportKind { get }

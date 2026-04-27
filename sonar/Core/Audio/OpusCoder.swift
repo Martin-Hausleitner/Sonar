@@ -89,13 +89,21 @@ final class OpusCoder {
 
     func decode(_ data: Data, into buffer: AVAudioPCMBuffer) throws {
         let dec = try decoder()
+        // Empty payload would force-unwrap-crash on baseAddress below, and
+        // AVAudioCompressedBuffer rejects maximumPacketSize == 0 anyway.
+        guard !data.isEmpty else { throw CodecError.decodeFailed }
 
         let inp = AVAudioCompressedBuffer(
             format: opusFormat,
             packetCapacity: 1,
             maximumPacketSize: data.count
         )
-        data.withUnsafeBytes { inp.data.copyMemory(from: $0.baseAddress!, byteCount: data.count) }
+        let copied: Bool = data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return false }
+            inp.data.copyMemory(from: base, byteCount: data.count)
+            return true
+        }
+        guard copied else { throw CodecError.decodeFailed }
         inp.byteLength   = UInt32(data.count)
         inp.packetCount  = 1
         inp.packetDescriptions?.pointee = AudioStreamPacketDescription(

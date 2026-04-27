@@ -29,6 +29,7 @@ final class MultipathBonder: ObservableObject {
         case bluetooth   // CoreBluetooth GATT Mesh
         case mpquic      // Cellular via MPQUIC
         case tailscale   // Optional WireGuard P2P
+        case simulatorRelay // Local Mac relay for two-simulator E2E tests
     }
 
     func addPath(_ path: any BondedPath) {

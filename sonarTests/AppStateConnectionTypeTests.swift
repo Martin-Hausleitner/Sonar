@@ -26,10 +26,14 @@ final class AppStateConnectionTypeTests: XCTestCase {
         XCTAssertEqual(AppState.ConnectionType.internet.label, "Internet")
     }
 
+    func testSimulatorRelayLabel() {
+        XCTAssertEqual(AppState.ConnectionType.simulatorRelay.label, "Simulator Relay")
+    }
+
     // MARK: - Icon correctness (SF Symbol names must be non-empty)
 
     func testAllIconsNonEmpty() {
-        for type in [AppState.ConnectionType.none, .awdl, .bluetooth, .wifi, .internet] {
+        for type in [AppState.ConnectionType.none, .awdl, .bluetooth, .wifi, .internet, .simulatorRelay] {
             XCTAssertFalse(type.icon.isEmpty, "\(type) must have a non-empty SF Symbol name")
         }
     }
@@ -41,6 +45,10 @@ final class AppStateConnectionTypeTests: XCTestCase {
 
     func testInternetIcon() {
         XCTAssertEqual(AppState.ConnectionType.internet.icon, "globe")
+    }
+
+    func testSimulatorRelayIcon() {
+        XCTAssertEqual(AppState.ConnectionType.simulatorRelay.icon, "desktopcomputer.and.iphone")
     }
 
     // MARK: - AppState default state
@@ -65,8 +73,10 @@ final class AppStateConnectionTypeTests: XCTestCase {
     func testAppStatePeerCanBeSet() {
         let state = AppState()
         state.peerOnline = true
+        state.peerID = "alice-device"
         state.peerName   = "Alice's iPhone"
         XCTAssertTrue(state.peerOnline)
+        XCTAssertEqual(state.peerID, "alice-device")
         XCTAssertEqual(state.peerName, "Alice's iPhone")
     }
 

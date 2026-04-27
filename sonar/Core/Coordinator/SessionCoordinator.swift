@@ -29,6 +29,7 @@ final class SessionCoordinator: ObservableObject {
     private let spatialMixer     = SpatialMixer()
     private let near             = NearTransport()
     private let far              = FarTransport()
+    private var simulatorRelay: SimulatorRelayTransport?
     private let jitterBuffer     = JitterBuffer()
     private let encoder          = OpusCoder()
     private let decoder          = OpusCoder()
@@ -65,6 +66,7 @@ final class SessionCoordinator: ObservableObject {
 
     func start() {
         phase = .connecting
+        appState?.phase = .connecting
         audioTask = Task { [weak self] in
             await self?.startAudioPipeline()
         }
@@ -83,14 +85,24 @@ final class SessionCoordinator: ObservableObject {
         rssiFallback.stop()
         musicDucker.disable()
         wakeWord.stop()
+        let relay = simulatorRelay
         Task {
             await near.stop()
             await far.stop()
+            await relay?.stop()
         }
+        simulatorRelay = nil
         jitterBuffer.reset()
         cancellables.removeAll()
         phase = .idle
+        appState?.phase = .idle
         appState?.isRecording = false
+        appState?.peerOnline = false
+        appState?.peerID = nil
+        appState?.peerName = nil
+        appState?.peerLastSeen = nil
+        appState?.connectionType = .none
+        appState?.connectionIsSimulated = false
     }
 
     // MARK: - Internal async setup
@@ -137,9 +149,25 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Transport setup
-        try? await near.start()
-        bonder.addPath(near)
-        bonder.addPath(far)
+        let simulatorRelayMode = appState?.testIdentity.isSimulatorRelayEnabled == true
+        if let appState, let relay = SimulatorRelayTransport.makeFromIdentity(appState.testIdentity) {
+            simulatorRelay = relay
+            relay.onPeerUpdate = { [weak self] peer in
+                self?.handleSimulatorRelayPeerUpdate(peer)
+            }
+            bonder.addPath(relay)
+            try? await relay.start()
+            appState.connectionType = .simulatorRelay
+            appState.connectionIsSimulated = true
+        } else {
+            try? await near.start()
+            // stop() may have run during the await above. Bail out instead of
+            // re-arming subsystems the user has just torn down.
+            guard !Task.isCancelled else { return }
+            bonder.addPath(near)
+            bonder.addPath(far)
+        }
+        guard !Task.isCancelled else { return }
 
         // MARK: Wake word → AI agent
         wakeWord.start()
@@ -180,7 +208,9 @@ final class SessionCoordinator: ObservableObject {
                 Task { @MainActor [weak self] in
                     self?.musicDucker.duckOnVoice(active: speaking)
                 }
-                self.transcription.append(buffer)
+                if !simulatorRelayMode {
+                    self.transcription.append(buffer)
+                }
                 self.recorder.append(buffer)
                 self.wakeWord.feed(buffer)
                 if let data = try? self.encoder.encode(buffer) {
@@ -234,14 +264,25 @@ final class SessionCoordinator: ObservableObject {
             .sink { [weak self] g in self?.appState?.signalGrade = g }
             .store(in: &cancellables)
 
-        // MARK: Privacy mode → remove cellular path immediately.
+        // MARK: Privacy mode → remove cellular path AND tear down cloud
+        // transcription engines. Without this the comment "kills all cloud
+        // connections" was a lie: OpenAI Realtime / Parakeet would keep
+        // streaming PCM upstream even with privacy enabled.
         NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
-            .sink { [weak self] _ in self?.bonder.removePath(.mpquic) }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.bonder.removePath(.mpquic)
+                switch self.transcription.currentEngine {
+                case .openAIRealtime, .parakeet:
+                    self.transcription.stop()
+                case .appleSpeech, .local:
+                    break
+                }
+            }
             .store(in: &cancellables)
 
         try? recorder.startSession()
         appState?.isRecording = true
-        Task { try? await transcription.start() }
 
         // Live transcript → AppState (drives UI)
         transcription.$transcript
@@ -249,7 +290,17 @@ final class SessionCoordinator: ObservableObject {
             .sink { [weak self] segs in self?.appState?.transcriptSegments = segs }
             .store(in: &cancellables)
 
+        if simulatorRelayMode {
+            appState?.transcriptSegments = []
+        } else {
+            Task { try? await transcription.start() }
+        }
+
+        // If stop() interleaved during one of the awaits above, don't flip the
+        // phase back to .far over the .idle that stop() just set.
+        guard !Task.isCancelled else { return }
         phase = .far
+        appState?.phase = .far
     }
 
     // MARK: - Distance → Phase
@@ -275,6 +326,30 @@ final class SessionCoordinator: ObservableObject {
     private var activeProfile: SessionProfile? {
         guard let id = appState?.profileID else { return nil }
         return SessionProfile.builtIn.first { $0.id == id }
+    }
+
+    private func handleSimulatorRelayPeerUpdate(_ peer: SimulatorRelayPeer?) {
+        guard let appState else { return }
+        guard let peer else {
+            appState.peerOnline = false
+            appState.peerID = nil
+            appState.peerName = nil
+            appState.peerLastSeen = nil
+            return
+        }
+
+        appState.peerOnline = true
+        appState.peerID = peer.id
+        appState.peerName = "\(peer.name) · \(shortPeerID(peer.id))"
+        appState.peerLastSeen = Date(timeIntervalSince1970: peer.lastSeen)
+        appState.connectionType = .simulatorRelay
+        appState.connectionIsSimulated = true
+    }
+
+    private func shortPeerID(_ id: String) -> String {
+        let cleaned = id.filter { $0.isLetter || $0.isNumber }
+        guard !cleaned.isEmpty else { return "PEER" }
+        return String(cleaned.suffix(6)).uppercased()
     }
 
     // MARK: - Jitter buffer drain (runs on main thread via Timer)

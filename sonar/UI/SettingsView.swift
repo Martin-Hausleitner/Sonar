@@ -341,6 +341,10 @@ struct SettingsView: View {
         Section {
             metricRow("Signal Score",    "\(appState.signalScore) / 100")
             metricRow("Aktive Pfade",    "\(appState.activePathCount)")
+            metricRow("Dieses Gerät",    appState.testIdentity.displayName)
+            metricRow("Peer",            appState.peerName ?? "—")
+            metricRow("Verbindung",      appState.connectionType.label)
+            metricRow("Quelle",          appState.connectionIsSimulated ? "Simuliert" : "Echt")
             metricRow("Akku-Modus",      batteryLabel)
             metricRow("Geräteprofil",    appState.deviceCapabilities.hasUWB ? "UWB · High-End" : "Standard")
 

@@ -12,6 +12,10 @@ final class TransportMultiplexer {
 
     @Published private(set) var active: TransportKind = .near
 
+    /// Bumped on every `select()` call so a rapid second switch invalidates the
+    /// previous fade ramp's still-pending `asyncAfter` blocks.
+    private var fadeGeneration: Int = 0
+
     init(near: NearTransport, far: FarTransport, audioRouter: AudioRouter) {
         self.near = near
         self.far = far
@@ -42,12 +46,15 @@ final class TransportMultiplexer {
         let steps = max(1, crossfadeMs / stepMs)
         let stepInterval = Double(stepMs) / 1000.0
 
+        fadeGeneration &+= 1
+        let myGen = fadeGeneration
+
         for i in 0...steps {
             let delay = stepInterval * Double(i)
             let progress = Float(i) / Float(steps)   // 0.0 → 1.0
 
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self else { return }
+                guard let self, self.fadeGeneration == myGen else { return }
                 // Incoming: fade in (0 → 1).
                 self.audioRouter.setLayerGain(incomingLayer, progress)
                 // Outgoing: fade out (1 → 0).

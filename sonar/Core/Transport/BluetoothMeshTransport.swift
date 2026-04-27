@@ -25,10 +25,16 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     private var connectedPeripherals: [CBPeripheral] = []
     private var audioCharacteristic: CBMutableCharacteristic?
 
+    // CoreBluetooth delegate callbacks need a serial queue, otherwise concurrent
+    // dispatch on a global concurrent queue can race on `connectedPeripherals` and
+    // `audioCharacteristic`. Both managers share one queue so no cross-queue
+    // synchronisation is required.
+    private static let bleQueue = DispatchQueue(label: "sonar.ble", qos: .userInteractive)
+
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: .global(qos: .userInteractive))
-        peripheralManager = CBPeripheralManager(delegate: self, queue: .global(qos: .userInteractive))
+        centralManager = CBCentralManager(delegate: self, queue: Self.bleQueue)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: Self.bleQueue)
     }
 
     func send(_ frame: AudioFrame) async {

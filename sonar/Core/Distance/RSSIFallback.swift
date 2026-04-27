@@ -36,6 +36,7 @@ final class RSSIFallback: NSObject {
 
     private var central: CBCentralManager?
     private var smoothedRSSI: Double? = nil
+    private let lock = NSLock()
 
     // MARK: - Lifecycle
 
@@ -48,7 +49,7 @@ final class RSSIFallback: NSObject {
     func stop() {
         central?.stopScan()
         central = nil
-        smoothedRSSI = nil
+        lock.lock(); smoothedRSSI = nil; lock.unlock()
         distance.send(nil)
     }
 
@@ -60,13 +61,14 @@ final class RSSIFallback: NSObject {
     }
 
     private func updateDistance(rssi: Double) {
-        // Exponential moving average to reduce per-advertisement noise.
+        lock.lock()
         if let prev = smoothedRSSI {
             smoothedRSSI = Self.emaAlpha * rssi + (1.0 - Self.emaAlpha) * prev
         } else {
             smoothedRSSI = rssi
         }
-        let metres = rssiToMetres(smoothedRSSI!)
+        let metres = rssiToMetres(smoothedRSSI!)   // safe: set above in same lock
+        lock.unlock()
         distance.send(metres)
     }
 }
@@ -76,7 +78,7 @@ final class RSSIFallback: NSObject {
 extension RSSIFallback: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard central.state == .poweredOn else {
-            if central.state != .poweredOn { distance.send(nil) }
+            distance.send(nil)
             return
         }
         // Scan without allowing duplicates to reduce wakeup frequency; we rely

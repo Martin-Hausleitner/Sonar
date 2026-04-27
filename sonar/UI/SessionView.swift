@@ -66,7 +66,9 @@ struct SessionView: View {
                 if active {
                     coordinator.appState = appState
                     coordinator.start()
-                    animateFakeDistance()
+                    if !appState.testIdentity.isSimulatorRelayEnabled {
+                        animateFakeDistance()
+                    }
                     sessionStart = Date()
                 } else {
                     coordinator.stop()
@@ -75,6 +77,10 @@ struct SessionView: View {
                     latencyMs = nil
                 }
             }
+        }
+        .onAppear {
+            guard appState.testIdentity.autoStartSession, !sessionActive else { return }
+            sessionActive = true
         }
         .onReceive(statsTimer) { _ in
             guard sessionActive else { return }
@@ -178,6 +184,9 @@ struct SessionView: View {
     }
 
     private var statusText: String {
+        if appState.connectionType == .simulatorRelay, sessionActive {
+            return appState.peerOnline ? "Simulator · verbunden" : "Simulator · wartet"
+        }
         switch appState.phase {
         case .idle:              return sessionActive ? "Verbinde…" : "Bereit"
         case .connecting:        return "Verbinde…"
@@ -189,6 +198,9 @@ struct SessionView: View {
     }
 
     private var statusIcon: String {
+        if appState.connectionType == .simulatorRelay, sessionActive {
+            return "desktopcomputer.and.iphone"
+        }
         switch appState.phase {
         case .idle:        return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
         case .connecting:  return "antenna.radiowaves.left.and.right"
@@ -229,6 +241,8 @@ struct SessionView: View {
                 }
             }
 
+            identityRow
+
             // Quality bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -243,9 +257,13 @@ struct SessionView: View {
 
             // Active path pills + REC
             HStack(spacing: 6) {
-                pathPill("dot.radiowaves.left.and.right", "AWDL",     active: appState.activePathCount > 0)
-                pathPill("bluetooth",                     "Bluetooth", active: appState.activePathCount > 1)
-                pathPill("globe",                         "Internet",  active: appState.activePathCount > 2)
+                if appState.connectionType == .simulatorRelay {
+                    pathPill("desktopcomputer.and.iphone", "Simulator", active: appState.activePathCount > 0 || appState.peerOnline)
+                } else {
+                    pathPill("dot.radiowaves.left.and.right", "AWDL", active: appState.activePathCount > 0)
+                    pathPill("bluetooth", "Bluetooth", active: appState.activePathCount > 1)
+                    pathPill("globe", "Internet", active: appState.activePathCount > 2)
+                }
                 Spacer()
                 if appState.isRecording {
                     Label("REC", systemImage: "record.circle.fill")
@@ -312,6 +330,44 @@ struct SessionView: View {
         }
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var identityRow: some View {
+        HStack(spacing: 8) {
+            identityChip(
+                title: "Dieses Gerät",
+                value: appState.testIdentity.displayName,
+                icon: "iphone"
+            )
+            identityChip(
+                title: "Peer",
+                value: appState.peerName ?? "Noch keiner",
+                icon: appState.peerOnline ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.questionmark"
+            )
+        }
+    }
+
+    private func identityChip(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.cyan)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func statCell(icon: String, label: String, value: String, color: Color) -> some View {
@@ -393,14 +449,31 @@ struct SessionView: View {
     // MARK: - Idle hint (before session)
 
     private var connectHint: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "info.circle")
-                .font(.callout)
-                .foregroundStyle(.cyan)
-            Text("Sonar auf beiden Geräten öffnen – die Verbindung startet automatisch.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.cyan)
+                Text("Sonar auf beiden Geräten öffnen – die Verbindung startet automatisch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            HStack(spacing: 8) {
+                Label(appState.testIdentity.displayName, systemImage: "iphone")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if appState.testIdentity.isSimulatorRelayEnabled {
+                    Label("Simulator Relay", systemImage: "desktopcomputer.and.iphone")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.cyan)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer()
+            }
             Button { showGuide = true } label: {
                 Text("Hilfe")
                     .font(.caption.weight(.semibold))
@@ -479,7 +552,7 @@ struct SessionView: View {
         // Simulate peer coming online
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             guard self.sessionActive else { return }
-            withAnimation { self.appState.peerOnline = true; self.appState.peerName = "Martin's iPhone" }
+            withAnimation { self.appState.peerOnline = true; self.appState.peerName = "Demo Peer · FAKE" }
         }
     }
 }
@@ -495,7 +568,7 @@ struct SessionView: View {
             s.activePathCount = 3
             s.isRecording = true
             s.peerOnline = true
-            s.peerName = "Martin's iPhone"
+            s.peerName = "Demo Peer · FAKE"
             return s
         }())
 }

@@ -27,6 +27,8 @@ final class LiveTranscriptionEngine: ObservableObject {
     private var openAIRealtime: OpenAIRealtimeTranscriber?
 
     func start(language: Locale = .current) async throws {
+        guard !SonarTestIdentity.current().isSimulatorRelayEnabled else { return }
+
         currentEngine = pickEngine(language: language)
         switch currentEngine {
         case .appleSpeech, .local:
@@ -155,7 +157,8 @@ private final class OpenAIRealtimeTranscriber {
         let wsBase = base
             .replacingOccurrences(of: "https://", with: "wss://")
             .replacingOccurrences(of: "http://",  with: "ws://")
-        self.wsURL = URL(string: "\(wsBase)/realtime?model=gpt-4o-realtime-preview-2024-12-17")!
+        self.wsURL = URL(string: "\(wsBase)/realtime?model=gpt-4o-realtime-preview-2024-12-17")
+            ?? URL(string: "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17")!
         self.apiKey = apiKey
         self.onSegment = onSegment
     }

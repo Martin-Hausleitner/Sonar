@@ -37,7 +37,11 @@ final class PermissionsManager: NSObject, ObservableObject {
 
     func requestAll() async {
         microphone        = await requestMicrophone() ? .granted : .denied
-        speechRecognition = await requestSpeechRecognition() ? .granted : .denied
+        if SonarTestIdentity.current().isSimulatorRelayEnabled {
+            speechRecognition = .granted
+        } else {
+            speechRecognition = await requestSpeechRecognition() ? .granted : .denied
+        }
         requestBluetooth()
         requestLocalNetwork()
         requestNearbyInteraction()
