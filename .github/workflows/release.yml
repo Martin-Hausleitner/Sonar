@@ -1,0 +1,232 @@
+# Release pipeline: build, test, archive, package unsigned IPA, and publish a GitHub Release.
+#
+# Trigger pattern: TAG PUSHES ONLY (`v*`).
+#
+# Rationale: `.github/workflows/ci.yml` already runs build + test on every push
+# to every branch (including main). Triggering this release workflow on every
+# push to main would duplicate that work without producing a meaningful
+# release artifact (releases should be intentional, version-tagged events).
+#
+# We chose tag pushes (`push.tags: ['v*']`) over `workflow_run` artifact reuse
+# because:
+#   1. `ci.yml` builds for the iOS *Simulator* (Debug, ONLY_ACTIVE_ARCH=YES) —
+#      its products cannot be repackaged as a device IPA, so reusing its
+#      artifact is not viable for an unsigned-iOS IPA release.
+#   2. Tag pushes give the maintainer explicit control over when a release is
+#      cut, and `gh release create <tag>` aligns naturally with the tag ref.
+#   3. No source/CI changes are required (constraint: don't touch ci.yml).
+#
+# To cut a release locally:
+#   git tag v0.2.3 && git push origin v0.2.3
+#
+# Manual dispatch is also supported for ad-hoc releases without a tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v0.2.3-manual)'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Test, Package, Publish (iOS, unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    env:
+      SCHEME: Sonar
+      PROJECT: Sonar.xcodeproj
+      CONFIGURATION: Release
+      IPA_NAME: Sonar-unsigned-iOS26.ipa
+      DEPLOYMENT_TARGET: '26.2'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "Could not resolve release tag" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Toolchain info
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+          sw_vers
+          gh --version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          else
+            echo "xcodegen already installed: $(xcodegen --version)"
+          fi
+
+      - name: Generate Xcode project
+        run: |
+          set -o pipefail
+          xcodegen generate 2>&1 | tee xcodegen.log
+
+      - name: Pick first available iPhone simulator
+        id: pick-sim
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available --json > sims.json
+          DEVICE_ID=$(python3 - <<'PY'
+          import json, sys
+          with open('sims.json') as f:
+              data = json.load(f)
+          for runtime, devs in data.get('devices', {}).items():
+              if 'iOS' not in runtime:
+                  continue
+              for d in devs:
+                  if d.get('isAvailable') and 'iPhone' in d.get('name',''):
+                      print(d['udid'])
+                      sys.exit(0)
+          sys.exit('no iPhone simulator available')
+          PY
+          )
+          echo "device-id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          echo "Picked simulator: $DEVICE_ID"
+
+      - name: Build (Debug, iOS Simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES 2>&1 | tee build.log
+
+      - name: Test (Debug, iOS Simulator)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES \
+            -resultBundlePath TestResults.xcresult 2>&1 | tee test.log
+
+      - name: Archive build (generic iOS device, unsigned)
+        run: |
+          set -o pipefail
+          DERIVED_DATA="build/release/UnsignedDerivedData"
+          rm -rf "$DERIVED_DATA"
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            IPHONEOS_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build 2>&1 | tee archive.log
+
+      - name: Package unsigned IPA
+        id: package
+        run: |
+          set -euo pipefail
+          DERIVED_DATA="build/release/UnsignedDerivedData"
+          PRODUCTS_DIR="${DERIVED_DATA}/Build/Products/Release-iphoneos"
+          APP_PATH="${PRODUCTS_DIR}/${SCHEME}.app"
+          OUT_DIR="build/release/UnsignedIPA"
+          IPA_PATH="${OUT_DIR}/${IPA_NAME}"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Expected app bundle at $APP_PATH" >&2
+            ls -la "$PRODUCTS_DIR" || true
+            exit 1
+          fi
+
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR/Payload"
+          ditto "$APP_PATH" "$OUT_DIR/Payload/${SCHEME}.app"
+          ( cd "$OUT_DIR" && ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME" )
+
+          ls -lh "$IPA_PATH"
+          echo "ipa-path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload IPA as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA_NAME }}
+          path: ${{ steps.package.outputs.ipa-path }}
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release with IPA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          IPA_PATH: ${{ steps.package.outputs.ipa-path }}
+        run: |
+          set -euo pipefail
+          # Ensure the tag exists on the remote (workflow_dispatch may pass a
+          # tag that hasn't been pushed yet — create it from the current SHA).
+          if ! git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git tag "$TAG" "${GITHUB_SHA}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
+          # Delete any existing release with the same tag, then create a fresh one.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag=false
+          fi
+
+          gh release create "$TAG" "$IPA_PATH" \
+            --title "Sonar $TAG" \
+            --notes "Automated release for ${TAG}. Unsigned iOS IPA built with CODE_SIGNING_ALLOWED=NO and IPHONEOS_DEPLOYMENT_TARGET=${DEPLOYMENT_TARGET}. Sideload with SideStore/AltStore."
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-logs-${{ github.sha }}
+          path: |
+            xcodegen.log
+            build.log
+            test.log
+            archive.log
+            sims.json
+            TestResults.xcresult
+          if-no-files-found: ignore
