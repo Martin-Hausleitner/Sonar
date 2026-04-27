@@ -456,7 +456,9 @@ xcodebuild test -scheme Sonar \
 
 ## Releases
 
-Aktueller Build: [`Sonar-unsigned-iOS26.ipa`](Sonar-unsigned-iOS26.ipa) im Repo-Root — unsigned, für SideStore / AltStore-Sideloading.
+Die jeweils neueste unsignierte Build liegt am Repo-Root als
+[`Sonar-unsigned-iOS26.ipa`](./Sonar-unsigned-iOS26.ipa) — dieser Pfad
+ist stabil und wird von SideStore-Direkt-Links referenziert.
 
 ```bash
 # Sideload via SideStore:
@@ -465,7 +467,23 @@ Aktueller Build: [`Sonar-unsigned-iOS26.ipa`](Sonar-unsigned-iOS26.ipa) im Repo-
 #   3. Sonar erscheint im Home-Screen, alle 7 Tage erneut signieren.
 ```
 
-Frühere Builds liegen unter [`releases/`](releases/) — ältere IPA-Snapshots zur Referenz und für Bisecting bei Regressionen.
+Ältere Versionen sind unter [`releases/`](./releases/) als
+`Sonar-v<version>.ipa` archiviert. Eine vollständige Versionsliste mit
+Datum, Tag, Commit und Größe findest du in
+[`releases/RELEASES.md`](./releases/RELEASES.md).
+
+Neuen Release schneiden:
+
+```bash
+make publish                  # bumpt automatisch den Patch-Stand
+make publish VERSION=0.3.0    # explizite Version
+```
+
+Das Skript [`scripts/release/publish.sh`](./scripts/release/publish.sh)
+aktualisiert `Info.plist`, baut die Tests, archiviert eine Release-Build
+für iOS 26.2 ohne Code-Signing, packt das IPA, schreibt
+`releases/RELEASES.md` fort, committet, pusht und legt einen
+GitHub-Release an.
 
 ---
 
