@@ -111,6 +111,7 @@ struct TranscriptView: View {
 // MARK: - Recordings Tab
 
 struct RecordingsListView: View {
+    @EnvironmentObject var appState: AppState
     @State private var sessions: [URL] = []
 
     var body: some View {
@@ -129,8 +130,19 @@ struct RecordingsListView: View {
                     }
                 } else {
                     List(sessions, id: \.absoluteString) { url in
-                        recordingRow(url)
+                        // While a session is actively recording, the most recent
+                        // file is still being written — don't allow playback yet.
+                        if appState.isRecording && url == sessions.first {
+                            recordingRow(url, disabled: true)
+                                .listRowBackground(Color.white.opacity(0.04))
+                        } else {
+                            NavigationLink {
+                                RecordingPlayerView(url: url)
+                            } label: {
+                                recordingRow(url, disabled: false)
+                            }
                             .listRowBackground(Color.white.opacity(0.04))
+                        }
                     }
                     .scrollContentBackground(.hidden)
                 }
@@ -139,30 +151,43 @@ struct RecordingsListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .foregroundStyle(.white)
-            .onAppear { sessions = LocalRecorder.allSessions() }
+            .onAppear { reload() }
         }
     }
 
-    private func recordingRow(_ url: URL) -> some View {
+    private func reload() {
+        let all = LocalRecorder.allSessions()
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            .sorted { lhs, rhs in
+                let l = (try? lhs.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+                let r = (try? rhs.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+                return l > r
+            }
+        sessions = all
+    }
+
+    private func recordingRow(_ url: URL, disabled: Bool) -> some View {
         HStack {
-            Image(systemName: "waveform")
-                .foregroundStyle(.cyan)
+            Image(systemName: disabled ? "record.circle.fill" : "waveform")
+                .foregroundStyle(disabled ? .red : .cyan)
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent
                     .replacingOccurrences(of: ".sonsess", with: ""))
                     .font(.subheadline)
                     .lineLimit(1)
-                if let size = fileSize(url) {
+                if disabled {
+                    Text("Aufnahme läuft …")
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.8))
+                } else if let size = fileSize(url) {
                     Text(size)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
+        .opacity(disabled ? 0.55 : 1.0)
     }
 
     private func fileSize(_ url: URL) -> String? {
