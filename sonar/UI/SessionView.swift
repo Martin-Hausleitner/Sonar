@@ -150,6 +150,17 @@ struct SessionView: View {
                 peerBadge
             }
 
+            // Connect / Pairing-Guide — always reachable, even mid-session.
+            Button { showGuide = true } label: {
+                Image(systemName: "link.badge.plus")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.cyan)
+                    .frame(width: 34, height: 34)
+                    .background(.cyan.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Verbinden — Pairing-Guide öffnen")
+
             // Settings
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
@@ -491,11 +502,31 @@ struct SessionView: View {
                 Spacer()
             }
             Button { showGuide = true } label: {
-                Text("Hilfe")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.cyan)
+                HStack(spacing: 8) {
+                    Image(systemName: "link.badge.plus")
+                        .font(.callout.weight(.semibold))
+                    Text("Verbinden — Pairing-Guide öffnen")
+                        .font(.callout.weight(.semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.cyan.opacity(0.7))
+                }
+                .foregroundStyle(.cyan)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.cyan.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.cyan.opacity(0.35), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
+            .padding(.top, 4)
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
