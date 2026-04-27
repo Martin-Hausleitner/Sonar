@@ -156,6 +156,12 @@ IPA_SIZE_BYTES="$(stat -f%z "$NEW_IPA")"
 IPA_SIZE_MB="$(awk -v b="$IPA_SIZE_BYTES" 'BEGIN { printf "%.1f", b/1024/1024 }')"
 
 # -----------------------------------------------------------------------------
+# 6b. Regenerate SideStore source (apps.json) so users get the update auto.
+# -----------------------------------------------------------------------------
+echo "==> Updating apps.json (SideStore source)"
+./scripts/release/update-apps-json.sh "${NEW_VERSION}" "Sonar v${NEW_VERSION} (Build ${NEW_BUILD})."
+
+# -----------------------------------------------------------------------------
 # 7. Update releases/RELEASES.md (insert new row at top of table)
 # -----------------------------------------------------------------------------
 echo "==> Updating ${RELEASES_INDEX}"
@@ -197,7 +203,7 @@ fi
 # 8. Commit + push (no force)
 # -----------------------------------------------------------------------------
 echo "==> Committing release"
-git add "$INFO_PLIST" "$NEW_IPA" "$ROOT_IPA" "$RELEASES_INDEX"
+git add "$INFO_PLIST" "$NEW_IPA" "$ROOT_IPA" "$RELEASES_INDEX" apps.json
 
 git commit -m "$(cat <<EOF
 release: Sonar v${NEW_VERSION}

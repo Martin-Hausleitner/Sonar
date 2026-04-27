@@ -1,0 +1,107 @@
+{
+  "$schema": "https://github.com/SideStore/sidestore-source-types/raw/main/schema.json",
+  "name": "Sonar",
+  "identifier": "app.sonar.ios.source",
+  "sourceURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/apps.json",
+  "subtitle": "Räumliche Echtzeit-Audiokommunikation für iPhone",
+  "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst.",
+  "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
+  "website": "https://github.com/Martin-Hausleitner/Sonar",
+  "tintColor": "00E5FF",
+  "featuredApps": [
+    "app.sonar.ios"
+  ],
+  "apps": [
+    {
+      "name": "Sonar",
+      "bundleIdentifier": "app.sonar.ios",
+      "developerName": "Martin Hausleitner",
+      "subtitle": "Räumliches Audio · UWB · Mesh · Live-Transkription",
+      "localizedDescription": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Das Mikrofon des anderen klingt so, als käme es wirklich von dort, wo die Person steht.\n\nSonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:\n• MultipeerConnectivity / AWDL — lokale Direktverbindung (~30 m)\n• CoreBluetooth GATT — Bluetooth-Fallback (~10 m)\n• NearbyInteraction (UWB) — zentimetergenaue Entfernung + Richtung (~10 m)\n• Network.framework QUIC — Internet-Pfad (Multi-Path), global\n• LiveKit WebRTC — Cloud Audio Relay, global\n• SFSpeechRecognizer — Live-Transkription, on-device\n• AVAudioEngine + VoiceProcessing — Spatial Mixer, AEC, Rauschunterdrückung\n• Opus — Audio-Codec (32 kBit/s, ±20 ms Frames)\n\nÖffne Sonar auf zwei iPhones — die Verbindung baut sich automatisch auf.",
+      "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
+      "tintColor": "00E5FF",
+      "category": "social",
+      "screenshotURLs": [],
+      "versions": [
+        {
+          "version": "0.2.2",
+          "buildVersion": "4",
+          "date": "2026-04-27",
+          "localizedDescription": "Prominenter \"Verbinden\"-Button im Idle-Screen; UI-Bump auf 0.2.2.",
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/Sonar-unsigned-iOS26.ipa",
+          "size": 8606217,
+          "minOSVersion": "26.2"
+        },
+        {
+          "version": "0.2.1",
+          "buildVersion": "3",
+          "date": "2026-04-27",
+          "localizedDescription": "Round-2 Quality-Pass: synchroner Temp-Download für Audio-Recordings, Stabilitätsfixes.",
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v0.2.1.ipa",
+          "size": 8606217,
+          "minOSVersion": "26.2"
+        },
+        {
+          "version": "0.2.0",
+          "buildVersion": "2",
+          "date": "2026-04-27",
+          "localizedDescription": "Demo-Toggle, echte Per-Pfad-Icons, Volume-Slider, Profil-Detail-Sheet, AppIcon.",
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v0.2.0.ipa",
+          "size": 8606217,
+          "minOSVersion": "26.2"
+        }
+      ],
+      "permissions": [
+        {
+          "type": "microphone",
+          "usageDescription": "Sonar braucht dein Mikro, damit du mit deinen Freunden reden kannst."
+        },
+        {
+          "type": "bluetooth",
+          "usageDescription": "Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden."
+        },
+        {
+          "type": "network",
+          "usageDescription": "Sonar redet direkt mit anderen iPhones in deinem WLAN oder in Bluetooth-Reichweite, ohne Umweg über das Internet."
+        },
+        {
+          "type": "speech-recognition",
+          "usageDescription": "Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst."
+        },
+        {
+          "type": "music",
+          "usageDescription": "Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund."
+        },
+        {
+          "type": "background-audio",
+          "usageDescription": "Sonar hält die Audio-Verbindung aktiv, auch wenn die App im Hintergrund läuft."
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.developer.networking.multicast",
+          "com.apple.developer.nearby-interaction"
+        ],
+        "privacy": {
+          "NSMicrophoneUsageDescription": "Sonar braucht dein Mikro, damit du mit deinen Freunden reden kannst.",
+          "NSBluetoothAlwaysUsageDescription": "Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden.",
+          "NSLocalNetworkUsageDescription": "Sonar redet direkt mit anderen iPhones in deinem WLAN oder in Bluetooth-Reichweite, ohne Umweg über das Internet.",
+          "NSNearbyInteractionUsageDescription": "Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem Gesprächspartner zentimetergenau zu messen.",
+          "NSSpeechRecognitionUsageDescription": "Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.",
+          "NSAppleMusicUsageDescription": "Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund."
+        }
+      }
+    }
+  ],
+  "news": [
+    {
+      "identifier": "sonar-0.2.2",
+      "title": "Sonar 0.2.2 verfügbar",
+      "caption": "Prominenter Verbinden-Button im Idle-Screen — Tap, und die Session startet.",
+      "date": "2026-04-27",
+      "tintColor": "00E5FF",
+      "appID": "app.sonar.ios",
+      "notify": false
+    }
+  ]
+}

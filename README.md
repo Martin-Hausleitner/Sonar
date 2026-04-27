@@ -485,6 +485,32 @@ für iOS 26.2 ohne Code-Signing, packt das IPA, schreibt
 `releases/RELEASES.md` fort, committet, pusht und legt einen
 GitHub-Release an.
 
+### SideStore-Quelle (One-Click-Updates)
+
+Sonar liefert eine SideStore-kompatible Source-JSON — einmal in SideStore
+hinzufügen und alle künftigen Updates kommen automatisch:
+
+```
+https://github.com/Martin-Hausleitner/Sonar/raw/main/apps.json
+```
+
+So gehts:
+
+1. SideStore öffnen → **Sources** → **+** → URL oben einfügen.
+2. **Sonar** erscheint im Browse-Tab — **Get** drücken.
+3. Bei jedem neuen Release zeigt SideStore automatisch ein Update an.
+
+Die Source-Datei ([`apps.json`](./apps.json)) folgt dem
+[SideStore Source v2 Schema](https://github.com/SideStore/sidestore-source-types)
+mit `versions[]`-Array und wird durch
+[`scripts/release/update-apps-json.sh`](./scripts/release/update-apps-json.sh)
+neu generiert (Version + Build + Datum + Größe). Aufruf manuell:
+
+```bash
+./scripts/release/update-apps-json.sh           # liest Version aus Info.plist
+./scripts/release/update-apps-json.sh 0.3.0 "Notes"
+```
+
 ---
 
 <div align="center">
