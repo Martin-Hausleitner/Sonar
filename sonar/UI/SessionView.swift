@@ -16,6 +16,7 @@ struct SessionView: View {
     @State private var showPairing  = false
     @State private var sessionActive = false
     @State private var previewDistance: Double? = nil
+    @State private var profileDetail: SessionProfile? = nil
 
     // Live stats
     @State private var sessionStart: Date?
@@ -43,6 +44,13 @@ struct SessionView: View {
             statusPill
                 .padding(.top, 14)
 
+            // In-session profile switcher — works pre- and during session.
+            // SessionCoordinator listens to appState.$profileID via dropFirst()
+            // and re-applies ANC / music / FEC live, so a tap here is enough.
+            profileSwitcher
+                .padding(.top, 12)
+                .padding(.horizontal, 20)
+
             Spacer(minLength: 0)
 
             // Live connection card — always visible when session is running
@@ -68,6 +76,10 @@ struct SessionView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { settingsSheet }
         .sheet(isPresented: $showGuide)    { guideSheet    }
+        .sheet(item: $profileDetail) { p in
+            NavigationStack { ProfileDetailView(profile: p) }
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showPairing)  { pairingSheet  }
         .onChange(of: sessionActive) { _, active in
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -137,17 +149,22 @@ struct SessionView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        // No "Kein Signal" / connection-status text up here — only:
+        //   title  ·  (peerBadge if peer online)  ·  Verbinden  ·  Gear
+        HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "waveform.circle.fill")
                     .foregroundStyle(.cyan)
                 Text("Sonar")
                     .font(.headline.bold())
+                    .lineLimit(1)
             }
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 6)
 
-            // Peer online indicator
+            // Peer online indicator (hidden when no peer — explicitly NO
+            // "Kein Signal" placeholder in this row).
             if appState.peerOnline {
                 peerBadge
             }
@@ -182,10 +199,80 @@ struct SessionView: View {
                 .overlay(Circle().stroke(.green.opacity(0.4), lineWidth: 3))
             Text(appState.peerName ?? "Peer")
                 .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+        .frame(maxWidth: 140)
         .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    // MARK: - Profile Switcher (in-session, compact)
+
+    /// Horizontal pill row of all built-in profiles. Tapping a pill writes
+    /// the new id to `appState.profileID`; SessionCoordinator listens via
+    /// `dropFirst()` and re-applies ANC / music / FEC settings live.
+    private var profileSwitcher: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(SessionProfile.builtIn) { profile in
+                        profilePill(profile)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            // "i" — opens detail sheet for currently selected profile.
+            Button {
+                profileDetail = SessionProfile.builtIn.first(where: { $0.id == appState.profileID })
+                    ?? SessionProfile.builtIn.first
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(.white.opacity(0.06), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Details zum aktiven Profil")
+        }
+    }
+
+    @ViewBuilder
+    private func profilePill(_ profile: SessionProfile) -> some View {
+        let isSelected = appState.profileID == profile.id
+        let tint = ProfileVisuals.color(profile.id)
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                appState.profileID = profile.id
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: ProfileVisuals.icon(profile.id))
+                    .font(.system(size: 11, weight: .semibold))
+                Text(profile.displayName)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(isSelected ? tint : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.05))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        isSelected ? tint.opacity(0.65) : Color.white.opacity(0.07),
+                        lineWidth: isSelected ? 1.2 : 1
+                    )
+            )
+            .scaleEffect(isSelected ? 1.04 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Profil \(profile.displayName)\(isSelected ? " (aktiv)" : "")")
     }
 
     // MARK: - Status Pill

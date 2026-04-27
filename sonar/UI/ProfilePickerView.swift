@@ -58,15 +58,15 @@ private struct ProfileCard: View {
             }
             .padding(.top, -6)
 
-            Image(systemName: ProfileStyle.icon(profile.id))
+            Image(systemName: ProfileVisuals.icon(profile.id))
                 .font(.system(size: 32))
-                .foregroundStyle(isSelected ? ProfileStyle.color(profile.id) : .secondary)
+                .foregroundStyle(isSelected ? ProfileVisuals.color(profile.id) : .secondary)
 
             Text(profile.displayName)
                 .font(.headline)
                 .foregroundStyle(isSelected ? .primary : .secondary)
 
-            Text(ProfileStyle.shortDescription(profile.id))
+            Text(ProfileVisuals.shortDescription(profile.id))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -74,8 +74,8 @@ private struct ProfileCard: View {
 
             // Quick-glance setting chips so user sees what gets applied.
             HStack(spacing: 4) {
-                miniChip(icon: ProfileStyle.listeningIcon(profile.listeningMode),
-                         text: ProfileStyle.listeningShort(profile.listeningMode))
+                miniChip(icon: ProfileVisuals.listeningIcon(profile.listeningMode),
+                         text: ProfileVisuals.listeningShort(profile.listeningMode))
                 miniChip(icon: "speaker.wave.2.fill",
                          text: "\(Int(profile.gain * 100))%")
                 if profile.musicMix > 0 {
@@ -89,12 +89,12 @@ private struct ProfileCard: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isSelected ? ProfileStyle.color(profile.id).opacity(0.12) : Color(.systemGray6).opacity(0.08))
+                .fill(isSelected ? ProfileVisuals.color(profile.id).opacity(0.12) : Color(.systemGray6).opacity(0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(
-                    isSelected ? ProfileStyle.color(profile.id) : Color.white.opacity(0.07),
+                    isSelected ? ProfileVisuals.color(profile.id) : Color.white.opacity(0.07),
                     lineWidth: isSelected ? 2 : 1
                 )
         )
@@ -116,7 +116,7 @@ private struct ProfileCard: View {
 
 // MARK: - Detail sheet
 
-private struct ProfileDetailView: View {
+struct ProfileDetailView: View {
     let profile: SessionProfile
     @Environment(\.dismiss) private var dismiss
 
@@ -125,14 +125,14 @@ private struct ProfileDetailView: View {
             Section {
                 HStack(spacing: 14) {
                     ZStack {
-                        Circle().fill(ProfileStyle.color(profile.id).opacity(0.15)).frame(width: 56, height: 56)
-                        Image(systemName: ProfileStyle.icon(profile.id))
+                        Circle().fill(ProfileVisuals.color(profile.id).opacity(0.15)).frame(width: 56, height: 56)
+                        Image(systemName: ProfileVisuals.icon(profile.id))
                             .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(ProfileStyle.color(profile.id))
+                            .foregroundStyle(ProfileVisuals.color(profile.id))
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(profile.displayName).font(.title2.bold())
-                        Text(ProfileStyle.shortDescription(profile.id))
+                        Text(ProfileVisuals.shortDescription(profile.id))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -142,10 +142,10 @@ private struct ProfileDetailView: View {
 
             Section {
                 detailRow(
-                    icon: ProfileStyle.listeningIcon(profile.listeningMode),
+                    icon: ProfileVisuals.listeningIcon(profile.listeningMode),
                     title: "AirPods-Modus",
-                    value: ProfileStyle.listeningLabel(profile.listeningMode),
-                    explain: ProfileStyle.listeningExplain(profile.listeningMode)
+                    value: ProfileVisuals.listeningLabel(profile.listeningMode),
+                    explain: ProfileVisuals.listeningExplain(profile.listeningMode)
                 )
                 detailRow(
                     icon: "speaker.wave.2.fill",
@@ -174,10 +174,10 @@ private struct ProfileDetailView: View {
                     explain: "Ab dieser Entfernung wechselt Sonar von lokaler Direktverbindung auf das Internet-Relay."
                 )
                 detailRow(
-                    icon: ProfileStyle.aiIcon(profile.aiTrigger),
+                    icon: ProfileVisuals.aiIcon(profile.aiTrigger),
                     title: "KI-Auslöser",
-                    value: ProfileStyle.aiLabel(profile.aiTrigger),
-                    explain: ProfileStyle.aiExplain(profile.aiTrigger)
+                    value: ProfileVisuals.aiLabel(profile.aiTrigger),
+                    explain: ProfileVisuals.aiExplain(profile.aiTrigger)
                 )
             } header: {
                 Text("Was dieses Profil einstellt")
@@ -198,7 +198,7 @@ private struct ProfileDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .frame(width: 22, height: 22)
-                .foregroundStyle(ProfileStyle.color(profile.id))
+                .foregroundStyle(ProfileVisuals.color(profile.id))
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(title).font(.subheadline.weight(.semibold))
@@ -212,9 +212,9 @@ private struct ProfileDetailView: View {
     }
 }
 
-// MARK: - Style helpers (shared by card + detail)
+// MARK: - Style helpers (shared by card + detail + in-session switcher)
 
-private enum ProfileStyle {
+enum ProfileVisuals {
     static func color(_ id: String) -> Color {
         switch id {
         case "zimmer":   .blue
