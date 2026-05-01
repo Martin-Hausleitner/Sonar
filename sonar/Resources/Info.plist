@@ -2,71 +2,67 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>de</string>
-    <key>CFBundleDisplayName</key>
-    <string>Sonar</string>
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-    <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.2.2</string>
-    <key>CFBundleVersion</key>
-    <string>4</string>
-    <key>LSRequiresIPhoneOS</key>
-    <true/>
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsLocalNetworking</key>
-        <true/>
-    </dict>
-    <key>UILaunchScreen</key>
-    <dict/>
-    <key>UIRequiredDeviceCapabilities</key>
-    <array>
-        <string>arm64</string>
-    </array>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-    </array>
-
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Sonar braucht dein Mikro, damit du mit deinen Freunden reden kannst.</string>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Sonar redet direkt mit anderen iPhones in deinem WLAN oder in Bluetooth-Reichweite, ohne Umweg über das Internet.</string>
-    <key>NSNearbyInteractionUsageDescription</key>
-    <string>Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem Gesprächspartner zentimetergenau zu messen.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.</string>
-    <key>NSAppleMusicUsageDescription</key>
-    <string>Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>Sonar nutzt die Kamera, um den QR-Code des Pairing-Partners zu scannen.</string>
-
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_sonar._tcp</string>
-        <string>_sonar._udp</string>
-    </array>
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>audio</string>
-        <string>voip</string>
-        <string>processing</string>
-    </array>
-
-    <key>NSSupportsLiveActivities</key>
-    <true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleDisplayName</key>
+	<string>Sonar</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.3</string>
+	<key>CFBundleVersion</key>
+	<string>6</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_sonar._tcp</string>
+		<string>_sonar._udp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Sonar nutzt die Kamera, um den QR-Code des Pairing-Partners zu scannen.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Sonar redet direkt mit anderen iPhones in deinem WLAN oder in Bluetooth-Reichweite, ohne Umweg über das Internet.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sonar braucht dein Mikro, damit du mit deinen Freunden reden kannst.</string>
+	<key>NSNearbyInteractionUsageDescription</key>
+	<string>Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem Gesprächspartner zentimetergenau zu messen.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>voip</string>
+		<string>processing</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>

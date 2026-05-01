@@ -24,11 +24,20 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "0.2.3",
+          "buildVersion": "6",
+          "date": "2026-05-01",
+          "localizedDescription": "Sonar v0.2.3 (Build 6).",
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/Sonar-unsigned-iOS26.ipa",
+          "size": 9687680,
+          "minOSVersion": "26.2"
+        },
+        {
           "version": "0.2.2",
           "buildVersion": "4",
           "date": "2026-04-27",
           "localizedDescription": "Prominenter \"Verbinden\"-Button im Idle-Screen; UI-Bump auf 0.2.2.",
-          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/Sonar-unsigned-iOS26.ipa",
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v0.2.2.ipa",
           "size": 8606217,
           "minOSVersion": "26.2"
         },

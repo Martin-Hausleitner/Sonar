@@ -11,6 +11,7 @@ SideStore-Direkt-Links referenziert.
 
 | Version | Date | Tag | Commit | Size |
 |---|---|---|---|---|
+| 0.2.3 | 2026-05-01 | [v0.2.3-20260501-1839](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.3-20260501-1839) | 9.2 MB | 0.0 MB |
 | 0.2.2 | 2026-04-27 | [v0.2.2-20260427-2323](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.2-20260427-2323) | `320bca7` | 8.2 MB |
 | 0.2.1 | 2026-04-27 | [v0.2.1-20260427-2316](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.1-20260427-2316) | `9060b76` | 8.2 MB |
 | 0.2.0 | 2026-04-27 | [v0.2.0-20260427-2309](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.0-20260427-2309) | `1de1b6c` | 8.2 MB |
