@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Sonar
 
 /// Tests for AppState.ConnectionType — labels, icons, and AppState integration.
@@ -38,6 +39,72 @@ final class AppStateConnectionTypeTests: XCTestCase {
         }
     }
 
+    func testPrimaryInterfaceSymbolsResolve() {
+        let symbols = Set([
+            AppState.ConnectionType.none.icon,
+            AppState.ConnectionType.awdl.icon,
+            AppState.ConnectionType.bluetooth.icon,
+            AppState.ConnectionType.wifi.icon,
+            AppState.ConnectionType.tailscale.icon,
+            AppState.ConnectionType.internet.icon,
+            AppState.ConnectionType.simulatorRelay.icon,
+            "antenna.radiowaves.left.and.right",
+            "arrow.triangle.branch",
+            "arrow.clockwise",
+            "battery.0",
+            "battery.100",
+            "brain.head.profile",
+            "captions.bubble",
+            "checkmark",
+            "checkmark.circle.fill",
+            "checkmark.shield",
+            "checkmark.shield.fill",
+            "chevron.right",
+            "circle",
+            "desktopcomputer",
+            "dot.radiowaves.left.and.right",
+            "gearshape",
+            "info.circle",
+            "iphone",
+            "key.fill",
+            "link",
+            "link.badge.plus",
+            "list.number",
+            "mic.fill",
+            "mic.badge.xmark",
+            "network",
+            "network.badge.shield.half.filled",
+            "person.line.dotted.person.fill",
+            "qrcode.viewfinder",
+            "record.circle.fill",
+            "slider.horizontal.3",
+            "speaker.fill",
+            "speaker.wave.2.fill",
+            "speaker.wave.3.fill",
+            "text.bubble",
+            "trash",
+            "video.slash.fill",
+            "wave.3.right.circle.fill",
+            "waveform.and.mic",
+            "waveform.circle",
+            "waveform.circle.fill",
+            "waveform.path",
+            "wifi",
+            "wrench.and.screwdriver",
+            "xmark"
+        ] + SessionProfile.builtIn.flatMap { profile in
+            [
+                ProfileVisuals.icon(profile.id),
+                ProfileVisuals.listeningIcon(profile.listeningMode),
+                ProfileVisuals.aiIcon(profile.aiTrigger)
+            ]
+        })
+
+        for symbol in symbols {
+            XCTAssertNotNil(UIImage(systemName: symbol), "\(symbol) must be a valid SF Symbol")
+        }
+    }
+
     func testNoneIcon() {
         XCTAssertEqual(AppState.ConnectionType.none.icon,
                        "antenna.radiowaves.left.and.right.slash")
@@ -48,7 +115,7 @@ final class AppStateConnectionTypeTests: XCTestCase {
     }
 
     func testSimulatorRelayIcon() {
-        XCTAssertEqual(AppState.ConnectionType.simulatorRelay.icon, "desktopcomputer.and.iphone")
+        XCTAssertEqual(AppState.ConnectionType.simulatorRelay.icon, "desktopcomputer")
     }
 
     // MARK: - AppState default state

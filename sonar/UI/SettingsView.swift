@@ -37,6 +37,9 @@ struct SettingsView: View {
             developerSection
             appInfoSection
         }
+        .scrollContentBackground(.hidden)
+        .background(SonarTheme.screenBackground.ignoresSafeArea())
+        .tint(SonarTheme.accent)
         .navigationTitle("Einstellungen")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -89,7 +92,7 @@ struct SettingsView: View {
         HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(i < appState.activePathCount ? Color.cyan : Color.secondary.opacity(0.25))
+                    .fill(i < appState.activePathCount ? SonarTheme.accent : Color.secondary.opacity(0.25))
                     .frame(width: 10, height: 14 + CGFloat(i) * 4)
             }
             Text(appState.activePathCount == 0 ? "Kein" : "\(appState.activePathCount) aktiv")
@@ -139,8 +142,8 @@ struct SettingsView: View {
                     Label("Sonar-Lautstärke", systemImage: "speaker.wave.2.fill")
                     Spacer()
                     Text("\(Int(outputVolume * 100)) %")
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 10) {
                     Image(systemName: "speaker.fill")
@@ -152,6 +155,8 @@ struct SettingsView: View {
                             // hears the change instantly without restarting.
                             SpatialMixer.applyOutputVolume(Float(v))
                         }
+                        .accessibilityLabel("Sonar-Lautstärke")
+                        .accessibilityValue("\(Int(outputVolume * 100)) Prozent")
                     Image(systemName: "speaker.wave.3.fill")
                         .foregroundStyle(.secondary)
                         .font(.caption)
@@ -238,7 +243,7 @@ struct SettingsView: View {
     private var activeEngineLabel: String {
         if !openAIKey.isEmpty           { return "OpenAI Realtime" }
         if !parakeetAPIKey.isEmpty      { return "Parakeet (NVIDIA)" }
-        let lid = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
+        let lid = modelManager.selectedModelID
         if !lid.isEmpty,
            let m = LocalModelManager.availableModels.first(where: { $0.id == lid }),
            LocalModelManager.shared.localURL(for: m) != nil { return "Lokal · \(m.displayName)" }
@@ -247,9 +252,11 @@ struct SettingsView: View {
 
     private var activeEngineColor: Color {
         if !openAIKey.isEmpty      { return .green }
-        if !parakeetAPIKey.isEmpty { return .cyan }
-        let lid = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
-        if !lid.isEmpty { return .yellow }
+        if !parakeetAPIKey.isEmpty { return SonarTheme.accent }
+        let lid = modelManager.selectedModelID
+        if !lid.isEmpty,
+           let m = LocalModelManager.availableModels.first(where: { $0.id == lid }),
+           LocalModelManager.shared.localURL(for: m) != nil { return .yellow }
         return Color.secondary
     }
 
@@ -266,7 +273,7 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     case .downloading(let p):
                         ProgressView(value: p)
-                            .tint(.cyan)
+                            .tint(SonarTheme.accent)
                             .frame(maxWidth: 140)
                     case .ready(let bytes):
                         Text(formatBytes(bytes))
@@ -301,7 +308,7 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 if modelManager.selectedModelID == model.id {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SonarTheme.accent)
                 } else {
                     Button("Nutzen") { modelManager.selectedModelID = model.id }
                         .buttonStyle(.bordered)
@@ -366,6 +373,7 @@ struct SettingsView: View {
                 Spacer()
                 Toggle("", isOn: $privacyActive)
                     .labelsHidden()
+                    .accessibilityLabel("Privacy Mode")
                     .onChange(of: privacyActive) { _, v in
                         if v { PrivacyMode.shared.activate() } else { PrivacyMode.shared.deactivate() }
                         appState.privacyModeActive = v
@@ -428,10 +436,10 @@ struct SettingsView: View {
     private var developerSection: some View {
         Section {
             Toggle(isOn: $fakeDemoEnabled) {
-                Label("Demo-Modus", systemImage: "theatermasks")
+                Label("Demo-Modus", systemImage: "wrench.and.screwdriver")
             }
             if fakeDemoEnabled {
-                Text("⚠️ Demo aktiv — Distanz, Signal-Score und Peer-Name (\"Demo Peer · FAKE\") sind synthetisch animiert. Echte Verbindungen laufen parallel weiter.")
+                Text("Demo aktiv: Distanz, Signal-Score und Peer-Name (\"Demo Peer · FAKE\") sind synthetisch animiert. Echte Verbindungen laufen parallel weiter.")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }

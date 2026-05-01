@@ -1,6 +1,10 @@
 import Foundation
 import Combine
 
+#if canImport(WhisperKit)
+import WhisperKit
+#endif
+
 /// Manages on-device Whisper model downloads and local storage.
 /// Models are stored in Application Support/SonarModels/ and survive app updates.
 @MainActor
@@ -8,12 +12,23 @@ final class LocalModelManager: ObservableObject {
 
     static let shared = LocalModelManager()
 
+    private static let legacyModelIDMap = [
+        "ggml-tiny-en": "whisperkit-tiny-en",
+        "ggml-base-en": "whisperkit-base-en",
+        "ggml-small-en": "whisperkit-small-en",
+    ]
+
     struct ModelInfo: Identifiable {
         let id: String
         let displayName: String
         let sourceURL: URL
         let approxMB: Int
-        var filename: String { "\(id).bin" }
+        let whisperKitVariant: String
+        var metadataFilename: String { "\(id).json" }
+
+        /// Legacy tests and cleanup still refer to a model "filename"; keep this
+        /// as the metadata filename because WhisperKit models are directories.
+        var filename: String { metadataFilename }
     }
 
     enum DownloadState: Equatable {
@@ -25,29 +40,35 @@ final class LocalModelManager: ObservableObject {
 
     static let availableModels: [ModelInfo] = [
         ModelInfo(
-            id: "ggml-tiny-en",
+            id: "whisperkit-tiny-en",
             displayName: "Whisper Tiny EN",
-            sourceURL: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin")!,
-            approxMB: 75
+            sourceURL: URL(string: "https://huggingface.co/argmaxinc/whisperkit-coreml/tree/main/openai_whisper-tiny.en")!,
+            approxMB: 75,
+            whisperKitVariant: "openai_whisper-tiny.en"
         ),
         ModelInfo(
-            id: "ggml-base-en",
+            id: "whisperkit-base-en",
             displayName: "Whisper Base EN",
-            sourceURL: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin")!,
-            approxMB: 142
+            sourceURL: URL(string: "https://huggingface.co/argmaxinc/whisperkit-coreml/tree/main/openai_whisper-base.en")!,
+            approxMB: 142,
+            whisperKitVariant: "openai_whisper-base.en"
         ),
         ModelInfo(
-            id: "ggml-small-en",
+            id: "whisperkit-small-en",
             displayName: "Whisper Small EN",
-            sourceURL: URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin")!,
-            approxMB: 466
+            sourceURL: URL(string: "https://huggingface.co/argmaxinc/whisperkit-coreml/tree/main/openai_whisper-small.en")!,
+            approxMB: 466,
+            whisperKitVariant: "openai_whisper-small.en"
         ),
     ]
 
     @Published var states: [String: DownloadState] = [:]
 
     var selectedModelID: String {
-        get { UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? "" }
+        get {
+            let stored = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
+            return Self.legacyModelIDMap[stored] ?? stored
+        }
         set {
             objectWillChange.send()
             UserDefaults.standard.set(newValue, forKey: "sonar.localmodel.selected")
@@ -67,7 +88,8 @@ final class LocalModelManager: ObservableObject {
     }
 
     func localURL(for model: ModelInfo) -> URL? {
-        let url = modelsDir.appendingPathComponent(model.filename)
+        guard let metadata = readMetadata(for: model) else { return nil }
+        let url = URL(fileURLWithPath: metadata.folderPath)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
@@ -75,41 +97,45 @@ final class LocalModelManager: ObservableObject {
         if case .downloading = states[model.id] ?? .notDownloaded { return }
         states[model.id] = .downloading(0)
 
-        let dest = modelsDir.appendingPathComponent(model.filename)
-        let id   = model.id
-
         Task {
-            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                let delegate = DownloadDelegate(
-                    destination: dest,
-                    onProgress: { [weak self] p in
+            do {
+                #if canImport(WhisperKit)
+                let folder = try await WhisperKit.download(
+                    variant: model.whisperKitVariant,
+                    downloadBase: modelsDir,
+                    progressCallback: { [weak self] progress in
+                        let fraction = progress.fractionCompleted.isFinite ? progress.fractionCompleted : 0
                         Task { @MainActor [weak self] in
-                            self?.states[id] = .downloading(p)
-                        }
-                    },
-                    onComplete: { [weak self] movedURL, error in
-                        Task { @MainActor [weak self] in
-                            defer { cont.resume() }
-                            guard let movedURL, error == nil else {
-                                self?.states[id] = .failed(error?.localizedDescription ?? "Fehler")
-                                return
-                            }
-                            let size = (try? FileManager.default.attributesOfItem(atPath: movedURL.path)[.size] as? Int64) ?? 0
-                            self?.states[id] = .ready(size)
+                            self?.states[model.id] = .downloading(fraction)
                         }
                     }
                 )
-                let cfg = URLSessionConfiguration.default
-                cfg.timeoutIntervalForResource = 600
-                let session = URLSession(configuration: cfg, delegate: delegate, delegateQueue: nil)
-                session.downloadTask(with: model.sourceURL).resume()
+                let size = folderSize(folder)
+                try writeMetadata(
+                    LocalModelMetadata(
+                        modelID: model.id,
+                        variant: model.whisperKitVariant,
+                        folderPath: folder.path,
+                        size: size
+                    ),
+                    for: model
+                )
+                states[model.id] = .ready(size)
+                #else
+                states[model.id] = .failed("WhisperKit ist nicht verfügbar")
+                #endif
+            } catch {
+                states[model.id] = .failed(error.localizedDescription)
             }
         }
     }
 
     func delete(_ model: ModelInfo) {
-        let url = modelsDir.appendingPathComponent(model.filename)
-        try? FileManager.default.removeItem(at: url)
+        if let metadata = readMetadata(for: model) {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: metadata.folderPath))
+        }
+        try? FileManager.default.removeItem(at: metadataURL(for: model))
+        try? FileManager.default.removeItem(at: modelsDir.appendingPathComponent("\(model.id).bin"))
         states[model.id] = .notDownloaded
         if selectedModelID == model.id { selectedModelID = "" }
     }
@@ -117,63 +143,53 @@ final class LocalModelManager: ObservableObject {
     // MARK: - Helpers
 
     private func refreshState(_ model: ModelInfo) {
-        let url = modelsDir.appendingPathComponent(model.filename)
-        if FileManager.default.fileExists(atPath: url.path) {
-            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        if let url = localURL(for: model) {
+            let size = readMetadata(for: model)?.size ?? folderSize(url)
             states[model.id] = .ready(size)
         } else {
             states[model.id] = .notDownloaded
         }
     }
+
+    private func metadataURL(for model: ModelInfo) -> URL {
+        modelsDir.appendingPathComponent(model.metadataFilename)
+    }
+
+    private func readMetadata(for model: ModelInfo) -> LocalModelMetadata? {
+        let url = metadataURL(for: model)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(LocalModelMetadata.self, from: data)
+    }
+
+    private func writeMetadata(_ metadata: LocalModelMetadata, for model: ModelInfo) throws {
+        let data = try JSONEncoder().encode(metadata)
+        try data.write(to: metadataURL(for: model), options: .atomic)
+    }
+
+    private func folderSize(_ url: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            guard
+                let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+                values.isRegularFile == true
+            else { continue }
+            total += Int64(values.fileSize ?? 0)
+        }
+        return total
+    }
 }
 
-// MARK: - URLSession download delegate
-
-private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
-    let destination: URL
-    let onProgress: (Double) -> Void
-    /// Called with the final on-disk URL after the temp file has already been
-    /// moved into place — `nil` URL signals failure.
-    let onComplete: (URL?, Error?) -> Void
-
-    /// Guards against `onComplete` running twice (didFinish + didCompleteWithError
-    /// can both fire on certain failure orderings).
-    private var didReport = false
-
-    init(destination: URL,
-         onProgress: @escaping (Double) -> Void,
-         onComplete: @escaping (URL?, Error?) -> Void) {
-        self.destination = destination
-        self.onProgress = onProgress
-        self.onComplete = onComplete
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData _: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite total: Int64) {
-        guard total > 0 else { return }
-        onProgress(Double(totalBytesWritten) / Double(total))
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {
-        // URLSession deletes the temp file as soon as this delegate method
-        // returns — so we MUST move it synchronously here, before any actor
-        // hop, otherwise the file is gone by the time the move runs.
-        guard !didReport else { return }
-        didReport = true
-        do {
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.moveItem(at: location, to: destination)
-            onComplete(destination, nil)
-        } catch {
-            onComplete(nil, error)
-        }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error, !didReport else { return }
-        didReport = true
-        onComplete(nil, error)
-    }
+private struct LocalModelMetadata: Codable {
+    let modelID: String
+    let variant: String
+    let folderPath: String
+    let size: Int64
 }

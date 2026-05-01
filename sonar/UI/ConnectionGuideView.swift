@@ -15,7 +15,7 @@ struct ConnectionGuideView: View {
         var id: String { rawValue }
         var icon: String {
             switch self {
-            case .auto:      return "sparkles"
+            case .auto:      return "arrow.triangle.branch"
             case .tailscale: return "network.badge.shield.half.filled"
             case .wifi:      return "wifi"
             case .bluetooth: return "wave.3.right.circle.fill"
@@ -41,6 +41,7 @@ struct ConnectionGuideView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .accessibilityLabel("Verbindungsart")
             } header: {
                 Text("Verbindungsart")
             } footer: {
@@ -62,6 +63,9 @@ struct ConnectionGuideView: View {
             // Status check
             statusSection
         }
+        .scrollContentBackground(.hidden)
+        .background(SonarTheme.screenBackground.ignoresSafeArea())
+        .tint(SonarTheme.accent)
         .navigationTitle("Verbindung einrichten")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPairing) {
@@ -82,10 +86,10 @@ struct ConnectionGuideView: View {
         Button { showPairing = true } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    Circle().fill(Color.cyan.opacity(0.18)).frame(width: 38, height: 38)
+                    Circle().fill(SonarTheme.accent.opacity(0.16)).frame(width: 38, height: 38)
                     Image(systemName: "qrcode.viewfinder")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SonarTheme.accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("QR-Pairing starten")
@@ -103,6 +107,9 @@ struct ConnectionGuideView: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("QR-Pairing starten")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Auto
@@ -183,7 +190,7 @@ struct ConnectionGuideView: View {
                  title: "Bluetooth einschalten",
                  detail: "Aktiviere Bluetooth auf beiden Geräten. Sonar nutzt BLE (Bluetooth Low Energy) als Fallback-Pfad, wenn WLAN oder Internet nicht verfügbar sind.")
 
-            step(n: 2, icon: "antenna.radiowaves.left.and.right", color: .cyan,
+            step(n: 2, icon: "wave.3.right.circle.fill", color: .cyan,
                  title: "Geräte in Reichweite halten",
                  detail: "BLE hat eine Reichweite von etwa 10 m. Die Verbindungsqualität nimmt mit der Entfernung ab. Sonar zeigt den RSSI-basierten Abstand im Radar an.")
 

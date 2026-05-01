@@ -143,16 +143,16 @@ Sonar zeigt in der TopBar **`BT`** als aktiven Pfad. Wenn AWDL und BLE gleichzei
 Wenn keine Verbindung zustande kommt, der Reihe nach:
 
 ```
-☐  Beide iPhones haben Sonar im Vordergrund geöffnet.
-☐  WLAN ist auf beiden Geräten an (auch ohne Internet — AWDL braucht WLAN-Radio).
-☐  Bluetooth ist auf beiden Geräten an.
-☐  Lokales Netzwerk ist erlaubt (Einstellungen → Sonar → Lokales Netzwerk).
-☐  Mikrofon ist erlaubt (sonst kein Audio, aber Discovery läuft trotzdem).
-☐  Beide auf iOS 18.0+.
-☐  Wenn Tailscale: beide im selben Tailnet (Admin-Panel prüfen).
-☐  Wenn Tailscale: Exit Node deaktiviert.
-☐  Bei AWDL-Problemen: WLAN aus/ein toggeln (forciert AWDL-Reset).
-☐  Im Zweifel: Sonar auf beiden Geräten beenden (Force-Quit) und neu starten.
+[ ] Beide iPhones haben Sonar im Vordergrund geöffnet.
+[ ] WLAN ist auf beiden Geräten an (auch ohne Internet — AWDL braucht WLAN-Radio).
+[ ] Bluetooth ist auf beiden Geräten an.
+[ ] Lokales Netzwerk ist erlaubt (Einstellungen → Sonar → Lokales Netzwerk).
+[ ] Mikrofon ist erlaubt (sonst kein Audio, aber Discovery läuft trotzdem).
+[ ] Beide auf iOS 18.0+.
+[ ] Wenn Tailscale: beide im selben Tailnet (Admin-Panel prüfen).
+[ ] Wenn Tailscale: Exit Node deaktiviert.
+[ ] Bei AWDL-Problemen: WLAN aus/ein toggeln (forciert AWDL-Reset).
+[ ] Im Zweifel: Sonar auf beiden Geräten beenden (Force-Quit) und neu starten.
 ```
 
 Detaillierte Logs im `Diagnostics`-Tab der App. Pfad-Status (AWDL/BLE/Tailscale/MPQUIC) und letzte Verbindungs-Events sind dort live einsehbar.

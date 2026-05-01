@@ -72,10 +72,10 @@ Logs:        Settings → Debug → Export Logs
 - Mikrofon-Dialog erscheint.
 - Bluetooth-Dialog erscheint.
 - Local-Network-Dialog erscheint.
-- Bei Tap "Erlauben" werden alle drei Indikatoren grün (✓).
+- Bei Tap "Erlauben" werden alle drei Indikatoren grün (OK).
 - UWB-Indikator wird grün, wenn `supportsPreciseDistanceMeasurement` true ist.
 
-**Pass.** Alle vier Indikatoren ✓ und Tap auf "Weiter" zeigt Hello-Sonar-Screen.
+**Pass.** Alle vier Indikatoren sind OK und Tap auf "Weiter" zeigt Hello-Sonar-Screen.
 
 **Fail-Modes.**
 
@@ -87,7 +87,7 @@ Logs:        Settings → Debug → Export Logs
 
 **Steps.** Bei einem Dialog "Nicht erlauben". App neu starten.
 
-**Expected.** Indikator bleibt rot (✗). Im Hello-Sonar-Screen muss bei
+**Expected.** Indikator bleibt rot (Fehler). Im Hello-Sonar-Screen muss bei
 betroffenem Feature ein Toast erscheinen "X verweigert, geh in Einstellungen".
 
 ---

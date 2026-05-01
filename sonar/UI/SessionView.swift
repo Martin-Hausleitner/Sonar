@@ -27,48 +27,37 @@ struct SessionView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-                .padding(.horizontal, 20)
+                .padding(.horizontal, SonarTheme.horizontalPadding)
                 .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
 
-            Spacer(minLength: 0)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 16) {
+                    heroSection
+                        .padding(.horizontal, SonarTheme.horizontalPadding)
 
-            // Hero: distance ring
-            DistanceRingView(
-                distance: previewDistance,
-                direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
-            )
-            .frame(width: 260, height: 260)
+                    // In-session profile switcher — works pre- and during session.
+                    // SessionCoordinator listens to appState.$profileID via dropFirst()
+                    // and re-applies ANC / music / FEC live, so a tap here is enough.
+                    profileSwitcher
+                        .padding(.horizontal, SonarTheme.horizontalPadding)
 
-            // Status pill
-            statusPill
-                .padding(.top, 14)
-
-            // In-session profile switcher — works pre- and during session.
-            // SessionCoordinator listens to appState.$profileID via dropFirst()
-            // and re-applies ANC / music / FEC live, so a tap here is enough.
-            profileSwitcher
-                .padding(.top, 12)
-                .padding(.horizontal, 20)
-
-            Spacer(minLength: 0)
-
-            // Live connection card — always visible when session is running
-            if sessionActive {
-                liveConnectionCard
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if !appState.peerOnline {
-                // Idle hint
-                connectHint
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 14)
+                    if sessionActive {
+                        liveConnectionCard
+                            .padding(.horizontal, SonarTheme.horizontalPadding)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if !appState.peerOnline {
+                        connectHint
+                            .padding(.horizontal, SonarTheme.horizontalPadding)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 14)
             }
 
-            // Primary action
             mainButton
-                .padding(.horizontal, 24)
+                .padding(.horizontal, SonarTheme.horizontalPadding)
+                .padding(.top, 2)
                 .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -123,18 +112,7 @@ struct SessionView: View {
     // MARK: - Background
 
     private var backgroundLayer: some View {
-        ZStack {
-            Color(red: 0.04, green: 0.05, blue: 0.10)
-            if sessionActive {
-                RadialGradient(
-                    colors: [accentColor.opacity(0.18), .clear],
-                    center: .top,
-                    startRadius: 0,
-                    endRadius: 400
-                )
-                .animation(.easeInOut(duration: 1.4), value: appState.signalScore)
-            }
-        }
+        SonarTheme.screenBackground
     }
 
     private var accentColor: Color {
@@ -149,14 +127,15 @@ struct SessionView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        // No "Kein Signal" / connection-status text up here — only:
+        // No connection-status placeholder up here — only:
         //   title  ·  (peerBadge if peer online)  ·  Verbinden  ·  Gear
         HStack(spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 Image(systemName: "waveform.circle.fill")
-                    .foregroundStyle(.cyan)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(SonarTheme.accent)
                 Text("Sonar")
-                    .font(.headline.bold())
+                    .font(.title3.weight(.semibold))
                     .lineLimit(1)
             }
             .layoutPriority(1)
@@ -164,48 +143,54 @@ struct SessionView: View {
             Spacer(minLength: 6)
 
             // Peer online indicator (hidden when no peer — explicitly NO
-            // "Kein Signal" placeholder in this row).
+            // no placeholder in this row).
             if appState.peerOnline {
                 peerBadge
             }
 
-            // Connect / Pairing-Guide — always reachable, even mid-session.
-            Button { showGuide = true } label: {
-                Image(systemName: "link.badge.plus")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.cyan)
-                    .frame(width: 34, height: 34)
-                    .background(.cyan.opacity(0.12), in: Circle())
+            if sessionActive {
+                compactMuteButton
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Verbinden — Pairing-Guide öffnen")
+
+            // Connect / Pairing-Guide — always reachable, even mid-session.
+            SonarIconButton(
+                systemName: "link.badge.plus",
+                accessibilityLabel: "Verbinden — Pairing-Guide öffnen",
+                tint: SonarTheme.accent,
+                isProminent: true
+            ) { showGuide = true }
 
             // Settings
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.body.weight(.medium))
-                    .frame(width: 34, height: 34)
-                    .background(.white.opacity(0.07), in: Circle())
-            }
-            .buttonStyle(.plain)
+            SonarIconButton(
+                systemName: "gearshape",
+                accessibilityLabel: "Einstellungen öffnen",
+                tint: .primary
+            ) { showSettings = true }
         }
     }
 
     private var peerBadge: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(.green)
-                .frame(width: 7, height: 7)
-                .overlay(Circle().stroke(.green.opacity(0.4), lineWidth: 3))
-            Text(appState.peerName ?? "Peer")
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(spacing: 0) {
+            SonarStatusDot(color: .green, size: 7)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .frame(maxWidth: 140)
-        .background(.ultraThinMaterial, in: Capsule())
+        .frame(width: 28, height: 28)
+        .background(.thinMaterial, in: Capsule())
+        .accessibilityLabel("Peer verbunden")
+    }
+
+    private var heroSection: some View {
+        VStack(spacing: 14) {
+            DistanceRingView(
+                distance: previewDistance,
+                direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
+            )
+            .frame(width: 224, height: 224)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Abstandsradar")
+
+            statusPill
+        }
+        .padding(.top, 2)
     }
 
     // MARK: - Profile Switcher (in-session, compact)
@@ -233,7 +218,7 @@ struct SessionView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.06), in: Circle())
+                    .background(Color.secondary.opacity(0.10), in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Details zum aktiven Profil")
@@ -255,21 +240,21 @@ struct SessionView: View {
                 Text(profile.displayName)
                     .font(.caption.weight(.semibold))
             }
-            .foregroundStyle(isSelected ? tint : .secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+        .foregroundStyle(isSelected ? tint : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.05))
+                    .fill(isSelected ? tint.opacity(0.16) : Color.secondary.opacity(0.10))
             )
             .overlay(
                 Capsule()
                     .strokeBorder(
-                        isSelected ? tint.opacity(0.65) : Color.white.opacity(0.07),
+                        isSelected ? tint.opacity(0.65) : SonarTheme.separator,
                         lineWidth: isSelected ? 1.2 : 1
                     )
             )
-            .scaleEffect(isSelected ? 1.04 : 1.0)
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Profil \(profile.displayName)\(isSelected ? " (aktiv)" : "")")
@@ -287,7 +272,8 @@ struct SessionView: View {
         .foregroundStyle(statusColor)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background(.thinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(SonarTheme.separator, lineWidth: 0.5))
         .animation(.easeInOut(duration: 0.3), value: appState.phase)
     }
 
@@ -307,7 +293,7 @@ struct SessionView: View {
 
     private var statusIcon: String {
         if appState.connectionType == .simulatorRelay, sessionActive {
-            return "desktopcomputer.and.iphone"
+            return "desktopcomputer"
         }
         switch appState.phase {
         case .idle:        return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
@@ -331,159 +317,185 @@ struct SessionView: View {
     // MARK: - Live Connection Card
 
     private var liveConnectionCard: some View {
-        VStack(spacing: 12) {
-            // Header: label + score
-            HStack {
-                Label("Verbindung", systemImage: "antenna.radiowaves.left.and.right")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label("Live-Verbindung", systemImage: "antenna.radiowaves.left.and.right")
+                        .font(.subheadline.weight(.semibold))
+                    Text(appState.peerOnline ? (appState.peerName ?? "Peer verbunden") : "Suche nach deinem Gegenüber")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 6) {
+                    SonarStatusDot(color: accentColor, size: 7)
+                    Text("\(appState.signalScore)")
+                        .font(.headline.weight(.semibold).monospacedDigit())
+                    Text("/100")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(accentColor)
+                .accessibilityLabel("Signal \(appState.signalScore) von 100")
+            }
+
+            qualityBar
+
+            audioControlsRow
+
+            activePathsRow
+
+            Divider()
+
+            metricsGrid
+
+            if appState.batteryTier == .critical {
+                Label("Kritischer Akku: Qualität stark reduziert", systemImage: "battery.0")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            liveTranscriptPreview
+        }
+        .sonarSurface(padding: 16, material: .regularMaterial)
+    }
+
+    private var qualityBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.secondary.opacity(0.18))
+                    .frame(height: 5)
+                Capsule()
+                    .fill(accentColor)
+                    .frame(width: geo.size.width * CGFloat(appState.signalScore) / 100, height: 5)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: appState.signalScore)
+            }
+        }
+        .frame(height: 5)
+        .accessibilityHidden(true)
+    }
+
+    private var activePathsRow: some View {
+        HStack(spacing: 6) {
+            if appState.connectionType == .simulatorRelay {
+                pathPill("desktopcomputer", "Simulator",
+                         active: appState.activePathIDs.contains("simulatorRelay") || appState.peerOnline)
+            } else {
+                pathPill("dot.radiowaves.left.and.right", "AWDL",
+                         active: appState.activePathIDs.contains("multipeer"))
+                pathPill("wave.3.right.circle.fill", "Bluetooth",
+                         active: appState.activePathIDs.contains("bluetooth"))
+                pathPill("network.badge.shield.half.filled", "Tailscale",
+                         active: appState.activePathIDs.contains("tailscale"))
+                pathPill("globe", "Internet",
+                         active: appState.activePathIDs.contains("mpquic"))
+            }
+            Spacer()
+            if appState.isRecording {
+                Label("REC", systemImage: "record.circle.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var metricsGrid: some View {
+        HStack(spacing: 0) {
+            statCell(
+                icon: "timer",
+                label: "Session",
+                value: sessionStart != nil ? sessionElapsed : "—",
+                color: SonarTheme.accent
+            )
+            statCell(
+                icon: "waveform.path.ecg",
+                label: "Latenz",
+                value: latencyMs != nil ? String(format: "%.0f ms", latencyMs!) : "—",
+                color: latencyColor
+            )
+            statCell(
+                icon: "location.fill",
+                label: "Distanz",
+                value: distanceLabel,
+                color: .primary
+            )
+            statCell(
+                icon: batteryIcon,
+                label: "Akku",
+                value: batteryLabel,
+                color: batteryColor
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var liveTranscriptPreview: some View {
+        let finalSegs = appState.transcriptSegments.filter(\.isFinal).suffix(2)
+        if !finalSegs.isEmpty {
+            Divider()
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Transkript", systemImage: "text.bubble")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
-                HStack(spacing: 4) {
-                    Circle().fill(accentColor).frame(width: 6, height: 6)
-                    Text("\(appState.signalScore)/100")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(accentColor)
-                    Text(gradeLabel)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            identityRow
-
-            // Quality bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.08)).frame(height: 5)
-                    Capsule()
-                        .fill(LinearGradient(colors: [.cyan, accentColor], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: geo.size.width * CGFloat(appState.signalScore) / 100, height: 5)
-                        .animation(.spring(response: 0.6), value: appState.signalScore)
-                }
-            }
-            .frame(height: 5)
-
-            // Active path pills + REC — driven by the live `activePathIDs`
-            // set so each transport's pill lights up only when *that specific*
-            // path is connected, not based on a count threshold.
-            HStack(spacing: 6) {
-                if appState.connectionType == .simulatorRelay {
-                    pathPill("desktopcomputer.and.iphone", "Simulator",
-                             active: appState.activePathIDs.contains("simulatorRelay") || appState.peerOnline)
-                } else {
-                    pathPill("dot.radiowaves.left.and.right", "AWDL",
-                             active: appState.activePathIDs.contains("multipeer"))
-                    pathPill("wave.3.right.circle.fill", "Bluetooth",
-                             active: appState.activePathIDs.contains("bluetooth"))
-                    pathPill("network.badge.shield.half.filled", "Tailscale",
-                             active: appState.activePathIDs.contains("tailscale"))
-                    pathPill("globe", "Internet",
-                             active: appState.activePathIDs.contains("mpquic"))
-                }
-                Spacer()
-                if appState.isRecording {
-                    Label("REC", systemImage: "record.circle.fill")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Divider().background(.white.opacity(0.08))
-
-            // 4-cell metrics grid
-            HStack(spacing: 0) {
-                statCell(
-                    icon: "timer",
-                    label: "Session",
-                    value: sessionStart != nil ? sessionElapsed : "—",
-                    color: .cyan
-                )
-                statCell(
-                    icon: "waveform.path.ecg",
-                    label: "Latenz",
-                    value: latencyMs != nil ? String(format: "%.0f ms", latencyMs!) : "—",
-                    color: latencyColor
-                )
-                statCell(
-                    icon: "location.fill",
-                    label: "Distanz",
-                    value: distanceLabel,
-                    color: .white
-                )
-                statCell(
-                    icon: batteryIcon,
-                    label: "Akku",
-                    value: batteryLabel,
-                    color: batteryColor
-                )
-            }
-
-            // Battery warning (only for critical states)
-            if appState.batteryTier == .critical {
-                Label("Kritischer Akkustand – Qualität stark reduziert", systemImage: "battery.0")
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // Live transcript (last 2 final segments)
-            let finalSegs = appState.transcriptSegments.filter(\.isFinal).suffix(2)
-            if !finalSegs.isEmpty {
-                Divider().background(.white.opacity(0.08))
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Transkript", systemImage: "text.bubble")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(finalSegs) { seg in
-                        Text(seg.text)
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                ForEach(finalSegs) { seg in
+                    Text(seg.text)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
-        .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var identityRow: some View {
-        HStack(spacing: 8) {
-            identityChip(
-                title: "Dieses Gerät",
-                value: appState.testIdentity.displayName,
-                icon: "iphone"
-            )
-            identityChip(
-                title: "Peer",
-                value: appState.peerName ?? "Noch keiner",
-                icon: appState.peerOnline ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.questionmark"
-            )
-        }
+    private var compactMuteButton: some View {
+        SonarIconButton(
+            systemName: appState.isMuted ? "mic.slash.fill" : "mic.fill",
+            accessibilityLabel: appState.isMuted ? "Mikrofon einschalten" : "Mikrofon stummschalten",
+            tint: appState.isMuted ? .red : SonarTheme.accent,
+            isProminent: true
+        ) { toggleMute() }
     }
 
-    private func identityChip(title: String, value: String, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.cyan)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+    private var audioControlsRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                toggleMute()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: appState.isMuted ? "mic.slash.fill" : "mic.fill")
+                        .font(.callout.weight(.bold))
+                    Text(appState.isMuted ? "Stumm" : "Mikro an")
+                        .font(.callout.weight(.bold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(appState.isMuted ? .red : SonarTheme.accent)
+                .frame(minWidth: 116, minHeight: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.14))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.45), lineWidth: 1)
+                )
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(appState.isMuted ? "Mikrofon einschalten" : "Mikrofon stummschalten")
+
+            AudioLevelMeter(rms: appState.inputLevelRMS)
+
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func toggleMute() {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+            appState.isMuted.toggle()
+        }
     }
 
     private func statCell(icon: String, label: String, value: String, color: Color) -> some View {
@@ -556,95 +568,96 @@ struct SessionView: View {
             Image(systemName: icon).font(.system(size: 9, weight: .semibold))
             Text(label).font(.caption2.weight(.medium))
         }
-        .foregroundStyle(active ? .cyan : .secondary)
+        .foregroundStyle(active ? SonarTheme.accent : .secondary)
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
-        .background(active ? Color.cyan.opacity(0.12) : Color.white.opacity(0.05), in: Capsule())
+        .background(active ? SonarTheme.accent.opacity(0.12) : Color.secondary.opacity(0.10), in: Capsule())
+        .overlay(Capsule().strokeBorder(active ? SonarTheme.accent.opacity(0.24) : SonarTheme.separator, lineWidth: 0.5))
     }
 
     // MARK: - Idle hint (before session)
 
     private var connectHint: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "info.circle")
-                    .font(.callout)
-                    .foregroundStyle(.cyan)
-                Text("Sonar auf beiden Geräten öffnen – die Verbindung startet automatisch.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            HStack(spacing: 8) {
-                Label(appState.testIdentity.displayName, systemImage: "iphone")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if appState.testIdentity.isSimulatorRelayEnabled {
-                    Label("Simulator Relay", systemImage: "desktopcomputer.and.iphone")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.cyan)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "person.line.dotted.person.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(SonarTheme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(SonarTheme.accent.opacity(0.14), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Verbinden")
+                        .font(.headline)
+                    Text("QR-Code scannen oder beide Geräte mit Sonar öffnen.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
                 Spacer()
             }
+
             Button { showPairing = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "qrcode.viewfinder")
                         .font(.callout.weight(.semibold))
-                    Text("QR-Pairing starten")
+                    Text("QR-Pairing")
                         .font(.callout.weight(.semibold))
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.cyan.opacity(0.7))
                 }
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.white)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.cyan.opacity(0.18))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.cyan.opacity(0.45), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(SonarTheme.accent)
                 )
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
 
             Button { showGuide = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link.badge.plus")
                         .font(.callout.weight(.semibold))
-                    Text("Verbinden — Pairing-Guide öffnen")
+                    Text("Verbindungsoptionen")
                         .font(.callout.weight(.semibold))
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.cyan.opacity(0.7))
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.primary)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.cyan.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.secondary.opacity(0.12))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.cyan.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(SonarTheme.separator, lineWidth: 0.5)
                 )
             }
             .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                Label(appState.testIdentity.displayName, systemImage: "iphone")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                if appState.testIdentity.isSimulatorRelayEnabled {
+                    Label("Simulator Relay", systemImage: "desktopcomputer")
+                        .foregroundStyle(SonarTheme.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
         }
-        .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .sonarSurface(padding: 16, material: .regularMaterial)
     }
 
     // MARK: - Main Button
@@ -661,11 +674,12 @@ struct SessionView: View {
             )
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
+            .frame(height: 52)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(sessionActive ? .red.opacity(0.85) : .cyan)
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .background(sessionActive ? Color.red : SonarTheme.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityLabel(sessionActive ? "Session beenden" : "Session starten")
     }
 
     // MARK: - Sheets

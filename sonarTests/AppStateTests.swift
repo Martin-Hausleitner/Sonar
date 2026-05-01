@@ -8,6 +8,21 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(s.phase, .idle)
     }
 
+    func testMicrophoneDefaultsToUnmutedWithNoInputLevel() {
+        let s = AppState()
+        XCTAssertFalse(s.isMuted)
+        XCTAssertEqual(s.inputLevelRMS, 0, accuracy: 0.0001)
+    }
+
+    func testMicrophoneStateCanBeUpdated() {
+        let s = AppState()
+        s.isMuted = true
+        s.inputLevelRMS = 0.42
+
+        XCTAssertTrue(s.isMuted)
+        XCTAssertEqual(s.inputLevelRMS, 0.42, accuracy: 0.0001)
+    }
+
     func testPhaseEquality() {
         XCTAssertEqual(AppState.Phase.idle, .idle)
         XCTAssertEqual(AppState.Phase.connecting, .connecting)

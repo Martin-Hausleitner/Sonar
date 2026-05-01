@@ -21,29 +21,31 @@ struct DistanceRingView: View {
                     let radius = radiusFor(metres: ring, maxRadius: maxRadius)
                     Circle()
                         .strokeBorder(
-                            distance == nil ? Color.gray.opacity(0.25) : Color.white.opacity(0.18),
+                            distance == nil ? Color.secondary.opacity(0.18) : Color.secondary.opacity(0.28),
                             lineWidth: 1
                         )
                         .frame(width: radius * 2, height: radius * 2)
                         .position(center)
 
-                    // Ring labels
-                    Text(ringLabel(ring))
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundStyle(distance == nil ? Color.gray.opacity(0.4) : Color.white.opacity(0.35))
-                        .position(x: center.x + radius + 1, y: center.y - 7)
+                    if distance != nil {
+                        Text(ringLabel(ring))
+                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .position(x: center.x + radius + 1, y: center.y - 7)
+                    }
                 }
 
-                // Cross-hair
-                Path { path in
-                    path.move(to: CGPoint(x: center.x, y: center.y - 6))
-                    path.addLine(to: CGPoint(x: center.x, y: center.y + 6))
-                    path.move(to: CGPoint(x: center.x - 6, y: center.y))
-                    path.addLine(to: CGPoint(x: center.x + 6, y: center.y))
+                if distance != nil {
+                    Path { path in
+                        path.move(to: CGPoint(x: center.x, y: center.y - 6))
+                        path.addLine(to: CGPoint(x: center.x, y: center.y + 6))
+                        path.move(to: CGPoint(x: center.x - 6, y: center.y))
+                        path.addLine(to: CGPoint(x: center.x + 6, y: center.y))
+                    }
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
                 }
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
 
-                // Dot or "Kein Signal"
+                // Dot or calm ready state.
                 if let dist = distance {
                     let dotRadius = radiusFor(metres: dist, maxRadius: maxRadius)
                     let angle = directionAngle
@@ -70,10 +72,18 @@ struct DistanceRingView: View {
                         .position(CGPoint(x: dotX, y: dotY))
 
                 } else {
-                    Text("Kein Signal")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(Color.gray.opacity(0.6))
-                        .position(center)
+                    VStack(spacing: 6) {
+                        Image(systemName: "waveform.circle")
+                            .font(.system(size: 28, weight: .medium))
+                            .symbolRenderingMode(.hierarchical)
+                        Text("Bereit")
+                            .font(.callout.weight(.semibold))
+                        Text("Warte auf Abstand")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.secondary)
+                    .position(center)
                 }
             }
         }
@@ -125,11 +135,11 @@ struct DistanceRingView: View {
 #Preview("With distance + direction") {
     DistanceRingView(distance: 2.4, direction: simd_float3(0.3, 0, -0.9))
         .frame(width: 280, height: 280)
-        .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+        .background(SonarTheme.screenBackground)
 }
 
 #Preview("No signal") {
     DistanceRingView(distance: nil)
         .frame(width: 280, height: 280)
-        .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+        .background(SonarTheme.screenBackground)
 }

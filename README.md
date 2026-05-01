@@ -255,8 +255,8 @@ Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
   │  Opus-Decode                          ~2 ms             │
   │  SpatialMixer.scheduleBuffer()        ~1 ms             │
   │                                       ─────             │
-  │  Gesamt lokal                  ≈  32 ms  ✓             │
-  │  Gesamt Internet               ≈  72 ms  ✓             │
+  │  Gesamt lokal                  ~  32 ms  OK            │
+  │  Gesamt Internet               ~  72 ms  OK            │
   │                                                         │
   └─────────────────────────────────────────────────────────┘
 ```
@@ -296,11 +296,11 @@ Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
 
 | Profil | Umgebung | AirPods-Modus | Musik-Mix | Fehlerkorr. |
 |---|---|---|---|---|
-| 🏠 Zimmer | Wohnung / Büro | Transparency | 0 % | Nein |
-| 🚶 Spaziergang | Straße, Park | ANC | 30 % | Nein |
-| 🎢 Fahrgeschäft | Jahrmarkt, laut | ANC | 60 % | **Ja** |
-| 🎪 Festival | Open Air | ANC | 80 % | **Ja** |
-| 🎧 Club | Laute Musik | ANC | 70 % | **Ja** |
+| Zimmer | Wohnung / Büro | Transparency | 0 % | Nein |
+| Spaziergang | Straße, Park | ANC | 30 % | Nein |
+| Fahrgeschäft | Jahrmarkt, laut | ANC | 60 % | **Ja** |
+| Festival | Open Air | ANC | 80 % | **Ja** |
+| Club | Laute Musik | ANC | 70 % | **Ja** |
 
 **FEC (Forward Error Correction):** Sendet redundante Pakete mit. Bei Paketverlust rekonstruiert der Empfänger den Frame aus dem Folgepaket — hörbar besser bei schlechtem WLAN oder Mobilfunk. Kosten: +20 % Bandbreite.
 
@@ -309,7 +309,7 @@ Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
 ## Tests
 
 ```
-  216 Tests · 24 Suites · alle grün ✓
+  216 Tests · 24 Suites · alle grün
 
   Suite                            Tests  Abdeckung
   ───────────────────────────────  ─────  ──────────────────────────────

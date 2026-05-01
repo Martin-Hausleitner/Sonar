@@ -44,6 +44,11 @@ final class AppState: ObservableObject {
     // V30 — privacy mode
     @Published var privacyModeActive: Bool = false
 
+    // Session microphone controls. `inputLevelRMS` continues updating while
+    // muted so the user can see that the microphone is alive before unmuting.
+    @Published var isMuted: Bool = false
+    @Published var inputLevelRMS: Float = 0
+
     // Peer discovery (passive — updated by SessionCoordinator even before session starts)
     @Published var localPeerName: String
     @Published var localPeerID: String
@@ -84,7 +89,7 @@ final class AppState: ObservableObject {
             case .wifi:      return "wifi"
             case .tailscale: return "network.badge.shield.half.filled"
             case .internet:  return "globe"
-            case .simulatorRelay: return "desktopcomputer.and.iphone"
+            case .simulatorRelay: return "desktopcomputer"
             }
         }
     }

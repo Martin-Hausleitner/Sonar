@@ -39,20 +39,71 @@ final class NearTransport: NSObject, Transport, BondedPath {
     /// Set by SessionCoordinator once NIRangingEngine has started its session.
     var localNIToken: NIDiscoveryToken?
 
+    struct PairingHint: Equatable {
+        let peerID: String
+        let displayName: String
+        let host: String
+        let bonjour: String
+
+        init(token: PairingToken) {
+            self.peerID = token.id
+            self.displayName = token.name
+            self.host = token.host
+            self.bonjour = token.bonjour
+        }
+
+        func matches(displayName: String, discoveryInfo: [String: String]?) -> Bool {
+            if discoveryInfo?["peerID"] == peerID { return true }
+            if !self.displayName.isEmpty, displayName == self.displayName { return true }
+            if !host.isEmpty, discoveryInfo?["host"] == host { return true }
+            return false
+        }
+    }
+
+    private(set) var currentPairingHint: PairingHint?
+
     // MARK: - MPC internals
 
     private enum Msg: UInt8 { case audio = 0x01, niToken = 0x02 }
 
     private let serviceType = "sonar-mpc"
-    private let peerID = MCPeerID(displayName: UIDevice.current.name)
+    private let identity: SonarTestIdentity
+    private let localHost: () -> String
+    private let peerID: MCPeerID
+    private struct DiscoveredPeer {
+        let peerID: MCPeerID
+        let discoveryInfo: [String: String]?
+    }
+    private var discoveredPeers: [String: DiscoveredPeer] = [:]
 
     private lazy var session: MCSession = {
         MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
     }()
     private lazy var advertiser = MCNearbyServiceAdvertiser(
-        peer: peerID, discoveryInfo: nil, serviceType: serviceType
+        peer: peerID, discoveryInfo: advertisedDiscoveryInfo, serviceType: serviceType
     )
     private lazy var browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
+
+    init(
+        identity: SonarTestIdentity = .current(),
+        localHost: @escaping () -> String = PairingTokenGenerator.localHost
+    ) {
+        self.identity = identity
+        self.localHost = localHost
+        self.peerID = MCPeerID(displayName: identity.deviceName)
+        super.init()
+    }
+
+    var advertisedDiscoveryInfo: [String: String] {
+        var info = [
+            "peerID": identity.deviceID,
+            "peerName": identity.deviceName,
+            "bonjour": serviceType,
+        ]
+        let host = localHost()
+        if !host.isEmpty { info["host"] = host }
+        return info
+    }
 
     // MARK: - Lifecycle
 
@@ -68,7 +119,15 @@ final class NearTransport: NSObject, Transport, BondedPath {
         advertiser.stopAdvertisingPeer()
         browser.stopBrowsingForPeers()
         session.disconnect()
+        discoveredPeers.removeAll()
         connectedSubject.send(false)
+    }
+
+    func applyPairingToken(_ token: PairingToken) {
+        currentPairingHint = PairingHint(token: token)
+        for peer in discoveredPeers.values {
+            inviteIfAllowed(peer.peerID, discoveryInfo: peer.discoveryInfo)
+        }
     }
 
     // MARK: - Send
@@ -143,7 +202,18 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
 
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
+        discoveredPeers[peerID.displayName] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        inviteIfAllowed(peerID, discoveryInfo: info)
+    }
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        discoveredPeers.removeValue(forKey: peerID.displayName)
+    }
+
+    private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        if let hint = currentPairingHint,
+           !hint.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) {
+            return
+        }
         browser.invitePeer(peerID, to: session, withContext: nil, timeout: 10)
     }
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
 }

@@ -37,9 +37,9 @@ final class LocalModelManagerTests: XCTestCase {
     func testFilenameMatchesID() {
         for model in LocalModelManager.availableModels {
             XCTAssertTrue(model.filename.hasPrefix(model.id),
-                          "Filename must start with the model id")
-            XCTAssertTrue(model.filename.hasSuffix(".bin"),
-                          "Filename must end in .bin")
+                          "Metadata filename must start with the model id")
+            XCTAssertTrue(model.filename.hasSuffix(".json"),
+                          "Metadata filename must end in .json")
         }
     }
 
@@ -86,6 +86,18 @@ final class LocalModelManagerTests: XCTestCase {
         XCTAssertEqual(stored, "persisted-test")
     }
 
+    func testLegacySelectedModelIDMigratesToWhisperKitID() {
+        let manager = LocalModelManager.shared
+        let original = manager.selectedModelID
+        defer {
+            manager.selectedModelID = original
+            UserDefaults.standard.removeObject(forKey: "sonar.localmodel.selected")
+        }
+
+        UserDefaults.standard.set("ggml-tiny-en", forKey: "sonar.localmodel.selected")
+        XCTAssertEqual(manager.selectedModelID, "whisperkit-tiny-en")
+    }
+
     // MARK: - downloadState helpers
 
     func testInitialStatesAreNotDownloadedOrReady() {
@@ -126,17 +138,25 @@ final class LocalModelManagerTests: XCTestCase {
         let original = manager.selectedModelID
         defer { manager.selectedModelID = original }
 
-        // Manually plant a fake file where LocalModelManager would store it
+        // Manually plant a fake WhisperKit folder plus metadata where
+        // LocalModelManager would store it.
         let supportDir = FileManager.default.urls(for: .applicationSupportDirectory,
                                                    in: .userDomainMask)[0]
         let modelDir = supportDir.appendingPathComponent("SonarModels")
         try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
-        let fakeFile = modelDir.appendingPathComponent(model.filename)
-        try Data("fake-model-bytes".utf8).write(to: fakeFile)
+        let fakeFolder = modelDir.appendingPathComponent("fake-\(model.id)", isDirectory: true)
+        try FileManager.default.createDirectory(at: fakeFolder, withIntermediateDirectories: true)
+        let fakeFile = fakeFolder.appendingPathComponent("model.mlmodelc")
+        let fakeBytes = Data("fake-model-bytes".utf8)
+        try fakeBytes.write(to: fakeFile)
+        let metadata = """
+        {"modelID":"\(model.id)","variant":"\(model.whisperKitVariant)","folderPath":"\(fakeFolder.path)","size":\(fakeBytes.count)}
+        """
+        try Data(metadata.utf8).write(to: modelDir.appendingPathComponent(model.filename))
 
         // Reinitialise to pick up the file
         let freshManager = LocalModelManager()
-        XCTAssertEqual(freshManager.states[model.id], .ready(Int64("fake-model-bytes".utf8.count)))
+        XCTAssertEqual(freshManager.states[model.id], .ready(Int64(fakeBytes.count)))
         freshManager.selectedModelID = model.id
         XCTAssertEqual(freshManager.selectedModelID, model.id)
 
@@ -145,5 +165,6 @@ final class LocalModelManagerTests: XCTestCase {
         XCTAssertEqual(freshManager.states[model.id], .notDownloaded)
         XCTAssertNil(freshManager.localURL(for: model))
         XCTAssertNotEqual(freshManager.selectedModelID, model.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fakeFolder.path))
     }
 }

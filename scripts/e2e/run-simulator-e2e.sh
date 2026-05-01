@@ -15,6 +15,13 @@ OUT_DIR="${OUT_DIR:-build/e2e/simulator-relay-run}"
 
 mkdir -p "$OUT_DIR/screens"
 OUT_DIR_ABS="$(cd "$OUT_DIR" && pwd)"
+rm -f \
+  "$OUT_DIR"/build.log \
+  "$OUT_DIR"/relay.log \
+  "$OUT_DIR"/*.launch.log \
+  "$OUT_DIR"/state.json \
+  "$OUT_DIR"/summary.md \
+  "$OUT_DIR"/screens/*.png
 
 python3 scripts/e2e/simulator_relay.py --host 127.0.0.1 --port "$PORT" >"$OUT_DIR/relay.log" 2>&1 &
 RELAY_PID=$!
@@ -84,6 +91,8 @@ launch_device() {
   local device="$1"
   local name="$2"
   local suffix="${device:0:6}"
+  xcrun simctl boot "$device" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$device" -b
   SIMCTL_CHILD_SONAR_TEST_DEVICE_ID="${name}-${suffix}" \
   SIMCTL_CHILD_SONAR_TEST_DEVICE_NAME="$name" \
   SIMCTL_CHILD_SONAR_SIM_RELAY_URL="$RELAY_URL" \

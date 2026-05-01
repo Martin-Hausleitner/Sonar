@@ -8,19 +8,15 @@ import Foundation
 /// 1. Validates the token's TTL (rejects anything older than 5 minutes).
 /// 2. Mirrors `id` / `name` into AppState's peer fields so the UI immediately
 ///    reflects "paired" — even before the actual transport handshake completes.
-/// 3. Posts a `Notification.Name("sonar.pairing.bonjourHint")` carrying the
-///    Bonjour hostname so a future `NearTransport` extension can prefer that
-///    host for a targeted invite. The actual transport-layer integration
-///    (e.g. an `MCNearbyServiceBrowser.invitePeer` aimed at the hinted host)
-///    is left as a follow-up — for now we only expose the hint.
+/// 3. Passes the token to `NearTransport` so Multipeer discovery only invites
+///    the intended peer when the QR target appears.
 ///
 /// MainActor-isolated; the Combine subscription is torn down on `deinit`.
 @MainActor
 final class PairingService {
     /// Notification name carrying the Bonjour hostname from a freshly-scanned
-    /// token. NearTransport can subscribe to this to prefer the hinted host
-    /// for its next invite. The hostname is delivered via
-    /// `notification.userInfo["host"] as? String`.
+    /// token. Kept for diagnostics and older observers; the live targeted
+    /// invite path is `NearTransport.applyPairingToken(_:)`.
     static let bonjourHintNotification = Notification.Name("sonar.pairing.bonjourHint")
 
     /// Tokens older than this are rejected. Five minutes covers a reasonable
@@ -45,8 +41,7 @@ final class PairingService {
     }
 
     /// Bind the service to an `AppState`. The optional transport references are
-    /// stored weakly — kept for the future where targeted invites land — but
-    /// the service is intentionally tolerant of `nil` so tests can call
+    /// stored weakly, and the service is intentionally tolerant of `nil` so tests can call
     /// `bind(appState:)` with no transports attached.
     func bind(
         appState: AppState,
@@ -97,9 +92,9 @@ final class PairingService {
         appState.peerOnline = true
         appState.peerLastSeen = now()
 
-        // Targeted Bonjour invite hint — for now just a NotificationCenter
-        // event. NearTransport's existing browser invites every peer it sees;
-        // a future change can subscribe here to prefer the hinted host.
+        near?.applyPairingToken(token)
+
+        // Keep a NotificationCenter event for diagnostics and older observers.
         if !token.bonjour.isEmpty {
             NotificationCenter.default.post(
                 name: Self.bonjourHintNotification,

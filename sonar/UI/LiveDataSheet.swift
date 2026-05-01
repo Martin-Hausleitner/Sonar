@@ -11,7 +11,7 @@ struct LiveDataSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             // Handle
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.2))
+                .fill(Color.secondary.opacity(0.32))
                 .frame(width: 36, height: 4)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 12)
@@ -68,7 +68,7 @@ struct LiveDataSheet: View {
                         .frame(width: 60, height: 60)
                         .rotationEffect(.degrees(-90))
                     Circle()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 6)
+                        .stroke(Color.secondary.opacity(0.12), lineWidth: 6)
                         .frame(width: 60, height: 60)
                 }
             }
@@ -94,7 +94,7 @@ struct LiveDataSheet: View {
     private func pathDot(label: String, id: Int) -> some View {
         VStack(spacing: 4) {
             Circle()
-                .fill(id < appState.activePathCount ? Color.green : Color.white.opacity(0.1))
+                .fill(id < appState.activePathCount ? Color.green : Color.secondary.opacity(0.14))
                 .frame(width: 10, height: 10)
                 .shadow(color: id < appState.activePathCount ? .green.opacity(0.6) : .clear, radius: 4)
             Text(label)
@@ -185,7 +185,7 @@ struct LiveDataSheet: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundStyle(active ? activeColor : Color.white.opacity(0.2))
+                .foregroundStyle(active ? activeColor : Color.secondary.opacity(0.32))
                 .shadow(color: active ? activeColor.opacity(0.6) : .clear, radius: 4)
             Text(label)
                 .font(.system(size: 10, weight: .medium))
@@ -255,10 +255,10 @@ struct GlassCard<Content: View>: View {
         content()
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: SonarTheme.cornerRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: SonarTheme.cornerRadius, style: .continuous)
+                    .strokeBorder(SonarTheme.separator, lineWidth: 0.5)
             )
     }
 }
@@ -266,6 +266,6 @@ struct GlassCard<Content: View>: View {
 #Preview {
     LiveDataSheet()
         .environmentObject(AppState())
-        .background(Color(red: 0.05, green: 0.05, blue: 0.1))
+        .background(SonarTheme.screenBackground)
         .preferredColorScheme(.dark)
 }

@@ -30,6 +30,7 @@ schemes:
       config: Debug
       targets:
         - SonarTests
+        - SonarUITests
       commandLineArguments: {}
     run:
       config: Debug
@@ -44,6 +45,9 @@ packages:
   LiveKit:
     url: https://github.com/livekit/client-sdk-swift
     from: "2.0.0"
+  ArgmaxOSS:
+    url: https://github.com/argmaxinc/argmax-oss-swift.git
+    from: "0.18.0"
 
 targets:
   Sonar:
@@ -74,6 +78,8 @@ targets:
     dependencies:
       - package: LiveKit
         product: LiveKit
+      - package: ArgmaxOSS
+        product: WhisperKit
 
   SonarTests:
     type: bundle.unit-test
@@ -85,5 +91,16 @@ targets:
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Für Live-Transkription während der Session."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Für Sprachaufnahme während der Session."
+    dependencies:
+      - target: Sonar
+
+  SonarUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - sonarUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
       - target: Sonar

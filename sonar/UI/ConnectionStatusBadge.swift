@@ -29,7 +29,7 @@ struct ConnectionStatusBadge: View {
             HStack(spacing: 3) {
                 ForEach(0..<4, id: \.self) { i in
                     Circle()
-                        .fill(i < activePaths ? scoreColor : Color.white.opacity(0.15))
+                        .fill(i < activePaths ? scoreColor : Color.secondary.opacity(0.18))
                         .frame(width: 5, height: 5)
                 }
             }

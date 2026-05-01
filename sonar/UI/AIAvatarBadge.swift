@@ -63,6 +63,6 @@ struct AIAvatarBadge: View {
         AIAvatarBadge(isActive: true)
     }
     .padding(32)
-    .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+    .background(SonarTheme.screenBackground)
     .preferredColorScheme(.dark)
 }

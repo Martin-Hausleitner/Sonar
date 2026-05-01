@@ -25,7 +25,9 @@ struct MainTabView: View {
                     Label("Aufnahmen", systemImage: "mic.fill")
                 }
         }
-        .tint(.cyan)
+        .tint(SonarTheme.accent)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
     }
 }
 
@@ -37,18 +39,14 @@ struct TranscriptView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.04, green: 0.05, blue: 0.12).ignoresSafeArea()
+                SonarTheme.screenBackground.ignoresSafeArea()
 
                 if appState.transcriptSegments.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "captions.bubble")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.15))
-                        Text("Live-Transkription erscheint hier\nwährend einer aktiven Session")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.35))
-                            .multilineTextAlignment(.center)
-                    }
+                    SonarEmptyState(
+                        systemImage: "captions.bubble",
+                        title: "Noch kein Transkript",
+                        message: "Live-Transkription erscheint hier während einer aktiven Session."
+                    )
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -71,7 +69,6 @@ struct TranscriptView: View {
             .navigationTitle("Transkript")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .foregroundStyle(.white)
         }
     }
 
@@ -87,16 +84,16 @@ struct TranscriptView: View {
                 if let speaker = seg.speakerID {
                     Text(speaker)
                         .font(.caption2.bold())
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
                 }
                 Text(seg.text)
                     .font(.body)
-                    .foregroundStyle(seg.isFinal ? .white.opacity(0.9) : .white.opacity(0.45))
+                    .foregroundStyle(seg.isFinal ? .primary : .secondary)
             }
             Spacer()
             Text(seg.timestamp, style: .time)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.2))
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
     }
@@ -117,40 +114,37 @@ struct RecordingsListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.04, green: 0.05, blue: 0.12).ignoresSafeArea()
+                SonarTheme.screenBackground.ignoresSafeArea()
 
                 if sessions.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "mic.badge.xmark")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.15))
-                        Text("Noch keine Aufnahmen")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.35))
-                    }
+                    SonarEmptyState(
+                        systemImage: "mic.badge.xmark",
+                        title: "Noch keine Aufnahmen",
+                        message: "Aufnahmen erscheinen hier, sobald eine Session gespeichert wurde."
+                    )
                 } else {
                     List(sessions, id: \.absoluteString) { url in
                         // While a session is actively recording, the most recent
                         // file is still being written — don't allow playback yet.
                         if appState.isRecording && url == sessions.first {
                             recordingRow(url, disabled: true)
-                                .listRowBackground(Color.white.opacity(0.04))
+                                .listRowBackground(SonarTheme.secondaryBackground)
                         } else {
                             NavigationLink {
                                 RecordingPlayerView(url: url)
                             } label: {
                                 recordingRow(url, disabled: false)
                             }
-                            .listRowBackground(Color.white.opacity(0.04))
+                            .listRowBackground(SonarTheme.secondaryBackground)
                         }
                     }
                     .scrollContentBackground(.hidden)
+                    .listStyle(.insetGrouped)
                 }
             }
             .navigationTitle("Aufnahmen")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .foregroundStyle(.white)
             .onAppear { reload() }
         }
     }
@@ -169,7 +163,7 @@ struct RecordingsListView: View {
     private func recordingRow(_ url: URL, disabled: Bool) -> some View {
         HStack {
             Image(systemName: disabled ? "record.circle.fill" : "waveform")
-                .foregroundStyle(disabled ? .red : .cyan)
+                .foregroundStyle(disabled ? .red : SonarTheme.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent
                     .replacingOccurrences(of: ".sonsess", with: ""))

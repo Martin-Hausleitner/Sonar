@@ -22,8 +22,9 @@ struct ProfilePickerView: View {
                     .onTapGesture { onSelect?(profile) }
                 }
             }
-            .padding()
+            .padding(SonarTheme.horizontalPadding)
         }
+        .background(SonarTheme.screenBackground.ignoresSafeArea())
         .sheet(item: $infoProfile) { p in
             NavigationStack { ProfileDetailView(profile: p) }
                 .presentationDetents([.medium, .large])
@@ -44,31 +45,41 @@ private struct ProfileCard: View {
     let onInfo: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             // Top row: info button right-aligned
             HStack {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(ProfileVisuals.color(profile.id))
+                        .accessibilityHidden(true)
+                }
                 Spacer()
                 Button(action: onInfo) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .background(Color.secondary.opacity(0.10), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Details zum Profil \(profile.displayName)")
             }
-            .padding(.top, -6)
 
             Image(systemName: ProfileVisuals.icon(profile.id))
-                .font(.system(size: 32))
+                .font(.system(size: 30, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(isSelected ? ProfileVisuals.color(profile.id) : .secondary)
 
             Text(profile.displayName)
-                .font(.headline)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
 
             Text(ProfileVisuals.shortDescription(profile.id))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
 
@@ -84,21 +95,20 @@ private struct ProfileCard: View {
             }
             .padding(.top, 2)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 164)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isSelected ? ProfileVisuals.color(profile.id).opacity(0.12) : Color(.systemGray6).opacity(0.08))
+            RoundedRectangle(cornerRadius: SonarTheme.cornerRadius, style: .continuous)
+                .fill(.regularMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SonarTheme.cornerRadius, style: .continuous)
                 .strokeBorder(
-                    isSelected ? ProfileVisuals.color(profile.id) : Color.white.opacity(0.07),
-                    lineWidth: isSelected ? 2 : 1
+                    isSelected ? ProfileVisuals.color(profile.id).opacity(0.8) : SonarTheme.separator,
+                    lineWidth: isSelected ? 1.5 : 0.5
                 )
         )
-        .scaleEffect(isSelected ? 1.03 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 
@@ -109,7 +119,7 @@ private struct ProfileCard: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(Capsule().fill(.white.opacity(0.06)))
+        .background(Capsule().fill(Color.secondary.opacity(0.10)))
         .foregroundStyle(.secondary)
     }
 }
@@ -185,6 +195,8 @@ struct ProfileDetailView: View {
                 Text("Werte werden beim Wechsel sofort angewendet — keine Session-Neustart nötig.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(SonarTheme.screenBackground.ignoresSafeArea())
         .navigationTitle("Profil-Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -326,6 +338,6 @@ enum ProfileVisuals {
         .environmentObject({ () -> AppState in
             let s = AppState(); s.profileID = "festival"; return s
         }())
-        .background(Color(red: 0.05, green: 0.05, blue: 0.12))
+        .background(SonarTheme.screenBackground)
         .preferredColorScheme(.dark)
 }

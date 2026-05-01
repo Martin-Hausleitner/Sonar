@@ -61,6 +61,7 @@ final class SessionCoordinator: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
+    private var simulatorRelayFrameTask: Task<Void, Never>?
     private var playbackTimer: Timer?
 
     private lazy var pcmPlaybackFormat = AVAudioFormat(
@@ -84,6 +85,8 @@ final class SessionCoordinator: ObservableObject {
         playbackTimer = nil
         audioTask?.cancel()
         audioTask = nil
+        simulatorRelayFrameTask?.cancel()
+        simulatorRelayFrameTask = nil
         audioEngine.stop()
         transcription.stop()
         _ = recorder.stopSession()
@@ -112,11 +115,18 @@ final class SessionCoordinator: ObservableObject {
         appState?.connectionIsSimulated = false
         appState?.activePathIDs = []
         appState?.activePathCount = 0
+        appState?.inputLevelRMS = 0
     }
 
     // MARK: - Internal async setup
 
     private func startAudioPipeline() async {
+        let simulatorRelayMode = appState?.testIdentity.isSimulatorRelayEnabled == true
+        if simulatorRelayMode {
+            await startSimulatorRelayPipeline()
+            return
+        }
+
         // Attach SpatialMixer nodes before the engine starts.
         audioEngine.connect(spatialMixer: spatialMixer)
 
@@ -158,55 +168,38 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Transport setup
-        let simulatorRelayMode = appState?.testIdentity.isSimulatorRelayEnabled == true
-        if let appState, let relay = SimulatorRelayTransport.makeFromIdentity(appState.testIdentity) {
-            simulatorRelay = relay
-            relay.onPeerUpdate = { [weak self] peer in
-                self?.handleSimulatorRelayPeerUpdate(peer)
-            }
-            bonder.addPath(relay)
-            try? await relay.start()
-            appState.connectionType = .simulatorRelay
-            appState.connectionIsSimulated = true
-        } else {
-            try? await near.start()
-            // stop() may have run during the await above. Bail out instead of
-            // re-arming subsystems the user has just torn down.
-            guard !Task.isCancelled else { return }
-            bonder.addPath(near)
-            bonder.addPath(far)
+        try? await near.start()
+        // stop() may have run during the await above. Bail out instead of
+        // re-arming subsystems the user has just torn down.
+        guard !Task.isCancelled else { return }
+        bonder.addPath(near)
+        bonder.addPath(far)
 
-            // Tailscale presence: if a 100.x CGNAT interface is up, treat
-            // Tailscale as the umbrella connection type — it transparently
-            // subsumes WiFi / Internet for end-to-end peer reachability.
-            // Never override `.simulatorRelay` (handled in the if-branch above).
-            tailscale.startMonitoring()
-            tailscale.refresh()
-            if tailscale.isAvailable {
-                appState?.connectionType = .tailscale
-            }
-            // Keep `connectionType` in sync as the tailnet interface
-            // appears / disappears (Wi-Fi reconnect, VPN toggle, etc.).
-            tailscale.$localTailscaleIP
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] ip in
-                    guard let self, let appState = self.appState else { return }
-                    // Don't override simulator-relay (test harness owns it).
-                    if appState.connectionType == .simulatorRelay { return }
-                    if ip != nil {
-                        appState.connectionType = .tailscale
-                    } else if appState.connectionType == .tailscale {
-                        appState.connectionType = .none
-                    }
-                }
-                .store(in: &cancellables)
+        // Tailscale presence: if a 100.x CGNAT interface is up, treat
+        // Tailscale as the umbrella connection type — it transparently
+        // subsumes WiFi / Internet for end-to-end peer reachability.
+        tailscale.startMonitoring()
+        tailscale.refresh()
+        if tailscale.isAvailable {
+            appState?.connectionType = .tailscale
         }
+        // Keep `connectionType` in sync as the tailnet interface
+        // appears / disappears (Wi-Fi reconnect, VPN toggle, etc.).
+        tailscale.$localTailscaleIP
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ip in
+                guard let self, let appState = self.appState else { return }
+                if ip != nil {
+                    appState.connectionType = .tailscale
+                } else if appState.connectionType == .tailscale {
+                    appState.connectionType = .none
+                }
+            }
+            .store(in: &cancellables)
         guard !Task.isCancelled else { return }
 
         // MARK: QR pairing — observe AppState.pendingPairing and translate
-        // a successful scan into peerOnline + a Bonjour-host hint for the
-        // transport layer. (The targeted-invite integration in NearTransport
-        // is a follow-up; for now the hint is a NotificationCenter event.)
+        // a successful scan into peerOnline + a targeted NearTransport invite.
         if let appState {
             pairingService.bind(appState: appState, near: near)
         }
@@ -242,6 +235,10 @@ final class SessionCoordinator: ObservableObject {
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] (_, buffer) in
                 guard let self else { return }
+                let rms = MicrophoneMonitor.rms(buffer)
+                Task { @MainActor [weak self] in
+                    self?.appState?.inputLevelRMS = rms
+                }
                 self.preCaptureBuffer.push(buffer)
                 self.whisperDetector.process(buffer)
                 self.smartMute.process(buffer)
@@ -249,6 +246,11 @@ final class SessionCoordinator: ObservableObject {
                 let speaking = self.vad.feed(buffer)
                 Task { @MainActor [weak self] in
                     self?.musicDucker.duckOnVoice(active: speaking)
+                }
+                guard MicrophoneMonitor.shouldForwardCapturedAudio(
+                    isMuted: self.appState?.isMuted ?? false
+                ) else {
+                    return
                 }
                 if !simulatorRelayMode {
                     self.transcription.append(buffer)
@@ -274,7 +276,9 @@ final class SessionCoordinator: ObservableObject {
             withTimeInterval: Double(LatencyBudget.audioFrameMs) / 1_000.0,
             repeats: true
         ) { [weak self] _ in
-            self?.drainJitterBuffer()
+            Task { @MainActor [weak self] in
+                self?.drainJitterBuffer()
+            }
         }
 
         // MARK: Battery tier → bonder mode + appState.
@@ -347,6 +351,67 @@ final class SessionCoordinator: ObservableObject {
         guard !Task.isCancelled else { return }
         phase = .far
         appState?.phase = .far
+    }
+
+    private func startSimulatorRelayPipeline() async {
+        guard let appState, let relay = SimulatorRelayTransport.makeFromIdentity(appState.testIdentity) else {
+            phase = .idle
+            appState?.phase = .idle
+            return
+        }
+
+        simulatorRelay = relay
+        relay.onPeerUpdate = { [weak self] peer in
+            self?.handleSimulatorRelayPeerUpdate(peer)
+        }
+
+        bonder.addPath(relay)
+        do {
+            try await relay.start()
+        } catch {
+            phase = .idle
+            appState.phase = .idle
+            appState.connectionType = .none
+            appState.connectionIsSimulated = false
+            return
+        }
+
+        guard !Task.isCancelled else { return }
+
+        appState.connectionType = .simulatorRelay
+        appState.connectionIsSimulated = true
+        appState.isRecording = false
+        appState.transcriptSegments = []
+
+        bonder.$activePaths
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] paths in
+                self?.appState?.activePathCount = paths.count
+                self?.appState?.activePathIDs = Set(paths.map(\.rawValue))
+            }
+            .store(in: &cancellables)
+
+        signalCalc.$score
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] s in self?.appState?.signalScore = s }
+            .store(in: &cancellables)
+
+        signalCalc.$grade
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] g in self?.appState?.signalGrade = g }
+            .store(in: &cancellables)
+
+        simulatorRelayFrameTask?.cancel()
+        simulatorRelayFrameTask = Task { [weak self] in
+            let payload = Data("sonar-simulator-relay-frame".utf8)
+            while !Task.isCancelled {
+                await self?.bonder.send(opusData: payload)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+
+        phase = .far
+        appState.phase = .far
     }
 
     // MARK: - Distance → Phase

@@ -10,31 +10,10 @@ struct OnboardingView: View {
     @State private var appeared = false
     @State private var requesting = false
 
-    private let accentCyan = Color(red: 0.00, green: 0.89, blue: 1.00)
-    private let accentBlue = Color(red: 0.10, green: 0.55, blue: 1.00)
-
+    private let accentCyan = SonarTheme.accent
     var body: some View {
         ZStack {
-            // MARK: Background
-            LinearGradient(
-                stops: [
-                    .init(color: Color(red: 0.02, green: 0.03, blue: 0.08), location: 0.0),
-                    .init(color: Color(red: 0.04, green: 0.06, blue: 0.13), location: 0.5),
-                    .init(color: Color(red: 0.03, green: 0.04, blue: 0.10), location: 1.0),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            // Top ambient glow
-            RadialGradient(
-                colors: [accentCyan.opacity(0.14), .clear],
-                center: .top,
-                startRadius: 0,
-                endRadius: 360
-            )
-            .ignoresSafeArea()
+            SonarTheme.screenBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // MARK: Scrollable content
@@ -51,7 +30,7 @@ struct OnboardingView: View {
 
                 // MARK: Pinned bottom CTA (never scrolls away)
                 Divider()
-                    .background(.white.opacity(0.06))
+                    .background(SonarTheme.separator)
 
                 VStack(spacing: 10) {
                     requestButton
@@ -60,14 +39,9 @@ struct OnboardingView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
                 .padding(.bottom, 36)
-                .background(
-                    Color(red: 0.03, green: 0.04, blue: 0.10)
-                        .opacity(0.95)
-                        .ignoresSafeArea(edges: .bottom)
-                )
+                .background(.bar)
             }
         }
-        .foregroundStyle(.white)
         .onAppear {
             withAnimation(.easeOut(duration: 0.65).delay(0.08)) { appeared = true }
             withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
@@ -100,43 +74,29 @@ struct OnboardingView: View {
                 // Center icon
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [accentCyan.opacity(0.30), accentBlue.opacity(0.20)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(accentCyan.opacity(0.16))
                         .frame(width: 56, height: 56)
 
                     Circle()
-                        .strokeBorder(accentCyan.opacity(0.55), lineWidth: 1)
+                        .strokeBorder(accentCyan.opacity(0.32), lineWidth: 1)
                         .frame(width: 56, height: 56)
 
                     Image(systemName: "waveform.circle.fill")
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(accentCyan)
-                        .shadow(color: accentCyan.opacity(0.7), radius: 8)
                 }
             }
             .frame(height: 110)
 
             // Wordmark + subtitle
             VStack(spacing: 6) {
-                Text("SONAR")
-                    .font(.system(size: 30, weight: .black, design: .monospaced))
-                    .tracking(7)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white, accentCyan.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                Text("Sonar")
+                    .font(.largeTitle.weight(.semibold))
+                    .foregroundStyle(.primary)
 
                 Text("Für den vollen Funktionsumfang benötigt\nSonar die folgenden Berechtigungen.")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.42))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
             }
@@ -159,7 +119,7 @@ struct OnboardingView: View {
             )
             permissionCard(
                 icon: "waveform",
-                iconColor: Color(red: 0.45, green: 0.55, blue: 1.00),
+                iconColor: .blue,
                 title: "Spracherkennung",
                 description: "Live-Transkription während des Gesprächs",
                 state: permissions.speechRecognition,
@@ -167,7 +127,7 @@ struct OnboardingView: View {
             )
             permissionCard(
                 icon: "antenna.radiowaves.left.and.right",
-                iconColor: Color(red: 0.20, green: 0.78, blue: 0.65),
+                iconColor: .teal,
                 title: "Bluetooth",
                 description: "AirPods und nahe Geräte finden",
                 state: permissions.bluetooth,
@@ -175,7 +135,7 @@ struct OnboardingView: View {
             )
             permissionCard(
                 icon: "network",
-                iconColor: Color(red: 0.58, green: 0.45, blue: 1.00),
+                iconColor: .indigo,
                 title: "Lokales Netzwerk",
                 description: "Direktverbindung ohne Umweg über das Internet",
                 state: permissions.localNetwork,
@@ -183,7 +143,7 @@ struct OnboardingView: View {
             )
             permissionCard(
                 icon: "dot.radiowaves.left.and.right",
-                iconColor: Color(red: 1.00, green: 0.65, blue: 0.22),
+                iconColor: .orange,
                 title: "Ultra-Wideband",
                 description: "Entfernung zentimetergenau messen",
                 state: permissions.nearbyInteraction,
@@ -206,10 +166,10 @@ struct OnboardingView: View {
         HStack(spacing: 13) {
             // Icon pill
             ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 42, height: 42)
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(iconColor.opacity(0.22), lineWidth: 1)
                     .frame(width: 42, height: 42)
                 Image(systemName: icon)
@@ -222,8 +182,8 @@ struct OnboardingView: View {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                 Text(description)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.42))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -234,11 +194,11 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 11)
-        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(
-                    state == .granted ? accentCyan.opacity(0.32) : .white.opacity(0.07),
+                    state == .granted ? accentCyan.opacity(0.32) : SonarTheme.separator,
                     lineWidth: 1
                 )
         )
@@ -272,7 +232,7 @@ struct OnboardingView: View {
 
         case .unknown:
             Circle()
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1.5)
+                .strokeBorder(Color.secondary.opacity(0.26), lineWidth: 1.5)
                 .frame(width: 24, height: 24)
         }
     }
@@ -302,14 +262,10 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(
-                LinearGradient(
-                    colors: [accentCyan, accentBlue],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                accentCyan,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
-            .shadow(color: accentCyan.opacity(0.30), radius: 10, y: 4)
+            .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
         .disabled(requesting)
@@ -317,9 +273,9 @@ struct OnboardingView: View {
 
     private var continueButton: some View {
         Button(action: onContinue) {
-            Text(permissions.allGranted ? "Weiter →" : "Überspringen")
+            Text(permissions.allGranted ? "Weiter" : "Überspringen")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white.opacity(permissions.allGranted ? 0.7 : 0.30))
+                .foregroundStyle(permissions.allGranted ? .secondary : .tertiary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 36)
         }

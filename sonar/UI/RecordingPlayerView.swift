@@ -13,25 +13,26 @@ struct RecordingPlayerView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.05, blue: 0.12).ignoresSafeArea()
+            SonarTheme.screenBackground.ignoresSafeArea()
 
             VStack(spacing: 32) {
                 Spacer()
 
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 96))
-                    .foregroundStyle(.cyan)
+                    .font(.system(size: 92, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(SonarTheme.accent)
 
                 VStack(spacing: 6) {
                     Text(displayName)
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     Text(RecordingPlayerView.format(seconds: player.duration))
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.secondary)
                 }
 
                 if let loadError {
@@ -55,7 +56,9 @@ struct RecordingPlayerView: View {
                                 isScrubbing = editing
                             }
                         )
-                        .tint(.cyan)
+                        .tint(SonarTheme.accent)
+                        .accessibilityLabel("Aufnahme-Position")
+                        .accessibilityValue(RecordingPlayerView.format(seconds: player.currentTime))
                         .padding(.horizontal)
 
                         HStack {
@@ -64,16 +67,19 @@ struct RecordingPlayerView: View {
                             Text(RecordingPlayerView.format(seconds: player.duration))
                         }
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal)
                     }
+                    .sonarSurface(padding: 16, material: .regularMaterial)
+                    .padding(.horizontal, SonarTheme.horizontalPadding)
 
                     Button {
                         player.togglePlayPause()
                     } label: {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 72))
-                            .foregroundStyle(.cyan)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(SonarTheme.accent)
                     }
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Abspielen")
                 }

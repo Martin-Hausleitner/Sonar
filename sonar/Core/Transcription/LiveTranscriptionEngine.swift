@@ -4,7 +4,7 @@ import Foundation
 import Speech
 
 /// Drives transcription via the best available engine.
-/// Priority: OpenAI Realtime → NVIDIA Parakeet → Local Whisper → Apple Speech.
+/// Priority: OpenAI Realtime -> NVIDIA Parakeet -> Local Whisper -> Apple Speech.
 @MainActor
 final class LiveTranscriptionEngine: ObservableObject {
     enum Engine { case appleSpeech, parakeet, local, openAIRealtime }
@@ -25,18 +25,45 @@ final class LiveTranscriptionEngine: ObservableObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var parakeet: ParakeetTranscriber?
     private var openAIRealtime: OpenAIRealtimeTranscriber?
+    private var localWhisper: LocalTranscribing?
+
+    typealias LocalTranscriberFactory = @MainActor (
+        _ modelID: String,
+        _ language: Locale,
+        _ onSegment: @escaping (String) -> Void
+    ) -> LocalTranscribing?
+
+    private let localTranscriberFactory: LocalTranscriberFactory
+
+    init(localTranscriberFactory: @escaping LocalTranscriberFactory = LiveTranscriptionEngine.makeLocalTranscriber) {
+        self.localTranscriberFactory = localTranscriberFactory
+    }
 
     func start(language: Locale = .current) async throws {
         guard !SonarTestIdentity.current().isSimulatorRelayEnabled else { return }
 
         currentEngine = pickEngine(language: language)
         switch currentEngine {
-        case .appleSpeech, .local:
-            // .local: model downloaded but WhisperKit inference not yet integrated.
+        case .appleSpeech:
             let authorized = await requestAuthorization()
             guard authorized else { return }
             currentEngine = .appleSpeech
             try startAppleSpeech(language: language)
+
+        case .local:
+            let modelID = LocalModelManager.shared.selectedModelID
+            guard let transcriber = localTranscriberFactory(modelID, language, { [weak self] text in
+                guard let self else { return }
+                let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: true)
+                self.transcript.append(seg)
+            }) else {
+                let authorized = await requestAuthorization()
+                guard authorized else { return }
+                currentEngine = .appleSpeech
+                try startAppleSpeech(language: language)
+                return
+            }
+            localWhisper = transcriber
 
         case .parakeet:
             let key = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
@@ -68,7 +95,8 @@ final class LiveTranscriptionEngine: ObservableObject {
 
     func append(_ buffer: AVAudioPCMBuffer) {
         switch currentEngine {
-        case .appleSpeech, .local: request?.append(buffer)
+        case .appleSpeech:         request?.append(buffer)
+        case .local:               localWhisper?.append(buffer)
         case .parakeet:            parakeet?.append(buffer)
         case .openAIRealtime:      openAIRealtime?.append(buffer)
         }
@@ -80,6 +108,8 @@ final class LiveTranscriptionEngine: ObservableObject {
         request = nil
         parakeet?.flush()
         parakeet = nil
+        localWhisper?.stop()
+        localWhisper = nil
         openAIRealtime?.disconnect()
         openAIRealtime = nil
     }
@@ -93,7 +123,7 @@ final class LiveTranscriptionEngine: ObservableObject {
         let parakeetKey = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
         if !parakeetKey.isEmpty { return .parakeet }
 
-        let localID = UserDefaults.standard.string(forKey: "sonar.localmodel.selected") ?? ""
+        let localID = LocalModelManager.shared.selectedModelID
         if !localID.isEmpty,
            let model = LocalModelManager.availableModels.first(where: { $0.id == localID }),
            LocalModelManager.shared.localURL(for: model) != nil {
@@ -101,6 +131,14 @@ final class LiveTranscriptionEngine: ObservableObject {
         }
 
         return .appleSpeech
+    }
+
+    private static func makeLocalTranscriber(
+        modelID: String,
+        language: Locale,
+        onSegment: @escaping (String) -> Void
+    ) -> LocalTranscribing? {
+        WhisperKitLocalTranscriber.make(modelID: modelID, language: language, onSegment: onSegment)
     }
 
     // MARK: - Apple SFSpeechRecognizer
@@ -285,12 +323,10 @@ private final class OpenAIRealtimeTranscriber {
 
 // MARK: - ParakeetTranscriber
 
-/// Buffers PCM audio in 5-second chunks and streams them to the NVIDIA NIM
-/// Parakeet endpoint (OpenAI-compatible audio/transcriptions API).
+/// Buffers PCM audio in 5-second chunks and sends each chunk to NVIDIA's
+/// hosted Riva/gRPC Parakeet endpoint.
 private final class ParakeetTranscriber {
     private let apiKey: String
-    private let model     = "nvidia/parakeet-ctc-1.1b"
-    private let endpoint  = URL(string: "https://integrate.api.nvidia.com/v1/audio/transcriptions")!
     private let sampleRate: Double = 16_000
     private let chunkDuration: Double = 5.0
 
@@ -329,80 +365,22 @@ private final class ParakeetTranscriber {
     }
 
     private func sendChunk(_ pcm: [Float]) {
-        let wav = buildWAV(pcm: pcm)
+        let pcm16 = buildPCM16LE(pcm: pcm)
         Task.detached { [weak self] in
             guard let self else { return }
-            guard let text = await self.post(wav: wav) else { return }
+            guard let text = try? await NvidiaRivaASRClient.transcribeHosted(
+                apiKey: self.apiKey,
+                pcm16LE: pcm16,
+                sampleRate: Int(self.sampleRate),
+                languageCode: "en-US"
+            ) else { return }
             DispatchQueue.main.async { self.onSegment(text) }
         }
     }
 
-    private func post(wav: Data) async -> String? {
-        var req = URLRequest(url: endpoint)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        let boundary = "Boundary-\(UUID().uuidString)"
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        req.httpBody = buildBody(wav: wav, boundary: boundary)
-        do {
-            let (data, _) = try await URLSession.shared.data(for: req)
-            return try JSONDecoder().decode(ParakeetResponse.self, from: data).text
-        } catch {
-            return nil
-        }
-    }
-
-    private func buildBody(wav: Data, boundary: String) -> Data {
-        var body = Data()
-        body.mpAppend(boundary: boundary, name: "model", string: model)
-        body.mpAppend(boundary: boundary, name: "file", filename: "audio.wav", mime: "audio/wav", data: wav)
-        body += "--\(boundary)--\r\n"
-        return body
-    }
-
-    // Encodes Float32 PCM as a 16-bit mono WAV blob.
-    private func buildWAV(pcm: [Float]) -> Data {
+    // Encodes Float32 PCM as raw little-endian LINEAR_PCM for Riva Recognize.
+    private func buildPCM16LE(pcm: [Float]) -> Data {
         let int16: [Int16] = pcm.map { Int16(clamping: Int32($0 * 32767)) }
-        let audioBytes = int16.withUnsafeBufferPointer { Data(buffer: $0) }
-        let sr   = UInt32(sampleRate)
-        let bps: UInt16 = 16
-        let ch:  UInt16 = 1
-        var h = Data()
-        h += "RIFF"
-        h.appendLE(UInt32(36 + audioBytes.count))
-        h += "WAVEfmt "
-        h.appendLE(UInt32(16)); h.appendLE(UInt16(1)); h.appendLE(ch); h.appendLE(sr)
-        h.appendLE(sr * UInt32(ch) * UInt32(bps) / 8)
-        h.appendLE(ch * bps / 8)
-        h.appendLE(bps)
-        h += "data"
-        h.appendLE(UInt32(audioBytes.count))
-        return h + audioBytes
-    }
-}
-
-private struct ParakeetResponse: Decodable { let text: String }
-
-// MARK: - Data helpers
-
-private extension Data {
-    static func += (lhs: inout Data, rhs: String) { lhs.append(contentsOf: rhs.utf8) }
-
-    mutating func appendLE<T: FixedWidthInteger>(_ v: T) {
-        var remaining = v.littleEndian
-        for _ in 0..<MemoryLayout<T>.size {
-            append(UInt8(truncatingIfNeeded: remaining))
-            remaining >>= 8
-        }
-    }
-
-    mutating func mpAppend(boundary: String, name: String, string: String) {
-        self += "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(string)\r\n"
-    }
-
-    mutating func mpAppend(boundary: String, name: String, filename: String, mime: String, data: Data) {
-        self += "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\nContent-Type: \(mime)\r\n\r\n"
-        append(data)
-        self += "\r\n"
+        return int16.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 }

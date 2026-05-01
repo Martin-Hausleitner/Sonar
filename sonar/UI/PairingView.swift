@@ -39,6 +39,7 @@ struct PairingView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Pairing-Modus")
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 8)
@@ -48,7 +49,7 @@ struct PairingView: View {
             case .scan: scanTab
             }
         }
-        .background(Color(red: 0.04, green: 0.05, blue: 0.10).ignoresSafeArea())
+        .background(SonarTheme.screenBackground.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .navigationTitle("QR-Pairing")
         .navigationBarTitleDisplayMode(.inline)
@@ -86,12 +87,12 @@ struct PairingView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 16)
-                    .background(.cyan.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+                    .background(SonarTheme.accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(.cyan.opacity(0.4), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(SonarTheme.accent.opacity(0.35), lineWidth: 1)
                     )
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(SonarTheme.accent)
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 28)
@@ -111,11 +112,13 @@ struct PairingView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .padding(18)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(SonarTheme.separator, lineWidth: 0.5)
                 )
+                .accessibilityElement()
+                .accessibilityLabel("Pairing-QR-Code")
         }
     }
 
@@ -143,9 +146,9 @@ struct PairingView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "person.line.dotted.person.fill")
                         .font(.system(size: 28))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SonarTheme.accent)
                         .frame(width: 48, height: 48)
-                        .background(.cyan.opacity(0.15), in: Circle())
+                        .background(SonarTheme.accent.opacity(0.15), in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mit \(t.name) verbinden?")
                             .font(.title3.weight(.semibold))
@@ -162,7 +165,8 @@ struct PairingView: View {
                     if let ble = t.ble { pairingRow("BLE", String(ble.prefix(8)) + "…") }
                 }
                 .padding(12)
-                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(SonarTheme.separator, lineWidth: 0.5))
 
                 HStack(spacing: 12) {
                     Button("Abbrechen") {
@@ -182,7 +186,7 @@ struct PairingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .tint(.cyan)
+                    .tint(SonarTheme.accent)
                 }
 
                 Spacer(minLength: 0)
@@ -270,6 +274,7 @@ private struct QRScannerContainer: View {
             case .authorized:
                 QRScannerView(onToken: onToken)
                     .ignoresSafeArea(edges: .bottom)
+                    .accessibilityLabel("QR-Code-Scanner")
             case .notDetermined:
                 permissionPrompt
                     .task {
@@ -318,7 +323,7 @@ private struct QRScannerContainer: View {
                     .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.cyan)
+            .tint(SonarTheme.accent)
             #endif
             Spacer()
         }
