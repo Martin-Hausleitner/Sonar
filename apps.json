@@ -4,7 +4,7 @@
   "identifier": "app.sonar.ios.source",
   "sourceURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/apps.json",
   "subtitle": "Räumliche Echtzeit-Audiokommunikation für iPhone",
-  "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst.",
+  "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Die Verbindung läuft direkt über WLAN, Bluetooth und Ultrabreitband (UWB), ohne Umweg über einen Server. Mit Live-Transkription, Mesh-Routing und einem Spatial Audio Mixer auf Basis von AVAudioEngine.",
   "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
   "website": "https://github.com/Martin-Hausleitner/Sonar",
   "tintColor": "00E5FF",
@@ -17,6 +17,7 @@
       "localizedDescription": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Das Mikrofon des anderen klingt so, als käme es wirklich von dort, wo die Person steht.\n\nSonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:\n• MultipeerConnectivity / AWDL — lokale Direktverbindung (~30 m)\n• CoreBluetooth GATT — Bluetooth-Fallback (~10 m)\n• NearbyInteraction (UWB) — zentimetergenaue Entfernung + Richtung (~10 m)\n• Network.framework QUIC — Internet-Pfad (Multi-Path), global\n• LiveKit WebRTC — Cloud Audio Relay, global\n• SFSpeechRecognizer — Live-Transkription, on-device\n• AVAudioEngine + VoiceProcessing — Spatial Mixer, AEC, Rauschunterdrückung\n• Opus — Audio-Codec (32 kBit/s, ±20 ms Frames)\n\nÖffne Sonar auf zwei iPhones — die Verbindung baut sich automatisch auf.",
       "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
       "tintColor": "00E5FF",
+      "beta": false,
       "screenshotURLs": [],
       "versions": [
         {
@@ -92,6 +93,7 @@
       "date": "2026-05-01",
       "tintColor": "00E5FF",
       "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.3-20260501-1839",
       "notify": false
     },
     {
@@ -101,6 +103,7 @@
       "date": "2026-04-27",
       "tintColor": "00E5FF",
       "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.2-20260427-2323",
       "notify": false
     }
   ]
