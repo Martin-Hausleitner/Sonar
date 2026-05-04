@@ -2,7 +2,7 @@
   "$schema": "https://github.com/SideStore/sidestore-source-types/raw/main/schema.json",
   "name": "Sonar",
   "identifier": "app.sonar.ios.source",
-  "sourceURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/apps.json",
+  "sourceURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/apps.json",
   "subtitle": "Räumliche Echtzeit-Audiokommunikation für iPhone",
   "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Die Verbindung läuft direkt über WLAN, Bluetooth und Ultrabreitband (UWB), ohne Umweg über einen Server. Mit Live-Transkription, Mesh-Routing und einem Spatial Audio Mixer auf Basis von AVAudioEngine.",
   "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
@@ -25,7 +25,7 @@
           "buildVersion": "7",
           "date": "2026-05-04",
           "localizedDescription": "Sonar v0.2.4 (Build 7).",
-          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/Sonar-unsigned-iOS26.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/Sonar-unsigned-iOS26.ipa",
           "size": 11578941,
           "minOSVersion": "26.2"
         },
@@ -95,6 +95,16 @@
     }
   ],
   "news": [
+    {
+      "identifier": "sonar-0.2.4",
+      "title": "Sonar 0.2.4 verfügbar",
+      "caption": "Sonar v0.2.4 (Build 7).",
+      "date": "2026-05-04",
+      "tintColor": "00E5FF",
+      "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/releases/latest",
+      "notify": false
+    },
     {
       "identifier": "sonar-0.2.3",
       "title": "Sonar 0.2.3 verfügbar",

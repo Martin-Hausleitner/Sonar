@@ -61,8 +61,12 @@ doc = json.loads(pathlib.Path(path).read_text())
 app = doc["apps"][0]
 versions = app.setdefault("versions", [])
 
-ROOT_DOWNLOAD = "https://github.com/Martin-Hausleitner/Sonar/raw/main/Sonar-unsigned-iOS26.ipa"
-ARCHIVED_TPL  = "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v{v}.ipa"
+RAW_BASE = "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main"
+ROOT_DOWNLOAD = f"{RAW_BASE}/Sonar-unsigned-iOS26.ipa"
+ARCHIVED_TPL  = f"{RAW_BASE}/releases/Sonar-v{{v}}.ipa"
+RELEASE_URL = "https://github.com/Martin-Hausleitner/Sonar/releases/latest"
+
+doc["sourceURL"] = f"{RAW_BASE}/apps.json"
 
 new_entry = {
     "version": version,
@@ -86,6 +90,25 @@ else:
         if prev_v:
             prev["downloadURL"] = ARCHIVED_TPL.format(v=prev_v)
     versions.insert(0, new_entry)
+
+news = doc.setdefault("news", [])
+news_entry = {
+    "identifier": f"sonar-{version}",
+    "title": f"Sonar {version} verfügbar",
+    "caption": notes,
+    "date": today,
+    "tintColor": "00E5FF",
+    "appID": app["bundleIdentifier"],
+    "url": RELEASE_URL,
+    "notify": False,
+}
+
+if news and news[0].get("identifier") == news_entry["identifier"]:
+    news[0] = news_entry
+else:
+    news = [item for item in news if item.get("identifier") != news_entry["identifier"]]
+    news.insert(0, news_entry)
+doc["news"] = news
 
 # Validate by round-tripping.
 out = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
