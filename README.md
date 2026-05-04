@@ -145,92 +145,234 @@ PCM 16 kHz · mono · Float32
 
 ---
 
-## Transport-Schichten
+## Wie die Verbindung funktioniert
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    MultipathBonder                           │
-│                                                             │
-│   Modus: redundant            Modus: primaryStandby         │
-│   ┌──────┬──────┬──────┐     ┌──────────┬──────────┐       │
-│   │ Near │  Far │  BT  │     │ Primary  │ Standby  │       │
-│   └──────┴──────┴──────┘     └──────────┴──────────┘       │
-│   Alle senden parallel        Failover bei Ausfall           │
-│   FrameDeduplicator auf       (Akku-Spar-Modus)             │
-│   Empfangsseite                                             │
-└─────────────────────────────────────────────────────────────┘
-         │                │                 │
-         ▼                ▼                 ▼
- ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐
- │ NearTransport│  │FarTransport │  │BluetoothMesh     │
- │              │  │             │  │                  │
- │ MPC / AWDL   │  │ MPQUIC      │  │ GATT Service     │
- │ (lokal, ~3ms)│  │ + LiveKit   │  │ A7F3E2B1-...     │
- │              │  │ (Internet)  │  │ BLE Notify 512 B │
- │ NIToken via  │  │             │  │ ~10 m Reichweite │
- │ 0x02 frame   │  │ WireGuard   │  │                  │
- └──────────────┘  └─────────────┘  └──────────────────┘
-```
+Sonar baut keinen einzelnen Kanal auf, sondern **vier parallele Pfade**, die nach Latenz priorisiert und im `MultipathBonder` aggregiert werden. Pfad-Hops sind transparent — die Sequence-ID im `AudioFrame` lässt den `FrameDeduplicator` Duplikate verwerfen, ohne dass die Audio-Pipeline einen Reconnect bemerkt.
 
----
+### Pfad-Übersicht
 
-## Verbinden
+| Priorität | Pfad | Latenz | Reichweite | Voraussetzung |
+|---|---|---|---|---|
+| 1 | **AWDL** (MPC) | ~3 ms | ~30 m | WLAN an, gleiches AWDL-Mesh |
+| 2 | **BLE GATT** | ~30 ms | ~10 m | Bluetooth an |
+| 3 | **Tailscale** | ~50 ms | global | beide im selben Tailnet |
+| 4 | **MPQUIC** + LiveKit | ~80 ms | global | Internet erreichbar |
 
-Sonar bietet vier Verbindungs-Pfade (AWDL → BLE → Tailscale → MPQUIC), die parallel laufen und nach Latenz priorisiert werden. Für tiefere Details:
+### Transport-Schichten
 
-- [`docs/connection-guide.md`](docs/connection-guide.md) — Pfad-Prioritäten, Bonjour/NIToken-Austausch, Tailscale-Walkthrough mit häufigen Stolperfallen, WLAN-Hotspot, reines BLE, Diagnose-Checkliste.
-- [`docs/pairing.md`](docs/pairing.md) — manuelles QR-Pairing über die TopBar (Anzeigen/Scannen), `PairingToken`-Schema und Sicherheits-Implikationen.
+```mermaid
+flowchart LR
+    Mic[["🎙 Mikrofon"]] --> Opus["OpusCoder.encode<br/>20 ms · ~32 kBit/s"]
+    Opus --> Bonder{{"MultipathBonder<br/>mode: redundant /<br/>primaryStandby"}}
 
-Kurzfassung der drei Standard-Methoden:
+    Bonder -.->|"~3 ms"| Near["NearTransport<br/><i>MPC / AWDL</i>"]
+    Bonder -.->|"~30 ms"| BLE["BluetoothMesh<br/><i>GATT 512 B Notify</i>"]
+    Bonder -.->|"~50 ms"| TS["FarTransport<br/><i>Tailscale 100.x</i>"]
+    Bonder -.->|"~80 ms"| Far["FarTransport<br/><i>MPQUIC + LiveKit</i>"]
 
-## Verbindung aufbauen
+    Near & BLE & TS & Far --> Peer(("Peer"))
 
-### Methode 1 — Automatisch (empfohlen)
+    Peer --> Dedup["FrameDeduplicator<br/>Set&lt;seq:UInt32&gt;"]
+    Dedup --> Jitter["JitterBuffer<br/>adaptive Playout · PLC"]
+    Jitter --> Decode["OpusCoder.decode"]
+    Decode --> Spatial["SpatialMixer<br/>AVAudioEnvironmentNode"]
+    Spatial --> Out[["🔊 AirPods"]]
 
-Sonar auf beiden iPhones öffnen. Fertig. AWDL (dasselbe Protokoll wie AirDrop) erkennt den Partner automatisch. WLAN muss eingeschaltet sein.
-
-```
-Gerät A                        Gerät B
-   │                              │
-   │──── MPC Advertise ──────────►│
-   │◄─── MPC Browse + Invite ─────│
-   │──── Accept + NIToken ───────►│
-   │◄─── NIToken zurück ──────────│
-   │                              │
-   │◄═══════ Audio (bidirektional) ════════►│
-   │       AWDL / BT / Internet            │
+    classDef path fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    classDef proc fill:#0f172a,stroke:#64748b,color:#e2e8f0
+    class Near,BLE,TS,Far path
+    class Opus,Dedup,Jitter,Decode,Spatial proc
 ```
 
-### Methode 2 — Tailscale VPN
+### Verbindungs-Handshake (vollständig)
 
-Tailscale verbindet Geräte per WireGuard über jedes Netzwerk — ideal wenn beide iPhones in verschiedenen WLANs oder Mobilfunknetzen sind.
+Vom App-Start bis zum ersten Audio-Frame — alles geht über **eine** MPC-Pipe, multiplexed per Tag-Byte (`0x01` = Audio, `0x02` = NI-Token).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as iPhone A
+    participant B as iPhone B
+
+    rect rgb(30,58,95)
+    Note over A,B: ① Discovery — passiv über AWDL
+    A->>A: NearTransport.start()
+    A-->>B: MCNearbyServiceAdvertiser  (sonar-mpc)
+    B-->>A: MCNearbyServiceAdvertiser  (sonar-mpc)
+    A->>A: foundPeer(info: peerID, host, bonjour)
+    end
+
+    rect rgb(45,30,80)
+    Note over A,B: ② Pairing-Filter — optional, via QR
+    A->>A: PairingService.handle(token)<br/>TTL ≤ 5 min · applyPairingToken()
+    A->>A: peerOnline = true (optimistic UI)
+    A->>B: invitePeer(...)  ← nur wenn hint matches
+    B->>B: didReceiveInvitationFromPeer<br/>invitationHandler(true, session)
+    end
+
+    rect rgb(20,60,40)
+    Note over A,B: ③ Secure Channel
+    A-->>B: MCSession connect<br/>encryptionPreference: .required (TLS)
+    B-->>A: MCSessionState.connected
+    end
+
+    rect rgb(80,50,20)
+    Note over A,B: ④ UWB-Bootstrap (piggybacked auf MPC)
+    A->>B: [0x02][len:2B][NIDiscoveryToken]  (.reliable)
+    B->>A: [0x02][len:2B][NIDiscoveryToken]  (.reliable)
+    A->>A: NIRangingEngine.start(with: peerToken)
+    B->>B: NIRangingEngine.start(with: peerToken)
+    end
+
+    rect rgb(60,20,60)
+    Note over A,B: ⑤ Audio-Pfad — alle 20 ms, alle aktiven Pfade
+    loop redundant mode
+        A-->>B: [0x01][seq][ts][codec][opus]  (.unreliable)
+        B-->>A: [0x01][seq][ts][codec][opus]  (.unreliable)
+    end
+    end
+```
+
+### Phasen-State-Machine
+
+`SessionCoordinator` und `AppState` halten den gleichen Phase-Wert. Übergang `.far ↔ .near` wird allein durch die Distanz-Pipeline (UWB > BLE-RSSI) getriggert.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> connecting: SessionCoordinator.start()
+    connecting --> far: bonder.activePaths > 0
+    far --> near: distance ≤ profile.nearFarThreshold<br/>(default 8 m)
+    near --> far: distance > threshold
+    far --> idle: stop()
+    near --> idle: stop()
+
+    note right of connecting
+      NearTransport.start()
+      tailscale.startMonitoring()
+      pairingService.bind()
+    end note
+
+    note right of far
+      Pfade aktiv: AWDL · BLE · TS · MPQUIC
+      MultipathBonder verteilt Frames
+    end note
+
+    note right of near
+      SpatialMixer ist 3D-aktiv
+      UWB-Direction → azimut / elevation
+      DistanceRing zeigt cm-Werte
+    end note
+```
+
+### Pairing-Entscheidungspfad
+
+Der `PairingService` filtert die *ausgehende* Invite-Seite über `applyPairingToken`. Ohne QR-Token lädt der Browser alle gefundenen Peers automatisch ein.
+
+```mermaid
+flowchart TD
+    Start([App offen]) --> Adv["NearTransport<br/>Advertise + Browse"]
+    Adv --> Found{"Peer im<br/>AWDL-Mesh?"}
+    Found -->|nein| Adv
+    Found -->|ja| QR{"PairingToken<br/>gesetzt?"}
+
+    QR -->|nein| Auto["inviteIfAllowed:<br/>jeden Peer einladen"]
+    QR -->|ja| TTL{"TTL &lt; 5 min?"}
+    TTL -->|nein| Reject["Token verworfen<br/>pendingPairing = nil"]
+    TTL -->|ja| Match{"hint.matches<br/>peerID / host /<br/>displayName?"}
+
+    Match -->|nein| Skip["Invite überspringen"]
+    Match -->|ja| Targeted["gezielten Invite<br/>an genau diesen Peer"]
+
+    Skip --> Adv
+    Reject --> Adv
+    Auto --> MCS
+    Targeted --> MCS["MCSession connect<br/>(TLS)"]
+    MCS --> NI["NIDiscoveryToken<br/>austauschen (0x02)"]
+    NI --> Audio["Audio-Pfad offen<br/>0x01 frames, .unreliable"]
+    Audio --> More["MultipathBonder nimmt<br/>BLE / Tailscale / MPQUIC<br/>als weitere Pfade dazu"]
+
+    classDef ok fill:#14532d,stroke:#22c55e,color:#fff
+    classDef bad fill:#7f1d1d,stroke:#ef4444,color:#fff
+    class MCS,NI,Audio,More,Targeted,Auto ok
+    class Reject,Skip bad
+```
+
+### Wire-Format auf der MPC-Pipe
+
+Beide Nachrichten-Typen teilen sich denselben Datenkanal. Ein einziger Tag-Byte multiplext Control- und Audio-Stream — keine zweite Verbindung nötig.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                  Tailscale Mesh-Netz                 │
-│                  100.x.x.x  /  WireGuard             │
-│                                                      │
-│   ┌─────────────┐    verschlüsselt    ┌────────────┐ │
-│   │  iPhone A   │◄──────────────────►│  iPhone B  │ │
-│   │ 100.64.0.1  │                    │ 100.64.0.2 │ │
-│   └─────────────┘                    └────────────┘ │
-│          ▲                                  ▲        │
-│    beliebiges                         beliebiges     │
-│    WLAN / 5G                          WLAN / 5G      │
-└──────────────────────────────────────────────────────┘
+0x01  Audio-Frame   ┐
+                    │ [0x01][seq:4B][ts:8B][codec:1B][opus-payload]
+                    │ MCSession.send(..., with: .unreliable)
+                    ┘
+
+0x02  NI-Token      ┐
+                    │ [0x02][len:2B][NSKeyedArchiver(NIDiscoveryToken)]
+                    │ MCSession.send(..., with: .reliable)
+                    ┘
 ```
 
-**Setup:**
-1. [Tailscale](https://tailscale.com/download) auf beiden iPhones installieren
-2. Mit demselben Konto anmelden (Google / GitHub / Microsoft)
-3. In der Tailscale-App prüfen: beide Geräte müssen als **Online** erscheinen
-4. Sonar öffnen — automatische Erkennung über Tailscale-Netz
+### Verbindungs-Methoden im Vergleich
 
-### Methode 3 — Gleicher Hotspot / WLAN
+```mermaid
+flowchart LR
+    subgraph M1["① Automatisch — gleicher Raum"]
+        direction LR
+        A1["iPhone A"] <-.->|"AWDL ~3 ms"| B1["iPhone B"]
+    end
 
-iPhone A → Einstellungen → Persönlicher Hotspot aktivieren.  
-iPhone B → Mit diesem Hotspot verbinden.  
-Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
+    subgraph M2["② Hotspot — kein Internet nötig"]
+        direction LR
+        A2["iPhone A<br/>Hotspot AN"] <-.->|"AWDL via<br/>geteiltes Subnetz"| B2["iPhone B"]
+    end
+
+    subgraph M3["③ Tailscale — beliebige Netze"]
+        direction LR
+        A3["iPhone A<br/>100.64.0.1"] <-.->|"WireGuard<br/>~50 ms"| B3["iPhone B<br/>100.64.0.2"]
+        A3 -.- WLAN1["WLAN / 5G"]
+        B3 -.- WLAN2["anderes WLAN / 5G"]
+    end
+
+    classDef m1 fill:#0c4a6e,stroke:#0ea5e9,color:#fff
+    classDef m2 fill:#365314,stroke:#84cc16,color:#fff
+    classDef m3 fill:#581c87,stroke:#a855f7,color:#fff
+    class A1,B1 m1
+    class A2,B2 m2
+    class A3,B3 m3
+```
+
+**Setup pro Methode:**
+
+| | Voraussetzung | Latenz | Anmerkung |
+|---|---|---|---|
+| ① Automatisch | WLAN auf beiden Geräten an | ~3–10 ms | Bonjour/AWDL findet den Partner ohne Router. Standard-Fall. |
+| ② Hotspot | A öffnet "Persönlicher Hotspot", B verbindet sich | ~10 ms | A teilt zwar Mobilfunk, aber Audio läuft lokal über AWDL — kein Datenvolumen. |
+| ③ Tailscale | Beide eingeloggt mit **demselben** Identity-Provider | ~50 ms | Häufigster Stolperstein: A mit Google, B mit GitHub → zwei getrennte Tailnets. |
+
+**Adaptives Verhalten zur Laufzeit:**
+
+```mermaid
+flowchart LR
+    Battery[["BatteryManager.tier"]] --> BMode{Modus?}
+    BMode -->|"normal · eco"| Red["Bonder.mode<br/>= .redundant<br/>(alle Pfade parallel)"]
+    BMode -->|"saver · critical"| PS["Bonder.mode<br/>= .primaryStandby<br/>(nur schnellster Pfad)"]
+
+    Privacy[["PrivacyMode aktiviert"]] --> P1["bonder.removePath(.mpquic)"]
+    Privacy --> P2["transcription.stop()<br/>wenn OpenAI/Riva aktiv"]
+    Privacy --> P3["transcriptSegments = []"]
+
+    classDef warn fill:#7f1d1d,stroke:#ef4444,color:#fff
+    classDef ok fill:#14532d,stroke:#22c55e,color:#fff
+    class P1,P2,P3 warn
+    class Red,PS ok
+```
+
+Tiefere Details zu Stolperfallen, Diagnose-Checkliste und Wire-Format-Edge-Cases:
+
+- [`docs/connection-guide.md`](docs/connection-guide.md) — Pfad-Prioritäten, Bonjour/NIToken-Austausch, Tailscale-Walkthrough, WLAN-Hotspot, reines BLE, Diagnose-Checkliste.
+- [`docs/pairing.md`](docs/pairing.md) — manuelles QR-Pairing über die TopBar, `PairingToken`-Schema und Sicherheits-Implikationen.
 
 ---
 
@@ -265,29 +407,41 @@ Sonar starten — AWDL und Bonjour funktionieren wie zu Hause.
 
 ## UWB Entfernungsmessung
 
-```
-  iPhone A                              iPhone B
-      │                                     │
-      │── NIDiscoveryToken ──(MPC 0x02)───►  │
-      │◄─ NIDiscoveryToken ──(MPC 0x02)───── │
-      │                                     │
-      │  ◄──────── UWB Ranging ────────►     │
-      │      Genauigkeit:  ~5 cm            │
-      │      Update-Rate:  ~10 Hz           │
-      │      Reichweite:   ~10 m            │
-      │                                     │
-      ▼
-  NIRangingEngine
-  .distance  ──► DistancePublisher ──► AppState.phase
-  .direction ──► SpatialMixer.updateSpatialPosition()
-                  → azimut, elevation → AVAudio3DMixingSourceMode
+UWB-Ranging startet, sobald über die MPC-Pipe gegenseitig `NIDiscoveryToken` (0x02) ausgetauscht wurden. Auf Geräten ohne U1/U2-Chip springt automatisch `RSSIFallback` ein.
 
-  Fallback (kein U1/U2 Chip):
-  RSSIFallback → BLE RSSI → Pfadverlust-Modell
-  d = 10 ^ ((txPower - RSSI) / (10 × n))
-      txPower = -59 dBm  (1m Referenz, typisch iOS)
-      n       = 2.0      (Freiraummodell)
-  EMA-Glättung: α = 0.3
+```mermaid
+flowchart LR
+    subgraph Bootstrap["UWB-Bootstrap (über MPC 0x02)"]
+        direction LR
+        A1["iPhone A"] <-->|"NIDiscoveryToken<br/>NSKeyedArchiver"| B1["iPhone B"]
+    end
+
+    Bootstrap --> Range{{"NISession.run(peerToken)<br/>~5 cm · ~10 Hz · ~10 m"}}
+
+    Range --> NRE["NIRangingEngine"]
+    NRE -->|".distance"| DP["DistancePublisher<br/>(UWB &gt; BLE)"]
+    NRE -->|".direction"| SM["SpatialMixer<br/>updateSpatialPosition<br/>→ azimut / elevation"]
+
+    DP --> Phase["AppState.phase<br/>.near(distance:) / .far"]
+    SM --> Audio["AVAudio3DMixingSourceMode<br/>räumlicher Klang"]
+
+    Range -.-|"kein U1/U2"| RSSI["RSSIFallback<br/>BLE-RSSI → Distanz"]
+    RSSI --> DP
+
+    classDef hw fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    classDef pipe fill:#0f172a,stroke:#64748b,color:#e2e8f0
+    class A1,B1,Range hw
+    class NRE,DP,SM,Phase,Audio,RSSI pipe
+```
+
+**RSSI-Fallback (Pfadverlust-Modell):**
+
+```
+d = 10 ^ ((txPower − RSSI) / (10 × n))
+
+  txPower = −59 dBm   (1 m Referenz, typisch iOS)
+  n       = 2.0       (Freiraum-Modell)
+  EMA-Glättung α = 0.3 auf der Distanzkurve
 ```
 
 ---

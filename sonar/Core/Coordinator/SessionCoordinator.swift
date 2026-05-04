@@ -28,6 +28,8 @@ final class SessionCoordinator: ObservableObject {
     private let privacy          = PrivacyMode.shared
     private let spatialMixer     = SpatialMixer()
     private let near             = NearTransport()
+    private let bluetooth        = BluetoothMeshTransport()
+    private let tailscalePath    = TailscaleTransport()
     private let far              = FarTransport()
     private var simulatorRelay: SimulatorRelayTransport?
     private let jitterBuffer     = JitterBuffer()
@@ -96,6 +98,7 @@ final class SessionCoordinator: ObservableObject {
         musicDucker.disable()
         wakeWord.stop()
         let relay = simulatorRelay
+        tailscalePath.stop()
         Task {
             await near.stop()
             await far.stop()
@@ -143,6 +146,7 @@ final class SessionCoordinator: ObservableObject {
         distancePublisher.bind(uwb: rangingEngine, rssi: rssiFallback)
 
         // When NearTransport gets a peer's NIDiscoveryToken, start UWB ranging.
+        near.localNIToken = rangingEngine.prepareLocalToken()
         near.onReceivedNIToken = { [weak self] token in
             guard let self else { return }
             self.rangingEngine.start(with: token)
@@ -169,39 +173,25 @@ final class SessionCoordinator: ObservableObject {
 
         // MARK: Transport setup
         try? await near.start()
+        try? tailscalePath.start()
         // stop() may have run during the await above. Bail out instead of
         // re-arming subsystems the user has just torn down.
         guard !Task.isCancelled else { return }
         bonder.addPath(near)
+        bonder.addPath(bluetooth)
+        bonder.addPath(tailscalePath)
         bonder.addPath(far)
 
-        // Tailscale presence: if a 100.x CGNAT interface is up, treat
-        // Tailscale as the umbrella connection type — it transparently
-        // subsumes WiFi / Internet for end-to-end peer reachability.
+        // Tailscale presence is advertised in the QR token. The UI only flips
+        // to "Tailscale" after the TCP path itself is actually connected.
         tailscale.startMonitoring()
         tailscale.refresh()
-        if tailscale.isAvailable {
-            appState?.connectionType = .tailscale
-        }
-        // Keep `connectionType` in sync as the tailnet interface
-        // appears / disappears (Wi-Fi reconnect, VPN toggle, etc.).
-        tailscale.$localTailscaleIP
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] ip in
-                guard let self, let appState = self.appState else { return }
-                if ip != nil {
-                    appState.connectionType = .tailscale
-                } else if appState.connectionType == .tailscale {
-                    appState.connectionType = .none
-                }
-            }
-            .store(in: &cancellables)
         guard !Task.isCancelled else { return }
 
         // MARK: QR pairing — observe AppState.pendingPairing and translate
         // a successful scan into peerOnline + a targeted NearTransport invite.
         if let appState {
-            pairingService.bind(appState: appState, near: near)
+            pairingService.bind(appState: appState, near: near, bluetooth: bluetooth, tailscale: tailscalePath)
         }
 
         // MARK: Wake word → AI agent
@@ -295,8 +285,7 @@ final class SessionCoordinator: ObservableObject {
         bonder.$activePaths
             .receive(on: DispatchQueue.main)
             .sink { [weak self] paths in
-                self?.appState?.activePathCount = paths.count
-                self?.appState?.activePathIDs = Set(paths.map(\.rawValue))
+                self?.appState?.applyActiveTransportPaths(paths)
             }
             .store(in: &cancellables)
 

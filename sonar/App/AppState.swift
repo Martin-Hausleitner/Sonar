@@ -100,4 +100,30 @@ final class AppState: ObservableObject {
         self.localPeerID = testIdentity.deviceID
         self.connectionIsSimulated = testIdentity.isSimulatorRelayEnabled
     }
+
+    func applyActiveTransportPaths(_ paths: [MultipathBonder.PathID], now: Date = Date()) {
+        activePathCount = paths.count
+        activePathIDs = Set(paths.map(\.rawValue))
+
+        guard !paths.isEmpty else {
+            peerOnline = false
+            connectionType = .none
+            return
+        }
+
+        peerOnline = true
+        peerLastSeen = now
+
+        if paths.contains(.simulatorRelay) {
+            connectionType = .simulatorRelay
+        } else if paths.contains(.multipeer) {
+            connectionType = .awdl
+        } else if paths.contains(.bluetooth) {
+            connectionType = .bluetooth
+        } else if paths.contains(.tailscale) {
+            connectionType = .tailscale
+        } else if paths.contains(.mpquic) {
+            connectionType = .internet
+        }
+    }
 }

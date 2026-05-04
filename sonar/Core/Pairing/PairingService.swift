@@ -30,6 +30,7 @@ final class PairingService {
     private weak var appState: AppState?
     private weak var near: NearTransport?
     private weak var bluetooth: BluetoothMeshTransport?
+    private weak var tailscale: TailscaleTransport?
     private var cancellable: AnyCancellable?
 
     init(now: @escaping () -> Date = Date.init) {
@@ -46,11 +47,13 @@ final class PairingService {
     func bind(
         appState: AppState,
         near: NearTransport? = nil,
-        bluetooth: BluetoothMeshTransport? = nil
+        bluetooth: BluetoothMeshTransport? = nil,
+        tailscale: TailscaleTransport? = nil
     ) {
         self.appState = appState
         self.near = near
         self.bluetooth = bluetooth
+        self.tailscale = tailscale
 
         cancellable?.cancel()
         // `@Published` fires its sink in `willSet` — observers see the *new*
@@ -93,6 +96,7 @@ final class PairingService {
         appState.peerLastSeen = now()
 
         near?.applyPairingToken(token)
+        tailscale?.applyPairingToken(token)
 
         // Keep a NotificationCenter event for diagnostics and older observers.
         if !token.bonjour.isEmpty {

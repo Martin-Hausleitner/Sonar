@@ -20,6 +20,7 @@ struct PairingToken: Codable, Equatable {
     let bonjour: String
     let host: String
     let tsIP: String?
+    let tsPort: UInt16?
     let ble: String?
     let ts: Int64
 
@@ -30,6 +31,7 @@ struct PairingToken: Codable, Equatable {
         bonjour: String = "_sonar._tcp",
         host: String,
         tsIP: String? = nil,
+        tsPort: UInt16? = nil,
         ble: String? = nil,
         ts: Int64 = Int64(Date().timeIntervalSince1970)
     ) {
@@ -39,6 +41,7 @@ struct PairingToken: Codable, Equatable {
         self.bonjour = bonjour
         self.host = host
         self.tsIP = tsIP
+        self.tsPort = tsPort
         self.ble = ble
         self.ts = ts
     }

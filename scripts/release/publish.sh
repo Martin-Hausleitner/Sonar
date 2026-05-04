@@ -5,7 +5,7 @@
 #
 # Reads the current version from sonar/Resources/Info.plist, optionally
 # bumps it (default: patch), runs the test-suite on a single iPhone 16 Pro
-# simulator, archives a Release build with signing disabled, packages an
+# simulator, builds a Release app with signing disabled, packages an
 # unsigned IPA, copies it to:
 #
 #   releases/Sonar-v<NEW_VERSION>.ipa     (archived per-version)
@@ -115,12 +115,13 @@ xcodebuild test \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=${SIM_UDID}" \
+  -skip-testing:SonarUITests \
   -quiet
 
 # -----------------------------------------------------------------------------
-# 5. Archive (signing disabled, iOS 26.2 deployment target)
+# 5. Build (signing disabled, iOS 26.2 deployment target)
 # -----------------------------------------------------------------------------
-echo "==> Archiving Release build (unsigned, iOS 26.2)"
+echo "==> Building Release app (unsigned, iOS 26.2)"
 rm -rf "$DERIVED_DATA" "$STAGING_DIR"
 mkdir -p "$STAGING_DIR/Payload" "$RELEASES_DIR"
 
@@ -134,11 +135,16 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY='' \
-  archive
+  build
 
 if [[ ! -d "$APP_PATH" ]]; then
-  echo "error: expected app bundle at $APP_PATH" >&2
-  exit 1
+  ARCHIVE_APP_PATH="$(find "${DERIVED_DATA}/Build/Intermediates.noindex/ArchiveIntermediates/${SCHEME}" -path '*/BuildProductsPath/Release-iphoneos/Sonar.app' -type d -print -quit 2>/dev/null || true)"
+  if [[ -n "$ARCHIVE_APP_PATH" && -d "$ARCHIVE_APP_PATH" ]]; then
+    APP_PATH="$ARCHIVE_APP_PATH"
+  else
+    echo "error: expected app bundle at $APP_PATH" >&2
+    exit 1
+  fi
 fi
 
 # -----------------------------------------------------------------------------

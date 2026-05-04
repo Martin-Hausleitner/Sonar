@@ -11,12 +11,13 @@ import Darwin
 /// hostname / LAN IP, and (optionally) a Tailscale IP if one is reachable.
 ///
 /// MVP scope:
-/// * Tailscale detection is a stub — returns nil unless a UserDefaults
-///   override is set under `sonar.pairing.tailscaleIP` (so tests / DevMode
-///   can exercise the full path without requiring runtime detection).
+/// * Tailscale detection uses the local CGNAT interface when the Tailscale VPN
+///   is up, with a UserDefaults override under `sonar.pairing.tailscaleIP` for
+///   tests / DevMode.
 /// * BLE peripheral identifier is also passed in — we don't run the
 ///   advertiser here, the caller threads in a known UUID if available.
 enum PairingTokenGenerator {
+    static let defaultTailscalePort: UInt16 = TailscaleTransport.defaultPort
 
     /// Generate a fresh token from the current `AppState`.
     @MainActor
@@ -30,6 +31,7 @@ enum PairingTokenGenerator {
             name: appState.testIdentity.deviceName,
             host: localHost(),
             tsIP: tailscaleIP(),
+            tsPort: defaultTailscalePort,
             ble: blePeripheralID,
             ts: Int64(now.timeIntervalSince1970)
         )
@@ -100,13 +102,17 @@ enum PairingTokenGenerator {
         return nil
     }
 
-    // MARK: - Tailscale (stub)
+    // MARK: - Tailscale
 
-    /// MVP stub — returns a Tailscale IP only if explicitly set in
-    /// UserDefaults under `sonar.pairing.tailscaleIP`. Real runtime
-    /// detection is a separate feature.
+    /// Returns the local Tailscale IP from the live detector, or a development
+    /// override if set.
+    @MainActor
     static func tailscaleIP() -> String? {
-        let ip = UserDefaults.standard.string(forKey: "sonar.pairing.tailscaleIP") ?? ""
-        return ip.isEmpty ? nil : ip
+        let override = UserDefaults.standard.string(forKey: "sonar.pairing.tailscaleIP") ?? ""
+        if !override.isEmpty { return override }
+
+        let detector = TailscaleDetector.shared
+        detector.refresh()
+        return detector.localTailscaleIP
     }
 }

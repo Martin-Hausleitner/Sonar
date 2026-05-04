@@ -155,4 +155,31 @@ final class AppStateConnectionTypeTests: XCTestCase {
             XCTFail("connectionType should be .awdl after assignment")
         }
     }
+
+    @MainActor
+    func testActiveMultipeerPathMarksPeerOnlineAndAWDL() {
+        let state = AppState()
+
+        state.applyActiveTransportPaths([.multipeer])
+
+        XCTAssertTrue(state.peerOnline)
+        XCTAssertEqual(state.activePathCount, 1)
+        XCTAssertEqual(state.activePathIDs, ["multipeer"])
+        if case .awdl = state.connectionType { } else {
+            XCTFail("multipeer path should surface as AWDL, got \(state.connectionType)")
+        }
+    }
+
+    @MainActor
+    func testActiveTailscalePathMarksPeerOnlineAndTailscale() {
+        let state = AppState()
+
+        state.applyActiveTransportPaths([.tailscale])
+
+        XCTAssertTrue(state.peerOnline)
+        XCTAssertEqual(state.activePathIDs, ["tailscale"])
+        if case .tailscale = state.connectionType { } else {
+            XCTFail("tailscale path should surface as Tailscale, got \(state.connectionType)")
+        }
+    }
 }
