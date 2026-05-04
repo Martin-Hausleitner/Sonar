@@ -52,8 +52,8 @@
           "buildVersion": "3",
           "date": "2026-04-27",
           "localizedDescription": "Round-2 Quality-Pass: synchroner Temp-Download für Audio-Recordings, Stabilitätsfixes.",
-          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v0.2.1.ipa",
-          "size": 8606217,
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/releases/download/v0.2.1-20260427-2316/Sonar-unsigned-iOS26.ipa",
+          "size": 8606479,
           "minOSVersion": "26.2"
         },
         {
@@ -61,8 +61,8 @@
           "buildVersion": "2",
           "date": "2026-04-27",
           "localizedDescription": "Demo-Toggle, echte Per-Pfad-Icons, Volume-Slider, Profil-Detail-Sheet, AppIcon.",
-          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/releases/Sonar-v0.2.0.ipa",
-          "size": 8606217,
+          "downloadURL": "https://github.com/Martin-Hausleitner/Sonar/releases/download/v0.2.0-20260427-2309/Sonar-unsigned-iOS26.ipa",
+          "size": 8602361,
           "minOSVersion": "26.2"
         }
       ],
