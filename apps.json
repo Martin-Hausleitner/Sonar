@@ -25,7 +25,7 @@
           "buildVersion": "8",
           "date": "2026-05-04",
           "localizedDescription": "Sonar v0.2.5 (Build 8).",
-          "downloadURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/Sonar-unsigned-iOS26.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/releases/Sonar-v0.2.5.ipa",
           "size": 11578942,
           "minOSVersion": "26.2"
         },

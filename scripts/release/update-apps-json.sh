@@ -38,15 +38,17 @@ if [[ ! -f "$INFO_PLIST" ]]; then
   echo "error: $INFO_PLIST missing." >&2
   exit 1
 fi
-if [[ ! -f "$ROOT_IPA" ]]; then
-  echo "error: $ROOT_IPA missing — build an IPA first." >&2
-  exit 1
-fi
-
 VERSION="${1:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")}"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
 NOTES="${2:-Neue Sonar-Version ${VERSION}.}"
-SIZE_BYTES="$(stat -f%z "$ROOT_IPA")"
+VERSION_IPA="releases/Sonar-v${VERSION}.ipa"
+
+if [[ ! -f "$VERSION_IPA" ]]; then
+  echo "error: $VERSION_IPA missing — build the archived IPA first." >&2
+  exit 1
+fi
+
+SIZE_BYTES="$(stat -f%z "$VERSION_IPA")"
 TODAY="$(date -u +%Y-%m-%d)"
 
 echo "==> Updating $APPS_JSON to v${VERSION} (build ${BUILD}, ${SIZE_BYTES} bytes)"
@@ -62,7 +64,6 @@ app = doc["apps"][0]
 versions = app.setdefault("versions", [])
 
 RAW_BASE = "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main"
-ROOT_DOWNLOAD = f"{RAW_BASE}/Sonar-unsigned-iOS26.ipa"
 ARCHIVED_TPL  = f"{RAW_BASE}/releases/Sonar-v{{v}}.ipa"
 RELEASE_URL = "https://github.com/Martin-Hausleitner/Sonar/releases/latest"
 
@@ -73,7 +74,7 @@ new_entry = {
     "buildVersion": build,
     "date": today,
     "localizedDescription": notes,
-    "downloadURL": ROOT_DOWNLOAD,
+    "downloadURL": ARCHIVED_TPL.format(v=version),
     "size": size_bytes,
     "minOSVersion": "26.2",
 }

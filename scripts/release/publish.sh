@@ -9,7 +9,7 @@
 # unsigned IPA, copies it to:
 #
 #   releases/Sonar-v<NEW_VERSION>.ipa     (archived per-version)
-#   Sonar-unsigned-iOS26.ipa              (stable root link for SideStore)
+#   Sonar-unsigned-iOS26.ipa              (legacy compatibility link)
 #
 # Then updates releases/RELEASES.md, commits + pushes, and creates a
 # GitHub release with the IPA from releases/.
@@ -155,8 +155,10 @@ ditto "$APP_PATH" "$STAGING_DIR/Payload/Sonar.app"
 ( cd "$STAGING_DIR" && ditto -c -k --sequesterRsrc --keepParent Payload "Sonar-v${NEW_VERSION}.ipa" )
 mv "$STAGING_DIR/Sonar-v${NEW_VERSION}.ipa" "$NEW_IPA"
 
-echo "==> Updating root ${ROOT_IPA}"
-cp "$NEW_IPA" "$ROOT_IPA"
+echo "==> Preserving legacy root ${ROOT_IPA}"
+if [[ ! -f "$ROOT_IPA" ]]; then
+  cp "$NEW_IPA" "$ROOT_IPA"
+fi
 
 IPA_SIZE_BYTES="$(stat -f%z "$NEW_IPA")"
 IPA_SIZE_MB="$(awk -v b="$IPA_SIZE_BYTES" 'BEGIN { printf "%.1f", b/1024/1024 }')"
@@ -215,7 +217,7 @@ git commit -m "$(cat <<EOF
 release: Sonar v${NEW_VERSION}
 
 - Bump CFBundleShortVersionString to ${NEW_VERSION} (build ${NEW_BUILD})
-- Refresh ${ROOT_IPA} (8.2M unsigned, iOS 26.2)
+- Keep ${ROOT_IPA} as legacy compatibility link
 - Archive ${NEW_IPA}
 - Update ${RELEASES_INDEX}
 EOF
