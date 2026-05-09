@@ -123,6 +123,16 @@
   ],
   "news": [
     {
+      "identifier": "sonar-next-game-mode",
+      "title": "Nächstes Feature: Spielmodus",
+      "caption": "Für die nächste Sonar-Version ist ein kleiner Spielmodus geplant — räumlich, lokal-first und passend zum Audio/Radar-Feeling.",
+      "date": "2026-05-09",
+      "tintColor": "00E5FF",
+      "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/issues/33",
+      "notify": false
+    },
+    {
       "identifier": "sonar-0.2.7",
       "title": "Sonar 0.2.7 verfügbar",
       "caption": "Sonar v0.2.7 (Build 10).",
