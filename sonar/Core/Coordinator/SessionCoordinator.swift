@@ -203,6 +203,20 @@ final class SessionCoordinator: ObservableObject {
             pairingService.bind(appState: appState, near: near, bluetooth: bluetooth, tailscale: tailscalePath)
         }
 
+        // MARK: Mic-gain slider → AudioEngine. Real-device testing on v0.2.6
+
+        // showed Apple's voice-processing AGC pulls speech low, so users need a
+        // live, persisted gain control on top of it.
+        if let appState {
+            audioEngine.inputGain = appState.inputGain
+            appState.$inputGain
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] gain in
+                    self?.audioEngine.inputGain = gain
+                }
+                .store(in: &cancellables)
+        }
+
         // MARK: Wake word → AI agent
 
         wakeWord.start()

@@ -70,6 +70,22 @@ struct SessionView: View {
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showPairing) { pairingSheet }
+        .onChange(of: showPairing) { _, isOpen in
+            // Opening the pairing UI is a strong "I want to connect" signal —
+            // start the session so MPC/BLE/Tailscale begin advertising/browsing
+            // immediately, without forcing the user to tap Start separately.
+            if isOpen, !sessionActive {
+                sessionActive = true
+            }
+        }
+        .onChange(of: appState.pendingPairing) { _, token in
+            // A scanned QR delivers a token; without an active session no
+            // transport is up to act on it. Auto-start so "Verbinden" actually
+            // does something visible end-to-end.
+            if token != nil, !sessionActive {
+                sessionActive = true
+            }
+        }
         .onChange(of: sessionActive) { _, active in
             withAnimation(.easeInOut(duration: 0.3)) {
                 if active {
@@ -476,34 +492,78 @@ struct SessionView: View {
     }
 
     private var audioControlsRow: some View {
-        HStack(spacing: 12) {
-            Button {
-                toggleMute()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: appState.isMuted ? "mic.slash.fill" : "mic.fill")
-                        .font(.callout.weight(.bold))
-                    Text(appState.isMuted ? "Stumm" : "Mikro an")
-                        .font(.callout.weight(.bold))
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Button {
+                    toggleMute()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: appState.isMuted ? "mic.slash.fill" : "mic.fill")
+                            .font(.callout.weight(.bold))
+                        Text(appState.isMuted ? "Stumm" : "Mikro an")
+                            .font(.callout.weight(.bold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(appState.isMuted ? .red : SonarTheme.accent)
+                    .frame(minWidth: 116, minHeight: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.14))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.45), lineWidth: 1)
+                    )
                 }
-                .foregroundStyle(appState.isMuted ? .red : SonarTheme.accent)
-                .frame(minWidth: 116, minHeight: 42)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.14))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder((appState.isMuted ? Color.red : SonarTheme.accent).opacity(0.45), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
+                .accessibilityLabel(appState.isMuted ? "Mikrofon einschalten" : "Mikrofon stummschalten")
+
+                AudioLevelMeter(rms: appState.inputLevelRMS)
+
+                Spacer(minLength: 0)
+            }
+
+            micGainRow
+        }
+    }
+
+    private var micGainRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "speaker.wave.1.fill")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Slider(
+                value: $appState.inputGain,
+                in: AppState.inputGainRange,
+                step: 0.1
+            ) {
+                Text("Mikrofon-Empfindlichkeit")
+            } minimumValueLabel: {
+                Image(systemName: "speaker.wave.1")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } maximumValueLabel: {
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .tint(SonarTheme.accent)
+            Text(String(format: "%.1f×", appState.inputGain))
+                .font(.caption.monospacedDigit().weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .trailing)
+            Button {
+                appState.inputGain = 1.0
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(Color.secondary.opacity(0.10), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(appState.isMuted ? "Mikrofon einschalten" : "Mikrofon stummschalten")
-
-            AudioLevelMeter(rms: appState.inputLevelRMS)
-
-            Spacer(minLength: 0)
+            .accessibilityLabel("Mikrofon-Empfindlichkeit zurücksetzen")
         }
     }
 

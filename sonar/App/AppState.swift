@@ -49,6 +49,30 @@ final class AppState: ObservableObject {
     @Published var isMuted: Bool = false
     @Published var inputLevelRMS: Float = 0
 
+    /// Live mic-gain slider (multiplier applied to captured PCM before encoding).
+    /// Persisted in UserDefaults so the value survives a relaunch — Apple's
+    /// voice-processing AGC pulls real-world speech low, so users tend to land
+    /// on a personal "good" gain and want it remembered.
+    @Published var inputGain: Float = AppState.loadInputGain() {
+        didSet {
+            let range = AppState.inputGainRange
+            let clamped = min(max(inputGain, range.lowerBound), range.upperBound)
+            if clamped != inputGain {
+                inputGain = clamped
+                return
+            }
+            UserDefaults.standard.set(inputGain, forKey: AppState.inputGainKey)
+        }
+    }
+
+    static let inputGainRange: ClosedRange<Float> = 0.5 ... 6.0
+    private static let inputGainKey = "sonar.audio.inputGain"
+    private static func loadInputGain() -> Float {
+        let stored = UserDefaults.standard.float(forKey: inputGainKey)
+        guard stored > 0 else { return 1.0 }
+        return min(max(stored, inputGainRange.lowerBound), inputGainRange.upperBound)
+    }
+
     // Peer discovery (passive — updated by SessionCoordinator even before session starts)
     @Published var localPeerName: String
     @Published var localPeerID: String

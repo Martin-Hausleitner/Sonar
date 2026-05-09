@@ -33,6 +33,10 @@ struct PairingView: View {
     @State private var tokenTimestamp: Int64 = .init(Date().timeIntervalSince1970)
     @State private var scannedToken: PairingToken? = nil
     @State private var showConfirm: Bool = false
+    /// Bumped whenever we want the camera scanner to resume after pausing on a
+    /// detected code — otherwise the preview stays frozen black and the user
+    /// can't scan again without leaving the view.
+    @State private var scannerEpoch: UUID = .init()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,7 +60,13 @@ struct PairingView: View {
         .preferredColorScheme(.dark)
         .navigationTitle("QR-Pairing")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showConfirm, onDismiss: { scannedToken = nil }) {
+        .sheet(isPresented: $showConfirm, onDismiss: {
+            scannedToken = nil
+            // Camera was paused as soon as a code was detected; nudge it back
+            // to scanning when the confirm sheet closes (e.g. user tapped
+            // "Abbrechen") so they aren't left staring at a frozen frame.
+            scannerEpoch = UUID()
+        }) {
             confirmSheet
         }
     }
@@ -128,7 +138,7 @@ struct PairingView: View {
     // MARK: - Scannen
 
     private var scanTab: some View {
-        QRScannerContainer { token in
+        QRScannerContainer(resumeKey: scannerEpoch) { token in
             // Latch the first valid token, ignore further scans until the
             // sheet is dismissed.
             guard scannedToken == nil else { return }
@@ -262,6 +272,7 @@ private struct QRImageView: View {
 /// permission gating: if the user denied camera access, shows a stub view
 /// with a deep-link to Settings. If permission is undetermined, requests it.
 private struct QRScannerContainer: View {
+    let resumeKey: UUID
     let onToken: (PairingToken) -> Void
 
     @State private var status: AVAuthorizationStatus =
@@ -271,7 +282,7 @@ private struct QRScannerContainer: View {
         Group {
             switch status {
             case .authorized:
-                QRScannerView(onToken: onToken)
+                QRScannerView(resumeKey: resumeKey, onToken: onToken)
                     .ignoresSafeArea(edges: .bottom)
                     .accessibilityLabel("QR-Code-Scanner")
             case .notDetermined:
@@ -332,19 +343,24 @@ private struct QRScannerContainer: View {
 
 #if canImport(UIKit)
     private struct QRScannerView: UIViewControllerRepresentable {
+        let resumeKey: UUID
         let onToken: (PairingToken) -> Void
 
         func makeUIViewController(context: Context) -> QRScannerViewController {
             let vc = QRScannerViewController()
             vc.onToken = onToken
+            vc.lastResumeKey = resumeKey
             return vc
         }
 
-        func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
+        func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {
+            uiViewController.requestResume(if: resumeKey)
+        }
     }
 
     final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
         var onToken: ((PairingToken) -> Void)?
+        fileprivate var lastResumeKey: UUID?
 
         private let session = AVCaptureSession()
         private var preview: AVCaptureVideoPreviewLayer?
@@ -357,16 +373,29 @@ private struct QRScannerContainer: View {
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            if !session.isRunning {
-                DispatchQueue.global(qos: .userInitiated).async { [session] in
-                    session.startRunning()
-                }
-            }
+            startSessionIfNeeded()
         }
 
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
             if session.isRunning { session.stopRunning() }
+        }
+
+        /// Re-arm the camera when the parent view's `resumeKey` changes — used
+        /// after the confirm sheet dismisses without "Verbinden", so the
+        /// preview unfreezes and the user can scan again.
+        fileprivate func requestResume(if key: UUID) {
+            if lastResumeKey != key {
+                lastResumeKey = key
+                startSessionIfNeeded()
+            }
+        }
+
+        private func startSessionIfNeeded() {
+            guard !session.isRunning else { return }
+            DispatchQueue.global(qos: .userInitiated).async { [session] in
+                session.startRunning()
+            }
         }
 
         override func viewDidLayoutSubviews() {
@@ -418,6 +447,7 @@ private struct QRScannerContainer: View {
     }
 #else
     private struct QRScannerView: View {
+        let resumeKey: UUID
         let onToken: (PairingToken) -> Void
         var body: some View {
             Text("Kamera-Scan nur auf iOS verfügbar.")
