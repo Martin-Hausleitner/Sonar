@@ -21,6 +21,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "0.2.8",
+          "buildVersion": "11",
+          "date": "2026-05-09",
+          "localizedDescription": "Sonar v0.2.8 (Build 11).",
+          "downloadURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/releases/Sonar-v0.2.8.ipa",
+          "size": 11658061,
+          "minOSVersion": "26.2"
+        },
+        {
           "version": "0.2.7",
           "buildVersion": "10",
           "date": "2026-05-09",
@@ -122,6 +131,16 @@
     }
   ],
   "news": [
+    {
+      "identifier": "sonar-0.2.8",
+      "title": "Sonar 0.2.8 verfügbar",
+      "caption": "Sonar v0.2.8 (Build 11).",
+      "date": "2026-05-09",
+      "tintColor": "00E5FF",
+      "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/releases/latest",
+      "notify": false
+    },
     {
       "identifier": "sonar-next-game-mode",
       "title": "Nächstes Feature: Spielmodus",
