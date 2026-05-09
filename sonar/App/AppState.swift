@@ -144,9 +144,17 @@ final class AppState: ObservableObject {
     /// instance.
     let peerStore: KnownPeerStore
 
+    /// Live, merged "Geräte"-Verzeichnis: known contacts + whatever the
+    /// transports are currently seeing on AWDL/BLE. Created here so the UI
+    /// can subscribe immediately; the SessionCoordinator pipes the
+    /// transport publishers in once a session is starting.
+    let peerDirectory: LivePeerDirectory
+
     init(testIdentity: SonarTestIdentity = .current(), peerStore: KnownPeerStore? = nil) {
         self.testIdentity = testIdentity
-        self.peerStore = peerStore ?? KnownPeerStore()
+        let store = peerStore ?? KnownPeerStore()
+        self.peerStore = store
+        peerDirectory = LivePeerDirectory(known: store)
         localPeerName = testIdentity.deviceName
         localPeerID = testIdentity.deviceID
         connectionIsSimulated = testIdentity.isSimulatorRelayEnabled

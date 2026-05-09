@@ -23,6 +23,7 @@ struct SonarApp: App {
             }
             .environmentObject(appState)
             .environmentObject(appState.peerStore)
+            .environmentObject(appState.peerDirectory)
             .environmentObject(permissions)
             .preferredColorScheme(.dark)
             #if DEBUG

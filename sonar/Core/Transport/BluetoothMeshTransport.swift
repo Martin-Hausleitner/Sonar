@@ -9,6 +9,27 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
 
     private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
     private let inboundSubject = PassthroughSubject<AudioFrame, Never>()
+    private let liveSubject = CurrentValueSubject<[LiveBLEPeer], Never>([])
+
+    /// One Sonar peripheral the central manager has seen recently. Drives the
+    /// live "Geräte in der Nähe" list — separate from `connectedPeripherals`
+    /// because we want the user to see candidates even before a GATT
+    /// connection has been established.
+    struct LiveBLEPeer: Identifiable, Equatable {
+        /// `peripheral.identifier.uuidString` — same form `PairingToken.ble` uses.
+        let id: String
+        let name: String
+        /// Last received signal strength in dBm. `nil` after the system stops
+        /// reporting (e.g. once we've connected). Closer to 0 = stronger.
+        let rssi: Int?
+        let lastSeen: Date
+    }
+
+    var livePeers: AnyPublisher<[LiveBLEPeer], Never> {
+        liveSubject.eraseToAnyPublisher()
+    }
+
+    private var discoveredPeripheralCache: [String: LiveBLEPeer] = [:]
 
     var isConnected: AnyPublisher<Bool, Never> {
         connectedSubject.eraseToAnyPublisher()
@@ -107,6 +128,21 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        // Always record the sighting so the "in der Nähe" UI can show this
+        // peripheral as a tap-to-pair candidate, even if the allow-list would
+        // otherwise reject the auto-connect below.
+        let key = peripheral.identifier.uuidString
+        let advertisedName = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
+            ?? peripheral.name
+            ?? "Unbekanntes Sonar"
+        discoveredPeripheralCache[key] = LiveBLEPeer(
+            id: key,
+            name: advertisedName,
+            rssi: RSSI.intValue,
+            lastSeen: Date()
+        )
+        liveSubject.send(Array(discoveredPeripheralCache.values))
+
         guard !connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier }) else { return }
         // Empty allow-list = open auto-discovery; otherwise require a match
         // against one of the remembered peers' BLE identifiers.

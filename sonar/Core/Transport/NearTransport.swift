@@ -24,6 +24,23 @@ final class NearTransport: NSObject, Transport, BondedPath {
     private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
     private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
     private let qualitySubject = CurrentValueSubject<Double, Never>(0)
+    private let liveSubject = CurrentValueSubject<[LiveMPCPeer], Never>([])
+
+    /// One MPC peer the browser currently sees. Surfaced so the app can show
+    /// a live "Geräte in der Nähe" list without the user having to scan QR.
+    struct LiveMPCPeer: Identifiable, Equatable {
+        /// Stable id — prefers the remote peer's `SonarTestIdentity.deviceID`
+        /// from `discoveryInfo["peerID"]`, falls back to MCPeerID's display
+        /// name (which is also the user-visible device name).
+        let id: String
+        let displayName: String
+        let host: String
+        let lastSeen: Date
+    }
+
+    var livePeers: AnyPublisher<[LiveMPCPeer], Never> {
+        liveSubject.eraseToAnyPublisher()
+    }
 
     var isConnected: AnyPublisher<Bool, Never> {
         connectedSubject.eraseToAnyPublisher()
@@ -270,11 +287,28 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
         discoveredPeers[peerID] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        publishLivePeers()
         inviteIfAllowed(peerID, discoveryInfo: info)
     }
 
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         discoveredPeers.removeValue(forKey: peerID)
+        publishLivePeers()
+    }
+
+    private func publishLivePeers() {
+        let now = Date()
+        let items = discoveredPeers.values.map { peer -> LiveMPCPeer in
+            let info = peer.discoveryInfo
+            let stableID = info?["peerID"] ?? peer.peerID.displayName
+            return LiveMPCPeer(
+                id: stableID,
+                displayName: info?["peerName"] ?? peer.peerID.displayName,
+                host: info?["host"] ?? "",
+                lastSeen: now
+            )
+        }
+        liveSubject.send(items)
     }
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {

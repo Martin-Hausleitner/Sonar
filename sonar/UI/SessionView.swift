@@ -675,9 +675,9 @@ struct SessionView: View {
 
             Button { showPairing = true } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "qrcode.viewfinder")
+                    Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.callout.weight(.semibold))
-                    Text("QR-Pairing")
+                    Text("Geräte verbinden")
                         .font(.callout.weight(.semibold))
                     Spacer()
                 }
@@ -773,8 +773,10 @@ struct SessionView: View {
 
     private var pairingSheet: some View {
         NavigationStack {
-            PairingView()
+            DevicesView()
                 .environmentObject(appState)
+                .environmentObject(appState.peerStore)
+                .environmentObject(appState.peerDirectory)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Fertig") { showPairing = false }

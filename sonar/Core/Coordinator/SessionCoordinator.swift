@@ -216,6 +216,10 @@ final class SessionCoordinator: ObservableObject {
             }
         }
 
+        // MARK: Live discovery → AppState.peerDirectory.
+
+        wireLiveDiscovery(into: appState)
+
         // MARK: QR pairing — observe AppState.pendingPairing and translate
 
         // a successful scan into peerOnline + a targeted NearTransport invite,
@@ -517,6 +521,26 @@ final class SessionCoordinator: ObservableObject {
     private var activeProfile: SessionProfile? {
         guard let id = appState?.profileID else { return nil }
         return SessionProfile.builtIn.first { $0.id == id }
+    }
+
+    /// Pipe NearTransport + BluetoothMeshTransport live-peer publishers into
+    /// `AppState.peerDirectory` so `DevicesView` reflects MPC/BLE sightings
+    /// within seconds of session start. Extracted from `startAudioPipeline`
+    /// to keep that function under the cyclomatic-complexity ceiling.
+    private func wireLiveDiscovery(into appState: AppState?) {
+        guard let appState else { return }
+        near.livePeers
+            .receive(on: DispatchQueue.main)
+            .sink { peers in
+                appState.peerDirectory.mpcPeers = peers
+            }
+            .store(in: &cancellables)
+        bluetooth.livePeers
+            .receive(on: DispatchQueue.main)
+            .sink { peers in
+                appState.peerDirectory.blePeers = peers
+            }
+            .store(in: &cancellables)
     }
 
     private func handleSimulatorRelayPeerUpdate(_ peer: SimulatorRelayPeer?) {
