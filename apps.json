@@ -21,6 +21,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "0.2.6",
+          "buildVersion": "9",
+          "date": "2026-05-09",
+          "localizedDescription": "Sonar v0.2.6 (Build 9).",
+          "downloadURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/releases/Sonar-v0.2.6.ipa",
+          "size": 11591205,
+          "minOSVersion": "26.2"
+        },
+        {
           "version": "0.2.5",
           "buildVersion": "8",
           "date": "2026-05-04",
@@ -104,6 +113,16 @@
     }
   ],
   "news": [
+    {
+      "identifier": "sonar-0.2.6",
+      "title": "Sonar 0.2.6 verfügbar",
+      "caption": "Sonar v0.2.6 (Build 9).",
+      "date": "2026-05-09",
+      "tintColor": "00E5FF",
+      "appID": "app.sonar.ios",
+      "url": "https://github.com/Martin-Hausleitner/Sonar/releases/latest",
+      "notify": false
+    },
     {
       "identifier": "sonar-0.2.5",
       "title": "Sonar 0.2.5 verfügbar",
