@@ -27,8 +27,12 @@ enum LatencyBudget {
     /// 5 = balanced. Apple Voice Memos uses ~5.
     static let opusComplexity: Int32 = 5
 
-    /// Bitrate in bps. 24 kbps is plenty for mono voice at 48 kHz.
-    static let opusBitrateBps: Int32 = 24000
+    /// Bitrate in bps. Real-device feedback on v0.2.7 was that 24 kbps voice
+    /// (combined with `.voiceChat` AGC) sounded "verpackt" (muffled). 32 kbps
+    /// trades ~30 % more bandwidth for noticeably more spectral detail in the
+    /// 4–8 kHz presence band where speech intelligibility lives. Still well
+    /// within the latency budget.
+    static let opusBitrateBps: Int32 = 32000
 
     /// Forward Error Correction. On for Far, off for Near (FEC adds 2–4 ms).
     static let opusFECEnabledNear: Bool = false

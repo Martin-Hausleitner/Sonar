@@ -73,6 +73,27 @@ final class AppState: ObservableObject {
         return min(max(stored, inputGainRange.lowerBound), inputGainRange.upperBound)
     }
 
+    /// "Ungefiltertes Audio" — when true, AudioEngine skips Apple's
+    /// voice-processing chain (`.voiceChat` mode + setVoiceProcessingEnabled)
+    /// and uses `.default` mode instead. Real-device feedback on v0.2.7 was
+    /// that the voice-chat AGC + noise suppression dulls speech to the point
+    /// the receiver hears it as "verpackt" — flipping this on restores
+    /// full-bandwidth voice at the cost of giving up echo cancellation.
+    /// Defaults to *on* (raw audio) because Sonar's primary use case is
+    /// two people in different rooms / different headphones, where echo
+    /// isn't the dominant problem and fidelity matters most.
+    @Published var rawAudioMode: Bool = AppState.loadRawAudioMode() {
+        didSet {
+            UserDefaults.standard.set(rawAudioMode, forKey: AppState.rawAudioModeKey)
+        }
+    }
+
+    private static let rawAudioModeKey = "sonar.audio.rawAudioMode"
+    private static func loadRawAudioMode() -> Bool {
+        if UserDefaults.standard.object(forKey: rawAudioModeKey) == nil { return true }
+        return UserDefaults.standard.bool(forKey: rawAudioModeKey)
+    }
+
     // Peer discovery (passive — updated by SessionCoordinator even before session starts)
     @Published var localPeerName: String
     @Published var localPeerID: String
@@ -117,8 +138,15 @@ final class AppState: ObservableObject {
         }
     }
 
-    init(testIdentity: SonarTestIdentity = .current()) {
+    /// Persisted "contact book" of every peer ever paired with. Lives on
+    /// AppState so the UI (PairingView "Bekannte" tab, SessionView quick-tap
+    /// row) and the SessionCoordinator (transport replay) all share one
+    /// instance.
+    let peerStore: KnownPeerStore
+
+    init(testIdentity: SonarTestIdentity = .current(), peerStore: KnownPeerStore? = nil) {
         self.testIdentity = testIdentity
+        self.peerStore = peerStore ?? KnownPeerStore()
         localPeerName = testIdentity.deviceName
         localPeerID = testIdentity.deviceID
         connectionIsSimulated = testIdentity.isSimulatorRelayEnabled

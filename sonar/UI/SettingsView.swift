@@ -164,6 +164,8 @@ struct SettingsView: View {
 
             Toggle("Vorwärtsfehlerkorrektur (FEC)", isOn: $fecEnabled)
 
+            Toggle("Ungefiltertes Audio", isOn: $appState.rawAudioMode)
+
             Picker("Aufbewahrung", selection: $retentionDays) {
                 Text("7 Tage").tag(7)
                 Text("30 Tage").tag(30)
@@ -173,7 +175,7 @@ struct SettingsView: View {
         } header: {
             Text("Audio")
         } footer: {
-            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. Empfohlen für Outdoor-Nutzung.")
+            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. **Ungefiltertes Audio** umgeht Apples AGC + Echo-Unterdrückung — empfohlen, wenn die Gegenseite \"verpackt\" klingt; eine laufende Session muss neu gestartet werden, damit die Änderung greift.")
         }
     }
 

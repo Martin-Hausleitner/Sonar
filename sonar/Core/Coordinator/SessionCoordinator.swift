@@ -133,6 +133,11 @@ final class SessionCoordinator: ObservableObject {
         // Attach SpatialMixer nodes before the engine starts.
         audioEngine.connect(spatialMixer: spatialMixer)
 
+        // Honor the user's "Ungefiltertes Audio" preference. Must be set
+        // before prepare(): voice-processing-enabled can't be flipped on a
+        // running engine without a full restart.
+        audioEngine.rawAudioMode = appState?.rawAudioMode ?? true
+
         do {
             try audioEngine.prepare()
         } catch {
@@ -196,11 +201,48 @@ final class SessionCoordinator: ObservableObject {
         tailscale.refresh()
         guard !Task.isCancelled else { return }
 
+        // MARK: Replay contact book — every peer we've ever paired with gets
+
+        // pushed into the transports' allow-lists so MPC/BLE/Tailscale auto-
+        // reconnect without the user needing to re-scan the QR. Done before
+        // PairingService.bind so the contact book is live by the time any
+        // pendingPairing event fires.
+        if let appState {
+            for peer in appState.peerStore.peers {
+                let token = peer.asReplayToken()
+                near.addPairingToken(token)
+                bluetooth.addPairingToken(token)
+                tailscalePath.addPairingToken(token)
+            }
+        }
+
         // MARK: QR pairing — observe AppState.pendingPairing and translate
 
-        // a successful scan into peerOnline + a targeted NearTransport invite.
+        // a successful scan into peerOnline + a targeted NearTransport invite,
+        // and into a new contact-book entry via the KnownPeerStore.
         if let appState {
-            pairingService.bind(appState: appState, near: near, bluetooth: bluetooth, tailscale: tailscalePath)
+            pairingService.bind(
+                appState: appState,
+                near: near,
+                bluetooth: bluetooth,
+                tailscale: tailscalePath,
+                peerStore: appState.peerStore
+            )
+        }
+
+        // MARK: Contact-book "last seen" bookkeeping. When the bonder reports
+
+        // any active path with a known peer ID set on AppState, bump the
+        // peer's lastSeenAt so the contact book sorts most-recent-first.
+        if let appState {
+            appState.$peerOnline
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { online in
+                    guard online, let id = appState.peerID else { return }
+                    appState.peerStore.touch(id: id)
+                }
+                .store(in: &cancellables)
         }
 
         // MARK: Mic-gain slider → AudioEngine. Real-device testing on v0.2.6

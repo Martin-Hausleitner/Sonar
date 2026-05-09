@@ -33,7 +33,10 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     private var connectedPeripherals: [CBPeripheral] = []
     private var writableCharacteristics: [UUID: CBCharacteristic] = [:]
     private var audioCharacteristic: CBMutableCharacteristic?
-    private var targetBLEIdentifier: String?
+    /// Allow-list of BLE peripheral identifiers (one per known peer). Empty
+    /// = "accept any Sonar peer in range" (matches the previous single-id
+    /// behaviour when the field was nil).
+    private var allowedBLEIdentifiers: Set<String> = []
 
     /// CoreBluetooth delegate callbacks need a serial queue, otherwise concurrent
     /// dispatch on a global concurrent queue can race on `connectedPeripherals` and
@@ -78,8 +81,19 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
         }
     }
 
+    func addPairingToken(_ token: PairingToken) {
+        if let ble = token.ble, !ble.isEmpty {
+            allowedBLEIdentifiers.insert(ble)
+        }
+    }
+
+    func clearPairingTokens() {
+        allowedBLEIdentifiers.removeAll()
+    }
+
+    /// Back-compat alias. New callers should use `addPairingToken`.
     func applyPairingToken(_ token: PairingToken) {
-        targetBLEIdentifier = token.ble
+        addPairingToken(token)
     }
 }
 
@@ -94,7 +108,13 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         guard !connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier }) else { return }
-        if let targetBLEIdentifier, peripheral.identifier.uuidString != targetBLEIdentifier { return }
+        // Empty allow-list = open auto-discovery; otherwise require a match
+        // against one of the remembered peers' BLE identifiers.
+        if !allowedBLEIdentifiers.isEmpty,
+           !allowedBLEIdentifiers.contains(peripheral.identifier.uuidString)
+        {
+            return
+        }
         connectedPeripherals.append(peripheral)
         central.connect(peripheral)
     }

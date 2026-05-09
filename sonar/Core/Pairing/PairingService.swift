@@ -31,6 +31,7 @@ final class PairingService {
     private weak var near: NearTransport?
     private weak var bluetooth: BluetoothMeshTransport?
     private weak var tailscale: TailscaleTransport?
+    private weak var peerStore: KnownPeerStore?
     private var cancellable: AnyCancellable?
 
     init(now: @escaping () -> Date = Date.init) {
@@ -48,12 +49,14 @@ final class PairingService {
         appState: AppState,
         near: NearTransport? = nil,
         bluetooth: BluetoothMeshTransport? = nil,
-        tailscale: TailscaleTransport? = nil
+        tailscale: TailscaleTransport? = nil,
+        peerStore: KnownPeerStore? = nil
     ) {
         self.appState = appState
         self.near = near
         self.bluetooth = bluetooth
         self.tailscale = tailscale
+        self.peerStore = peerStore
 
         cancellable?.cancel()
         // `@Published` fires its sink in `willSet` — observers see the *new*
@@ -96,9 +99,13 @@ final class PairingService {
         appState.peerOnline = false
         appState.peerLastSeen = nil
 
-        near?.applyPairingToken(token)
-        bluetooth?.applyPairingToken(token)
-        tailscale?.applyPairingToken(token)
+        near?.addPairingToken(token)
+        bluetooth?.addPairingToken(token)
+        tailscale?.addPairingToken(token)
+
+        // Persist the peer to the contact book so future sessions auto-target
+        // it without forcing the user to re-scan the QR code.
+        peerStore?.upsert(from: token, now: now())
 
         // Keep a NotificationCenter event for diagnostics and older observers.
         if !token.bonjour.isEmpty {

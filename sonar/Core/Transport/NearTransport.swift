@@ -51,7 +51,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
     /// Set by SessionCoordinator once NIRangingEngine has started its session.
     var localNIToken: NIDiscoveryToken?
 
-    struct PairingHint: Equatable {
+    struct PairingHint: Hashable {
         let peerID: String
         let displayName: String
         let host: String
@@ -72,7 +72,17 @@ final class NearTransport: NSObject, Transport, BondedPath {
         }
     }
 
-    private(set) var currentPairingHint: PairingHint?
+    /// Set of allow-listed peers (from QR scan + replayed contact book). Empty
+    /// means "auto-discover everything" — preserves the original first-launch
+    /// behaviour of pre-pairing discovery before we had a contact book.
+    private(set) var currentPairingHints: Set<PairingHint> = []
+
+    /// Back-compat single-hint accessor (returns the most recently added hint).
+    /// Used by legacy code paths and tests; new callers should read
+    /// `currentPairingHints` directly.
+    var currentPairingHint: PairingHint? {
+        currentPairingHints.first
+    }
 
     // MARK: - MPC internals
 
@@ -137,11 +147,27 @@ final class NearTransport: NSObject, Transport, BondedPath {
         connectedSubject.send(false)
     }
 
-    func applyPairingToken(_ token: PairingToken) {
-        currentPairingHint = PairingHint(token: token)
+    /// Add a peer to the allow-list. Replay path (contact book) and the live
+    /// QR-scan path both go through this — accumulating instead of replacing
+    /// is what makes "I scanned Alice yesterday and Bob today, both should
+    /// auto-connect" work without re-scanning either of them.
+    func addPairingToken(_ token: PairingToken) {
+        currentPairingHints.insert(PairingHint(token: token))
         for peer in discoveredPeers.values {
             inviteIfAllowed(peer.peerID, discoveryInfo: peer.discoveryInfo)
         }
+    }
+
+    /// Drop the entire allow-list (used by Settings → "Alle Kontakte
+    /// vergessen"). Live MPC sessions are untouched; only future invitations
+    /// will fall back to "accept everything" mode.
+    func clearPairingTokens() {
+        currentPairingHints.removeAll()
+    }
+
+    /// Back-compat alias kept for callers that haven't migrated yet.
+    func applyPairingToken(_ token: PairingToken) {
+        addPairingToken(token)
     }
 
     // MARK: - Send
@@ -169,12 +195,24 @@ final class NearTransport: NSObject, Transport, BondedPath {
     }
 
     static func shouldAcceptInvitation(
+        currentPairingHints: Set<PairingHint>,
+        displayName: String,
+        discoveryInfo: [String: String]?
+    ) -> Bool {
+        guard !currentPairingHints.isEmpty else { return true }
+        return currentPairingHints.contains { $0.matches(displayName: displayName, discoveryInfo: discoveryInfo) }
+    }
+
+    /// Back-compat single-hint helper kept for tests that pre-date the
+    /// multi-peer refactor.
+    static func shouldAcceptInvitation(
         currentPairingHint: PairingHint?,
         displayName: String,
         discoveryInfo: [String: String]?
     ) -> Bool {
-        guard let currentPairingHint else { return true }
-        return currentPairingHint.matches(displayName: displayName, discoveryInfo: discoveryInfo)
+        var set = Set<PairingHint>()
+        if let hint = currentPairingHint { set.insert(hint) }
+        return shouldAcceptInvitation(currentPairingHints: set, displayName: displayName, discoveryInfo: discoveryInfo)
     }
 }
 
@@ -219,7 +257,7 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         let discoveryInfo = discoveredPeers[peerID]?.discoveryInfo
         let accept = Self.shouldAcceptInvitation(
-            currentPairingHint: currentPairingHint,
+            currentPairingHints: currentPairingHints,
             displayName: peerID.displayName,
             discoveryInfo: discoveryInfo
         )
@@ -240,8 +278,8 @@ extension NearTransport: MCNearbyServiceBrowserDelegate {
     }
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
-        if let hint = currentPairingHint,
-           !hint.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo)
+        if !currentPairingHints.isEmpty,
+           !currentPairingHints.contains(where: { $0.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) })
         {
             return
         }

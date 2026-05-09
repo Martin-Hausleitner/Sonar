@@ -30,6 +30,11 @@ final class TailscaleTransport: BondedPath {
     private var connections: [NWConnection] = []
     private var readyConnections: [NWConnection] = []
     private var receiveBuffers: [ObjectIdentifier: Data] = [:]
+    /// Endpoints we've already dialled (`"host:port"` form). Replaying the
+    /// contact book at session start can hand us the same peer multiple times;
+    /// without this the same peer would get N parallel connections and every
+    /// audio frame would be sent N times.
+    private var dialedEndpoints: Set<String> = []
 
     init(listenPort: UInt16 = defaultPort) {
         self.listenPort = listenPort
@@ -61,14 +66,33 @@ final class TailscaleTransport: BondedPath {
             connections.removeAll()
             readyConnections.removeAll()
             receiveBuffers.removeAll()
+            dialedEndpoints.removeAll()
             connectedSubject.send(false)
         }
     }
 
-    func applyPairingToken(_ token: PairingToken) {
+    func addPairingToken(_ token: PairingToken) {
         guard let ip = token.tsIP, !ip.isEmpty else { return }
         let port = token.tsPort ?? Self.defaultPort
+        let key = "\(ip):\(port)"
+        var alreadyDialed = false
+        queue.sync {
+            alreadyDialed = dialedEndpoints.contains(key)
+            if !alreadyDialed { dialedEndpoints.insert(key) }
+        }
+        guard !alreadyDialed else { return }
         connect(host: ip, port: port)
+    }
+
+    func clearPairingTokens() {
+        queue.async { [weak self] in
+            self?.dialedEndpoints.removeAll()
+        }
+    }
+
+    /// Back-compat alias.
+    func applyPairingToken(_ token: PairingToken) {
+        addPairingToken(token)
     }
 
     func connect(host: String, port: UInt16 = defaultPort) {

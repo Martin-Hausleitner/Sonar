@@ -12,11 +12,13 @@ import SwiftUI
 ///   payload, and on user confirmation push the token into `AppState.pendingPairing`.
 struct PairingView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var peerStore: KnownPeerStore
     @Environment(\.dismiss) private var dismiss
 
     enum Mode: String, CaseIterable, Identifiable {
         case show = "Anzeigen"
         case scan = "Scannen"
+        case known = "Bekannte"
         var id: String {
             rawValue
         }
@@ -25,6 +27,7 @@ struct PairingView: View {
             switch self {
             case .show: "qrcode"
             case .scan: "qrcode.viewfinder"
+            case .known: "person.2.crop.square.stack"
             }
         }
     }
@@ -54,6 +57,7 @@ struct PairingView: View {
             switch mode {
             case .show: showTab
             case .scan: scanTab
+            case .known: knownTab
             }
         }
         .background(SonarTheme.screenBackground.ignoresSafeArea())
@@ -148,6 +152,109 @@ struct PairingView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             #endif
         }
+    }
+
+    // MARK: - Bekannte (contact book)
+
+    private var knownTab: some View {
+        Group {
+            if peerStore.peers.isEmpty {
+                VStack(spacing: 14) {
+                    Spacer()
+                    Image(systemName: "person.2.slash")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.secondary)
+                    Text("Noch keine Kontakte")
+                        .font(.headline)
+                    Text("Scanne einmal den QR-Code deines Gegenübers — danach erscheint er hier und ihr verbindet euch automatisch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                List {
+                    Section {
+                        ForEach(peerStore.peers) { peer in
+                            Button { reconnect(peer) } label: {
+                                knownPeerRow(peer)
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    peerStore.remove(id: peer.id)
+                                } label: {
+                                    Label("Vergessen", systemImage: "trash")
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text("Tippe auf einen Kontakt, um die Verbindung gezielt zu starten. Wische nach links zum Vergessen. Bekannte Kontakte werden bei jedem Sessionstart automatisch wieder gesucht.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    private func knownPeerRow(_ peer: KnownPeer) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(SonarTheme.accent.opacity(0.18))
+                    .frame(width: 38, height: 38)
+                Image(systemName: "person.fill")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(SonarTheme.accent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(peer.displayName)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(lastSeenLabel(for: peer))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                if peer.tsIP != nil {
+                    Image(systemName: "network.badge.shield.half.filled")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if peer.ble != nil {
+                    Image(systemName: "wave.3.right.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if !peer.host.isEmpty {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func lastSeenLabel(for peer: KnownPeer) -> String {
+        guard let last = peer.lastSeenAt else { return "Noch nie verbunden" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return "Zuletzt \(f.localizedString(for: last, relativeTo: Date()))"
+    }
+
+    private func reconnect(_ peer: KnownPeer) {
+        appState.peerName = peer.name
+        appState.peerID = peer.id
+        appState.pendingPairing = peer.asReplayToken()
+        dismiss()
     }
 
     // MARK: - Confirm sheet

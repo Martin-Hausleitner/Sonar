@@ -33,6 +33,12 @@ final class AudioEngine {
         }
     }
 
+    /// When true, `prepare()` configures the AVAudioSession with the neutral
+    /// `.default` mode and *does not* enable Apple's voice-processing chain
+    /// (which performs aggressive AGC + noise suppression). Set this BEFORE
+    /// calling `prepare()` — toggling at runtime requires a session restart.
+    var rawAudioMode: Bool = true
+
     /// Each captured buffer is published with the frame ID it was assigned by
     /// `Metrics.openTrace()`. Subscribers must forward the ID through encode/
     /// transport/decode so glass-to-glass latency can be measured end-to-end.
@@ -45,9 +51,13 @@ final class AudioEngine {
 
     func prepare() throws {
         let session = AVAudioSession.sharedInstance()
+        // `.voiceChat` activates Apple's AGC + noise suppression which dulls
+        // speech ("verpackt"). `.default` keeps the signal flat — better for
+        // remote-room use where echo isn't a problem. Toggled by AppState.
+        let mode: AVAudioSession.Mode = rawAudioMode ? .default : .voiceChat
         try session.setCategory(
             .playAndRecord,
-            mode: .voiceChat,
+            mode: mode,
             options: [.mixWithOthers, .allowAirPlay]
         )
         try session.setPreferredIOBufferDuration(LatencyBudget.preferredIOBufferDurationSec)
@@ -55,7 +65,9 @@ final class AudioEngine {
         try session.setActive(true, options: [])
 
         // Voice processing must be enabled BEFORE prepare(). RESEARCH.md §6.
-        try engine.inputNode.setVoiceProcessingEnabled(true)
+        // Same toggle as the mode above — disabling here is what actually
+        // bypasses the AGC pipeline at the input node.
+        try engine.inputNode.setVoiceProcessingEnabled(!rawAudioMode)
 
         let format = engine.inputNode.inputFormat(forBus: 0)
         let bufSize = AVAudioFrameCount(LatencyBudget.samplesPerFrame)
