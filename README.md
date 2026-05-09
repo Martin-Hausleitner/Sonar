@@ -667,6 +667,17 @@ neu generiert (Version + Build + Datum + Größe). Aufruf manuell:
 
 ---
 
+## Claude Code Skills
+
+Sonar-spezifische [Claude Code](https://claude.com/claude-code) Skills (Release-Flow, Pairing-Diagnose, …) leben im Schwester-Repo
+[`Martin-Hausleitner/sonar-skills`](https://github.com/Martin-Hausleitner/sonar-skills).
+Neue Skills werden als GitHub-Releases ausgeliefert — Newsletter-Stil, ein Drop pro Release.
+
+Abonnieren: **Watch → Custom → Releases** auf dem Repo, oder per RSS via
+[`releases.atom`](https://github.com/Martin-Hausleitner/sonar-skills/releases.atom).
+
+---
+
 <div align="center">
 
 **Sonar** ist ein Prototyp — kein App-Store-Release.  
