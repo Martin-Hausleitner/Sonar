@@ -10,24 +10,61 @@ import UIKit
 /// entirely under our control and matching the NearTransport wire format.
 @MainActor
 final class FarTransport: Transport, BondedPath {
+    struct Configuration: Equatable {
+        let liveKitURL: String
+        let tokenServerURL: String
+        let roomName: String
+
+        var isStartable: Bool {
+            !liveKitURL.isEmpty && !tokenServerURL.isEmpty && !roomName.isEmpty
+        }
+    }
+
     let kind: TransportKind = .far
     let id: MultipathBonder.PathID = .mpquic
-    var estimatedCostPerByte: Double { 1.0 }
+    var estimatedCostPerByte: Double {
+        1.0
+    }
 
-    private let connectedSubject   = CurrentValueSubject<Bool, Never>(false)
-    private let inboundPCMSubject  = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
+    private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
     private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
-    private let qualitySubject     = CurrentValueSubject<Double, Never>(0)
+    private let qualitySubject = CurrentValueSubject<Double, Never>(0)
 
-    var isConnected: AnyPublisher<Bool, Never>          { connectedSubject.eraseToAnyPublisher() }
-    var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundPCMSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AudioFrame, Never>  { inboundFrameSubject.eraseToAnyPublisher() }
-    var qualityScore: AnyPublisher<Double, Never>       { qualitySubject.eraseToAnyPublisher() }
+    var isConnected: AnyPublisher<Bool, Never> {
+        connectedSubject.eraseToAnyPublisher()
+    }
+
+    var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> {
+        inboundPCMSubject.eraseToAnyPublisher()
+    }
+
+    var inboundFrames: AnyPublisher<AudioFrame, Never> {
+        inboundFrameSubject.eraseToAnyPublisher()
+    }
+
+    var qualityScore: AnyPublisher<Double, Never> {
+        qualitySubject.eraseToAnyPublisher()
+    }
 
     private let room = Room()
     private var lkServerURL: String = ""
     private var tokenProvider: RoomTokenProviding?
     private var roomName: String = "sonar-main"
+    private var isRoomConnected = false
+    private var remoteParticipantCount = 0
+
+    func configure(_ configuration: Configuration) {
+        guard configuration.isStartable else {
+            lkServerURL = ""
+            tokenProvider = nil
+            roomName = configuration.roomName
+            return
+        }
+        lkServerURL = configuration.liveKitURL
+        tokenProvider = SonarTokenProvider(serverURL: configuration.tokenServerURL)
+        roomName = configuration.roomName
+    }
 
     func configure(
         serverURL: String,
@@ -49,7 +86,9 @@ final class FarTransport: Transport, BondedPath {
 
     func stop() async {
         await room.disconnect()
-        connectedSubject.send(false)
+        isRoomConnected = false
+        remoteParticipantCount = 0
+        refreshConnectedState()
     }
 
     func send(_ buffer: AVAudioPCMBuffer) async {}
@@ -62,15 +101,49 @@ final class FarTransport: Transport, BondedPath {
             options: DataPublishOptions(topic: "sonar.audio", reliable: false)
         )
     }
+
+    private func refreshConnectedState() {
+        connectedSubject.send(isRoomConnected && remoteParticipantCount > 0)
+    }
+
+    #if DEBUG
+        func debugSetConnectionState(roomConnected: Bool, remoteParticipantCount: Int) {
+            isRoomConnected = roomConnected
+            self.remoteParticipantCount = max(0, remoteParticipantCount)
+            refreshConnectedState()
+        }
+    #endif
 }
 
 extension FarTransport: RoomDelegate {
     nonisolated func roomDidConnect(_ room: Room) {
-        Task { @MainActor in self.connectedSubject.send(true) }
+        Task { @MainActor in
+            self.isRoomConnected = true
+            self.remoteParticipantCount = room.remoteParticipants.count
+            self.refreshConnectedState()
+        }
     }
 
     nonisolated func roomDidDisconnect(_ room: Room, error: Error?) {
-        Task { @MainActor in self.connectedSubject.send(false) }
+        Task { @MainActor in
+            self.isRoomConnected = false
+            self.remoteParticipantCount = 0
+            self.refreshConnectedState()
+        }
+    }
+
+    nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
+        Task { @MainActor in
+            self.remoteParticipantCount = max(self.remoteParticipantCount + 1, room.remoteParticipants.count)
+            self.refreshConnectedState()
+        }
+    }
+
+    nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
+        Task { @MainActor in
+            self.remoteParticipantCount = max(0, min(self.remoteParticipantCount - 1, room.remoteParticipants.count))
+            self.refreshConnectedState()
+        }
     }
 
     nonisolated func room(

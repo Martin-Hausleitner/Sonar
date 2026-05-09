@@ -1,7 +1,6 @@
 import AVFoundation
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 final class MicrophoneMonitorTests: XCTestCase {
     func testRMSIsZeroForSilentBuffer() {
@@ -29,7 +28,7 @@ final class MicrophoneMonitorTests: XCTestCase {
     }
 
     private func makeBuffer(samples: [Float]) -> AVAudioPCMBuffer {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
         let buffer = AVAudioPCMBuffer(
             pcmFormat: format,
             frameCapacity: AVAudioFrameCount(samples.count)

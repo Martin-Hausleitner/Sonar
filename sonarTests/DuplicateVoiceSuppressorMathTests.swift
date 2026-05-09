@@ -1,5 +1,5 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class DuplicateVoiceSuppressorMathTests: XCTestCase {
     typealias FP = DuplicateVoiceSuppressor.FingerPrint
@@ -43,7 +43,7 @@ final class DuplicateVoiceSuppressorMathTests: XCTestCase {
 
     func testRingBufferEvictsOnCapacity() {
         let sup = DuplicateVoiceSuppressor()
-        for i in 0..<150 {
+        for i in 0 ..< 150 {
             let fp = FP(timestamp: TimeInterval(i), mfcc: Array(repeating: Float(i), count: 8))
             sup.ingestOutgoingFingerprint(fp)
         }

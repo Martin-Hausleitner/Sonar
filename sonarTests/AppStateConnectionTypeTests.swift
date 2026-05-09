@@ -1,10 +1,9 @@
-import XCTest
-import UIKit
 @testable import Sonar
+import UIKit
+import XCTest
 
 /// Tests for AppState.ConnectionType — labels, icons, and AppState integration.
 final class AppStateConnectionTypeTests: XCTestCase {
-
     // MARK: - Label correctness
 
     func testNoneLabel() {
@@ -106,8 +105,10 @@ final class AppStateConnectionTypeTests: XCTestCase {
     }
 
     func testNoneIcon() {
-        XCTAssertEqual(AppState.ConnectionType.none.icon,
-                       "antenna.radiowaves.left.and.right.slash")
+        XCTAssertEqual(
+            AppState.ConnectionType.none.icon,
+            "antenna.radiowaves.left.and.right.slash"
+        )
     }
 
     func testInternetIcon() {
@@ -133,7 +134,7 @@ final class AppStateConnectionTypeTests: XCTestCase {
     func testAppStateDefaultPeerOnline() {
         let state = AppState()
         XCTAssertFalse(state.peerOnline, "No peer should be online at initialisation")
-        XCTAssertNil(state.peerName,     "peerName must be nil at initialisation")
+        XCTAssertNil(state.peerName, "peerName must be nil at initialisation")
     }
 
     @MainActor
@@ -141,7 +142,7 @@ final class AppStateConnectionTypeTests: XCTestCase {
         let state = AppState()
         state.peerOnline = true
         state.peerID = "alice-device"
-        state.peerName   = "Alice's iPhone"
+        state.peerName = "Alice's iPhone"
         XCTAssertTrue(state.peerOnline)
         XCTAssertEqual(state.peerID, "alice-device")
         XCTAssertEqual(state.peerName, "Alice's iPhone")
@@ -181,5 +182,31 @@ final class AppStateConnectionTypeTests: XCTestCase {
         if case .tailscale = state.connectionType { } else {
             XCTFail("tailscale path should surface as Tailscale, got \(state.connectionType)")
         }
+    }
+
+    @MainActor
+    func testNoActivePathsClearsConnectionButKeepsPairingIntentName() {
+        let state = AppState()
+        state.peerName = "Alex iPhone"
+        state.peerID = "peer-A"
+        state.peerOnline = true
+        state.peerLastSeen = Date(timeIntervalSince1970: 1_700_000_000)
+
+        state.applyActiveTransportPaths([])
+
+        XCTAssertFalse(state.peerOnline)
+        XCTAssertEqual(state.connectionType, .none)
+        XCTAssertNil(state.peerLastSeen)
+        XCTAssertEqual(state.peerName, "Alex iPhone")
+        XCTAssertEqual(state.peerID, "peer-A")
+    }
+
+    @MainActor
+    func testActivePathPriorityPrefersLocalOverInternet() {
+        let state = AppState()
+        state.applyActiveTransportPaths([.mpquic, .tailscale, .multipeer])
+
+        XCTAssertTrue(state.peerOnline)
+        XCTAssertEqual(state.connectionType, .awdl)
     }
 }

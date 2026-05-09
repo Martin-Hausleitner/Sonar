@@ -1,20 +1,19 @@
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 final class NvidiaRivaASRClientTests: XCTestCase {
     func testHostedRequestUsesNvidiaGRPCGatewayNotIntegrateHTTPAudioEndpoint() throws {
         let request = try NvidiaRivaASRClient.makeHostedRecognizeRequest(
             apiKey: "nvapi-test",
             pcm16LE: Data([0x01, 0x00, 0x02, 0x00]),
-            sampleRate: 16_000,
+            sampleRate: 16000,
             languageCode: "en-US"
         )
 
         XCTAssertEqual(request.url?.scheme, "https")
         XCTAssertEqual(request.url?.host, "grpc.nvcf.nvidia.com")
         XCTAssertEqual(request.url?.path, "/nvidia.riva.asr.RivaSpeechRecognition/Recognize")
-        XCTAssertFalse(request.url!.absoluteString.contains("integrate.api.nvidia.com"))
+        XCTAssertFalse(try XCTUnwrap(request.url?.absoluteString.contains("integrate.api.nvidia.com")))
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer nvapi-test")
         XCTAssertEqual(request.value(forHTTPHeaderField: "function-id"), NvidiaRivaASRClient.hostedFunctionID)
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/grpc")
@@ -26,7 +25,7 @@ final class NvidiaRivaASRClientTests: XCTestCase {
         let request = try NvidiaRivaASRClient.makeHostedRecognizeRequest(
             apiKey: "nvapi-test",
             pcm16LE: Data([0x01, 0x00, 0x02, 0x00]),
-            sampleRate: 16_000,
+            sampleRate: 16000,
             languageCode: "en-US"
         )
 

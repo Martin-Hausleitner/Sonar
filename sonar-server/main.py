@@ -18,15 +18,15 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from livekit import api
 from pydantic import BaseModel
 
 load_dotenv()
 
-LIVEKIT_URL    = os.environ["LIVEKIT_URL"]
-LIVEKIT_KEY    = os.environ["LIVEKIT_API_KEY"]
+LIVEKIT_URL = os.environ["LIVEKIT_URL"]
+LIVEKIT_KEY = os.environ["LIVEKIT_API_KEY"]
 LIVEKIT_SECRET = os.environ["LIVEKIT_API_SECRET"]
 
 logging.basicConfig(level=logging.INFO)
@@ -101,9 +101,9 @@ async def _run_agent(room_name: str):
     data message on topic "sonar.wake" to activate it.
     """
     try:
-        from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
-        from livekit.agents.voice import VoiceAssistant
-        from livekit.plugins import openai, silero
+        from livekit.agents import AutoSubscribe, JobContext  # noqa: PLC0415
+        from livekit.agents.voice import VoiceAssistant  # noqa: PLC0415
+        from livekit.plugins import openai, silero  # noqa: PLC0415
 
         async def entrypoint(ctx: JobContext):
             await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
@@ -120,7 +120,8 @@ async def _run_agent(room_name: str):
             await asyncio.Event().wait()  # run until cancelled
 
         # Run the entrypoint directly instead of via WorkerOptions (single-room mode).
-        from livekit import rtc
+        from livekit import rtc  # noqa: PLC0415
+
         room = rtc.Room()
         token = (
             api.AccessToken(LIVEKIT_KEY, LIVEKIT_SECRET)

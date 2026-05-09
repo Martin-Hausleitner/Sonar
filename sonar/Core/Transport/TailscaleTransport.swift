@@ -9,13 +9,20 @@ final class TailscaleTransport: BondedPath {
     static let defaultPort: UInt16 = 49377
 
     let id: MultipathBonder.PathID = .tailscale
-    var estimatedCostPerByte: Double { 0.0005 }
+    var estimatedCostPerByte: Double {
+        0.0005
+    }
 
     private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
     private let inboundSubject = PassthroughSubject<AudioFrame, Never>()
 
-    var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundSubject.eraseToAnyPublisher() }
+    var isConnected: AnyPublisher<Bool, Never> {
+        connectedSubject.eraseToAnyPublisher()
+    }
+
+    var inboundFrames: AnyPublisher<AudioFrame, Never> {
+        inboundSubject.eraseToAnyPublisher()
+    }
 
     private let listenPort: UInt16
     private let queue = DispatchQueue(label: "app.sonar.tailscale-transport", qos: .userInteractive)
@@ -37,7 +44,7 @@ final class TailscaleTransport: BondedPath {
             self?.configure(connection)
         }
         listener.stateUpdateHandler = { state in
-            if case .failed(let error) = state {
+            if case let .failed(error) = state {
                 Log.app.error("Tailscale listener failed: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -48,13 +55,13 @@ final class TailscaleTransport: BondedPath {
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.listener?.cancel()
-            self.listener = nil
-            self.connections.forEach { $0.cancel() }
-            self.connections.removeAll()
-            self.readyConnections.removeAll()
-            self.receiveBuffers.removeAll()
-            self.connectedSubject.send(false)
+            listener?.cancel()
+            listener = nil
+            connections.forEach { $0.cancel() }
+            connections.removeAll()
+            readyConnections.removeAll()
+            receiveBuffers.removeAll()
+            connectedSubject.send(false)
         }
     }
 
@@ -89,12 +96,12 @@ final class TailscaleTransport: BondedPath {
     private func configure(_ connection: NWConnection) {
         queue.async { [weak self] in
             guard let self else { return }
-            guard !self.connections.contains(where: { $0 === connection }) else { return }
+            guard !connections.contains(where: { $0 === connection }) else { return }
 
-            self.connections.append(connection)
+            connections.append(connection)
             connection.stateUpdateHandler = { [weak self, weak connection] state in
                 guard let self, let connection else { return }
-                self.queue.async {
+                queue.async {
                     switch state {
                     case .ready:
                         if !self.readyConnections.contains(where: { $0 === connection }) {
@@ -109,7 +116,7 @@ final class TailscaleTransport: BondedPath {
                     }
                 }
             }
-            connection.start(queue: self.queue)
+            connection.start(queue: queue)
         }
     }
 
@@ -120,10 +127,10 @@ final class TailscaleTransport: BondedPath {
                 self.consume(data, from: connection)
             }
             if isComplete || error != nil {
-                self.remove(connection)
+                remove(connection)
                 return
             }
-            self.receiveLoop(on: connection)
+            receiveLoop(on: connection)
         }
     }
 

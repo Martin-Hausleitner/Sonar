@@ -1,19 +1,18 @@
 import AVFoundation
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class SmartMuteDetectorTests: XCTestCase {
-
     // MARK: - PCM buffer helpers
 
     /// Creates a 10ms 48kHz mono buffer filled with a constant value.
     private func makeSilentBuffer() -> AVAudioPCMBuffer {
-        return makePCMBuffer(samples: Array(repeating: 0.0, count: 480))
+        makePCMBuffer(samples: Array(repeating: 0.0, count: 480))
     }
 
     /// Fills all samples with `value`.
     private func makeConstantBuffer(value: Float) -> AVAudioPCMBuffer {
-        return makePCMBuffer(samples: Array(repeating: value, count: 480))
+        makePCMBuffer(samples: Array(repeating: value, count: 480))
     }
 
     /// Creates a buffer with a large spike followed by low-level noise.
@@ -26,16 +25,18 @@ final class SmartMuteDetectorTests: XCTestCase {
     /// non-zero value so rms > 0.02 but peak/rms >> 8.
     private func makeImpulseBuffer() -> AVAudioPCMBuffer {
         var samples = Array(repeating: Float(0.05), count: 480)
-        samples[0] = 1.0   // single spike
+        samples[0] = 1.0 // single spike
         return makePCMBuffer(samples: samples)
     }
 
     private func makePCMBuffer(samples: [Float]) -> AVAudioPCMBuffer {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
         buf.frameLength = AVAudioFrameCount(samples.count)
         if let data = buf.floatChannelData {
-            for (i, v) in samples.enumerated() { data[0][i] = v }
+            for (i, v) in samples.enumerated() {
+                data[0][i] = v
+            }
         }
         return buf
     }
@@ -45,13 +46,17 @@ final class SmartMuteDetectorTests: XCTestCase {
     func testSilenceDoesNotTriggerMute() {
         let detector = SmartMuteDetector()
         detector.process(makeSilentBuffer())
-        XCTAssertFalse(detector.shouldMute.value,
-                       "All-zero buffer should not trigger mute")
+        XCTAssertFalse(
+            detector.shouldMute.value,
+            "All-zero buffer should not trigger mute"
+        )
     }
 
     func testRepeatedSilenceDoesNotTriggerMute() {
         let detector = SmartMuteDetector()
-        for _ in 0..<20 { detector.process(makeSilentBuffer()) }
+        for _ in 0 ..< 20 {
+            detector.process(makeSilentBuffer())
+        }
         XCTAssertFalse(detector.shouldMute.value)
     }
 
@@ -60,8 +65,10 @@ final class SmartMuteDetectorTests: XCTestCase {
     func testImpulseTriggersAutoMute() {
         let detector = SmartMuteDetector()
         detector.process(makeImpulseBuffer())
-        XCTAssertTrue(detector.shouldMute.value,
-                      "High crest factor + sufficient RMS should trigger mute")
+        XCTAssertTrue(
+            detector.shouldMute.value,
+            "High crest factor + sufficient RMS should trigger mute"
+        )
     }
 
     func testMuteWindowRemainsActiveShortlyAfterImpulse() {
@@ -69,8 +76,10 @@ final class SmartMuteDetectorTests: XCTestCase {
         detector.process(makeImpulseBuffer())
         // Immediately after the impulse the 500ms mute window should still be active
         detector.process(makeSilentBuffer())
-        XCTAssertTrue(detector.shouldMute.value,
-                      "Mute should remain active within the 500ms window")
+        XCTAssertTrue(
+            detector.shouldMute.value,
+            "Mute should remain active within the 500ms window"
+        )
     }
 
     // MARK: - Constant loud sound does NOT trigger mute (low crest factor)
@@ -79,8 +88,10 @@ final class SmartMuteDetectorTests: XCTestCase {
         // A constant non-zero value has crestFactor = 1.0 (peak == rms), far below 8.
         let detector = SmartMuteDetector()
         detector.process(makeConstantBuffer(value: 0.5))
-        XCTAssertFalse(detector.shouldMute.value,
-                       "Constant loud sound has crestFactor ~1, should NOT mute")
+        XCTAssertFalse(
+            detector.shouldMute.value,
+            "Constant loud sound has crestFactor ~1, should NOT mute"
+        )
     }
 
     // MARK: - shouldMute publisher emits changes
@@ -90,11 +101,13 @@ final class SmartMuteDetectorTests: XCTestCase {
         var emittedValues: [Bool] = []
         let cancellable = detector.shouldMute.sink { emittedValues.append($0) }
 
-        detector.process(makeSilentBuffer())  // stays false
+        detector.process(makeSilentBuffer()) // stays false
         detector.process(makeImpulseBuffer()) // goes true
 
-        XCTAssertTrue(emittedValues.contains(true),
-                      "Publisher should have emitted true after impulse")
+        XCTAssertTrue(
+            emittedValues.contains(true),
+            "Publisher should have emitted true after impulse"
+        )
         cancellable.cancel()
     }
 
@@ -109,13 +122,15 @@ final class SmartMuteDetectorTests: XCTestCase {
         // peak = 0.16, all samples = 0.02 → rms ≈ 0.02, peak/rms = 8 exactly
         // 8.0 is NOT > 8.0, so should not trigger
         var samples = Array(repeating: Float(0.02), count: 480)
-        samples[0] = 0.16   // peak/rms = 0.16/0.02 = 8.0 (not strictly greater)
+        samples[0] = 0.16 // peak/rms = 0.16/0.02 = 8.0 (not strictly greater)
         // Note: with 479 samples at 0.02 and 1 sample at 0.16,
         // rms = sqrt((479*0.02^2 + 0.16^2)/480) ≈ sqrt((0.1916+0.0256)/480) ≈ 0.02125
         // peak/rms ≈ 7.5 → below threshold
         let buf = makePCMBuffer(samples: samples)
         detector.process(buf)
-        XCTAssertFalse(detector.shouldMute.value,
-                       "crestFactor ≤ 8 should not trigger mute")
+        XCTAssertFalse(
+            detector.shouldMute.value,
+            "crestFactor ≤ 8 should not trigger mute"
+        )
     }
 }

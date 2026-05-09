@@ -7,10 +7,10 @@ import Foundation
 /// §2.4 — the heart of Sonar's stability guarantee.
 @MainActor
 final class MultipathBonder: ObservableObject {
-    enum Mode: Sendable {
-        case redundant      // default: all paths, same frame
+    enum Mode {
+        case redundant // default: all paths, same frame
         case primaryStandby // only primary active, others warm
-        case eco            // cheapest single path
+        case eco // cheapest single path
     }
 
     @Published private(set) var activePaths: [PathID] = []
@@ -24,11 +24,11 @@ final class MultipathBonder: ObservableObject {
 
     let inboundFrames = PassthroughSubject<AudioFrame, Never>()
 
-    enum PathID: String, Hashable, Sendable, CaseIterable {
-        case multipeer   // WLAN / Bonjour AWDL
-        case bluetooth   // CoreBluetooth GATT Mesh
-        case mpquic      // Cellular via MPQUIC
-        case tailscale   // Optional WireGuard P2P
+    enum PathID: String, Hashable, CaseIterable {
+        case multipeer // WLAN / Bonjour AWDL
+        case bluetooth // CoreBluetooth GATT Mesh
+        case mpquic // Internet path ID: LiveKit FarTransport in production
+        case tailscale // Optional WireGuard P2P
         case simulatorRelay // Local Mac relay for two-simulator E2E tests
     }
 
@@ -38,7 +38,7 @@ final class MultipathBonder: ObservableObject {
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] frame in
                 guard let self else { return }
-                if let unique = self.deduplicator.receive(frame) {
+                if let unique = deduplicator.receive(frame) {
                     Task { @MainActor in self.inboundFrames.send(unique) }
                 }
             }
@@ -48,9 +48,9 @@ final class MultipathBonder: ObservableObject {
             .sink { [weak self] connected in
                 guard let self else { return }
                 if connected {
-                    if !self.activePaths.contains(path.id) { self.activePaths.append(path.id) }
+                    if !activePaths.contains(path.id) { activePaths.append(path.id) }
                 } else {
-                    self.activePaths.removeAll { $0 == path.id }
+                    activePaths.removeAll { $0 == path.id }
                 }
             }
             .store(in: &cancellables)
@@ -73,7 +73,8 @@ final class MultipathBonder: ObservableObject {
     }
 
     private func nextSeq() -> UInt32 {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         seqCounter &+= 1
         return seqCounter
     }

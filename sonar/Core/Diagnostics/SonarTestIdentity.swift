@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-struct SonarTestIdentity: Equatable, Sendable {
+struct SonarTestIdentity: Equatable {
     let deviceID: String
     let deviceName: String
     let shortID: String
@@ -49,11 +49,11 @@ struct SonarTestIdentity: Equatable, Sendable {
         let relay = environment["SONAR_SIM_RELAY_URL"]
             ?? argumentReader.value(for: "--sonar-sim-relay-url", "-SONAR_SIM_RELAY_URL", "SONAR_SIM_RELAY_URL")
 
-        self.deviceID = id
-        self.deviceName = name
-        self.shortID = SonarTestIdentity.makeShortID(from: id)
-        self.relayURL = relay.flatMap(URL.init(string:))
-        self.autoStartSession = SonarTestIdentity.isTruthy(environment["SONAR_AUTOSTART_SESSION"])
+        deviceID = id
+        deviceName = name
+        shortID = SonarTestIdentity.makeShortID(from: id)
+        relayURL = relay.flatMap(URL.init(string:))
+        autoStartSession = SonarTestIdentity.isTruthy(environment["SONAR_AUTOSTART_SESSION"])
             || argumentReader.contains("--sonar-autostart-session", "-SONAR_AUTOSTART_SESSION", "SONAR_AUTOSTART_SESSION")
     }
 

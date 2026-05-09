@@ -1,8 +1,7 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class JitterBufferTests: XCTestCase {
-
     private func makeFrame(seq: UInt32) -> AudioFrame {
         AudioFrame(seq: seq, timestamp: 0, payload: Data([UInt8(seq & 0xFF)]))
     }
@@ -88,10 +87,10 @@ final class JitterBufferTests: XCTestCase {
         let jb = JitterBuffer()
         jb.enqueue(makeFrame(seq: 0))
         jb.enqueue(makeFrame(seq: 2)) // gap at seq 1
-        _ = jb.dequeue()              // consume seq 0, next = 1
+        _ = jb.dequeue() // consume seq 0, next = 1
         XCTAssertTrue(jb.needsConcealment, "seq 1 missing → concealment needed")
 
-        jb.advanceOnConceal()         // skip seq 1, next = 2
+        jb.advanceOnConceal() // skip seq 1, next = 2
         XCTAssertFalse(jb.needsConcealment, "seq 2 present → no concealment needed")
     }
 
@@ -127,7 +126,9 @@ final class JitterBufferTests: XCTestCase {
         // a frame at a high seq and advancing to it.
         let highSeq = UInt32(5)
         jb.enqueue(makeFrame(seq: highSeq))
-        for _ in 0..<5 { jb.advanceOnConceal() }
+        for _ in 0 ..< 5 {
+            jb.advanceOnConceal()
+        }
         XCTAssertEqual(jb.dequeue()?.seq, highSeq)
     }
 }

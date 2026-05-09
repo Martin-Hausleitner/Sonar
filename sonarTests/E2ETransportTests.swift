@@ -1,14 +1,13 @@
 import AVFoundation
 import Combine
 import Network
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// End-to-end transport tests using two in-process "devices" linked by MockBondedPath.
 /// No network or hardware required — bonderA's outbound is manually wired to bonderB's inbound.
 @MainActor
 final class E2ETransportTests: XCTestCase {
-
     private var cancellables = Set<AnyCancellable>()
 
     override func tearDown() async throws {
@@ -17,19 +16,19 @@ final class E2ETransportTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func sineBuffer(sampleRate: Double = 48_000, frameCount: Int = 480, freq: Double = 440) -> AVAudioPCMBuffer {
+    private func sineBuffer(sampleRate: Double = 48000, frameCount: Int = 480, freq: Double = 440) -> AVAudioPCMBuffer {
         let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
         let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(frameCount))!
         buf.frameLength = AVAudioFrameCount(frameCount)
         let ch = buf.floatChannelData![0]
-        for i in 0..<frameCount {
+        for i in 0 ..< frameCount {
             ch[i] = Float(sin(2.0 * .pi * freq * Double(i) / sampleRate)) * 0.5
         }
         return buf
     }
 
     private var pcmFmt: AVAudioFormat {
-        AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false)!
+        AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false)!
     }
 
     private func waitUntil(
@@ -52,7 +51,7 @@ final class E2ETransportTests: XCTestCase {
         let bonderB = MultipathBonder()
 
         let pathOut = MockBondedPath(id: .multipeer, connected: true)
-        let pathIn  = MockBondedPath(id: .multipeer, connected: true)
+        let pathIn = MockBondedPath(id: .multipeer, connected: true)
         bonderA.addPath(pathOut)
         bonderB.addPath(pathIn)
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -66,7 +65,8 @@ final class E2ETransportTests: XCTestCase {
         try await Task.sleep(nanoseconds: 30_000_000)
 
         guard let sent = pathOut.sentFrames.first else {
-            XCTFail("bonderA must have sent a frame"); return
+            XCTFail("bonderA must have sent a frame")
+            return
         }
         pathIn.receiveInbound(sent)
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -86,18 +86,21 @@ final class E2ETransportTests: XCTestCase {
             .sink { received.append($0) }
             .store(in: &cancellables)
 
-        let pathA = MockBondedPath(id: .multipeer,  connected: false)
+        let pathA = MockBondedPath(id: .multipeer, connected: false)
         let pathB = MockBondedPath(id: .bluetooth, connected: false)
         bonder.addPath(pathA)
         bonder.addPath(pathB)
 
         let frame = AudioFrame(seq: 42, payload: Data([0x11, 0x22]))
         pathA.receiveInbound(frame)
-        pathB.receiveInbound(frame)  // same seq — duplicate
+        pathB.receiveInbound(frame) // same seq — duplicate
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(received.count, 1,
-                       "Duplicate frame arriving on two paths must be forwarded exactly once")
+        XCTAssertEqual(
+            received.count,
+            1,
+            "Duplicate frame arriving on two paths must be forwarded exactly once"
+        )
     }
 
     // MARK: - Full Opus encode → mock wire → decode round-trip
@@ -107,7 +110,7 @@ final class E2ETransportTests: XCTestCase {
         let bonderB = MultipathBonder()
 
         let pathOut = MockBondedPath(id: .multipeer, connected: true)
-        let pathIn  = MockBondedPath(id: .multipeer, connected: true)
+        let pathIn = MockBondedPath(id: .multipeer, connected: true)
         bonderA.addPath(pathOut)
         bonderB.addPath(pathIn)
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -125,7 +128,8 @@ final class E2ETransportTests: XCTestCase {
         try await Task.sleep(nanoseconds: 30_000_000)
 
         guard let sentFrame = pathOut.sentFrames.first else {
-            XCTFail("bonderA must have sent a frame"); return
+            XCTFail("bonderA must have sent a frame")
+            return
         }
         pathIn.receiveInbound(sentFrame)
         try await Task.sleep(nanoseconds: 50_000_000)
@@ -144,7 +148,7 @@ final class E2ETransportTests: XCTestCase {
         let n = Int(out.frameLength)
         XCTAssertGreaterThan(n, 0, "Decoder must produce at least one sample")
 
-        let samples = UnsafeBufferPointer(start: out.floatChannelData![0], count: n)
+        let samples = try UnsafeBufferPointer(start: XCTUnwrap(out.floatChannelData?[0]), count: n)
         let rms = sqrt(samples.map { $0 * $0 }.reduce(0, +) / Float(n))
         XCTAssertGreaterThan(rms, 0.01, "Decoded sine must have non-trivial RMS — Opus must not mute the signal")
     }
@@ -157,16 +161,19 @@ final class E2ETransportTests: XCTestCase {
         bonder.addPath(path)
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        for _ in 0..<5 {
+        for _ in 0 ..< 5 {
             await bonder.send(opusData: Data([0x01]))
         }
         try await Task.sleep(nanoseconds: 30_000_000)
 
         let seqs = path.sentFrames.map(\.seq)
         XCTAssertEqual(seqs.count, 5)
-        for i in 1..<seqs.count {
-            XCTAssertGreaterThan(seqs[i], seqs[i - 1],
-                                 "Seq [\(i)] must be greater than seq [\(i-1)]")
+        for i in 1 ..< seqs.count {
+            XCTAssertGreaterThan(
+                seqs[i],
+                seqs[i - 1],
+                "Seq [\(i)] must be greater than seq [\(i - 1)]"
+            )
         }
     }
 
@@ -175,9 +182,10 @@ final class E2ETransportTests: XCTestCase {
     func testWireEncodingRoundTrip() {
         let original = AudioFrame(seq: 0xDEAD_BEEF, payload: Data([0x01, 0x02, 0x03, 0x04]))
         guard let decoded = AudioFrame(wireData: original.wireData) else {
-            XCTFail("wireData round-trip must not return nil"); return
+            XCTFail("wireData round-trip must not return nil")
+            return
         }
-        XCTAssertEqual(decoded.seq,     original.seq)
+        XCTAssertEqual(decoded.seq, original.seq)
         XCTAssertEqual(decoded.payload, original.payload)
         XCTAssertEqual(decoded.codecID, original.codecID)
     }
@@ -199,8 +207,11 @@ final class E2ETransportTests: XCTestCase {
 
         XCTAssertEqual(pathA.sentFrames.count, 1)
         XCTAssertEqual(pathB.sentFrames.count, 1)
-        XCTAssertEqual(pathA.sentFrames[0].seq, pathB.sentFrames[0].seq,
-                       "Both paths must carry identical seq in redundant mode")
+        XCTAssertEqual(
+            pathA.sentFrames[0].seq,
+            pathB.sentFrames[0].seq,
+            "Both paths must carry identical seq in redundant mode"
+        )
         XCTAssertEqual(pathA.sentFrames[0].payload, pathB.sentFrames[0].payload)
     }
 
@@ -276,7 +287,7 @@ private final class LoopbackAudioFrameNetworkLink {
                 } else {
                     ready.resume(throwing: LoopbackNetworkError.listenerMissingPort)
                 }
-            case .failed(let error):
+            case let .failed(error):
                 ready.resume(throwing: error)
             default:
                 break
@@ -316,7 +327,7 @@ private final class LoopbackAudioFrameNetworkLink {
                 switch state {
                 case .ready:
                     ready.resume(returning: ())
-                case .failed(let error):
+                case let .failed(error):
                     ready.resume(throwing: error)
                 case .cancelled:
                     ready.resume(throwing: LoopbackNetworkError.connectionCancelledBeforeReady)
@@ -379,13 +390,13 @@ private final class LoopbackTCPBondedPath: BondedPath, @unchecked Sendable {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             if let data, !data.isEmpty {
-                self.appendAndEmitFrames(data)
+                appendAndEmitFrames(data)
             }
             if isComplete || error != nil {
-                self.connectedSubject.send(false)
+                connectedSubject.send(false)
                 return
             }
-            self.receiveNextChunk()
+            receiveNextChunk()
         }
     }
 
@@ -447,7 +458,7 @@ private final class OneShot<Value>: @unchecked Sendable {
             return
         }
         self.result = result
-        let continuation = self.continuation
+        let continuation = continuation
         self.continuation = nil
         lock.unlock()
         continuation?.resume(with: result)

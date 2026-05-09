@@ -27,7 +27,7 @@ struct ConnectionStatusBadge: View {
 
             // Active path dots
             HStack(spacing: 3) {
-                ForEach(0..<4, id: \.self) { i in
+                ForEach(0 ..< 4, id: \.self) { i in
                     Circle()
                         .fill(i < activePaths ? scoreColor : Color.secondary.opacity(0.18))
                         .frame(width: 5, height: 5)
@@ -43,21 +43,21 @@ struct ConnectionStatusBadge: View {
 
     private var scoreColor: Color {
         switch score {
-        case 80...100: .green
-        case 60..<80:  .yellow
-        case 40..<60:  .orange
-        default:       .red
+        case 80 ... 100: .green
+        case 60 ..< 80: .yellow
+        case 40 ..< 60: .orange
+        default: .red
         }
     }
 
     private var phaseLabel: String {
         switch phase {
-        case .idle:           "—"
-        case .connecting:     "Verbindet…"
-        case .near:           "Near"
-        case .far:            "Far"
-        case .degrading:      "Degrading"
-        case .recovering:     "Recovering"
+        case .idle: "—"
+        case .connecting: "Verbindet…"
+        case .near: "Near"
+        case .far: "Far"
+        case .degrading: "Degrading"
+        case .recovering: "Recovering"
         }
     }
 }

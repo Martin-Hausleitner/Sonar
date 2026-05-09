@@ -8,7 +8,7 @@ import Foundation
 final class AudioRouter {
     enum Layer: Hashable { case voiceNear, voiceFar, ai, music, ambient }
 
-    // Observable per-layer gain state.
+    /// Observable per-layer gain state.
     @Published private(set) var currentGain: [Layer: Float] = [
         .voiceNear: 1.0,
         .voiceFar: 0.0,
@@ -17,7 +17,7 @@ final class AudioRouter {
         .ambient: 0.0
     ]
 
-    // Active ramp timer for the remote voice gain.
+    /// Active ramp timer for the remote voice gain.
     private var rampTimer: DispatchSourceTimer?
 
     // MARK: - Public API
@@ -39,7 +39,7 @@ final class AudioRouter {
             return
         }
 
-        let stepInterval: TimeInterval = 0.010          // 10 ms steps
+        let stepInterval: TimeInterval = 0.010 // 10 ms steps
         let totalSteps = max(1, Int((rampDuration / stepInterval).rounded()))
         let gainStep = (target - start) / Float(totalSteps)
         var stepsDone = 0
@@ -54,11 +54,11 @@ final class AudioRouter {
             guard let self else { return }
             stepsDone += 1
             if stepsDone >= totalSteps {
-                self.currentGain[layer] = target
-                self.rampTimer?.cancel()
-                self.rampTimer = nil
+                currentGain[layer] = target
+                rampTimer?.cancel()
+                rampTimer = nil
             } else {
-                self.currentGain[layer] = start + gainStep * Float(stepsDone)
+                currentGain[layer] = start + gainStep * Float(stepsDone)
             }
         }
         rampTimer = timer

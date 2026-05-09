@@ -1,0 +1,13 @@
+--swiftversion 5.10
+--indent 4
+--linebreaks lf
+--semicolons never
+--trimwhitespace always
+--stripunusedargs closure-only
+--self remove
+--commas inline
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--maxwidth none
+--exclude build,.claude,Sonar.xcodeproj

@@ -19,7 +19,6 @@ import Foundation
 /// best-effort fallback only.
 @MainActor
 final class AirPodsController {
-
     // MARK: - Public interface
 
     /// Apply the listening mode specified in a profile.

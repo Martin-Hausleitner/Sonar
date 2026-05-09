@@ -155,14 +155,14 @@ final class RecordingPlayer: ObservableObject {
             ticker = Timer.publish(every: 0.1, on: .main, in: .common)
                 .autoconnect()
                 .sink { [weak self] _ in
-                    guard let self, let p = self.avPlayer else { return }
-                    self.currentTime = p.currentTime
-                    if !p.isPlaying && p.currentTime >= p.duration - 0.05 {
+                    guard let self, let p = avPlayer else { return }
+                    currentTime = p.currentTime
+                    if !p.isPlaying, p.currentTime >= p.duration - 0.05 {
                         // Reached end.
-                        self.isPlaying = false
-                        self.currentTime = p.duration
-                        self.ticker?.cancel()
-                        self.ticker = nil
+                        isPlaying = false
+                        currentTime = p.duration
+                        ticker?.cancel()
+                        ticker = nil
                     }
                 }
         }

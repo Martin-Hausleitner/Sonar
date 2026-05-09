@@ -3,7 +3,7 @@ import Foundation
 /// Rolling 2-minute transcript so the AI has recent context. Plan §2.1 L5.
 @MainActor
 final class ContextBuffer {
-    struct Entry: Sendable {
+    struct Entry {
         let speakerID: String
         let text: String
         let at: Date
@@ -18,5 +18,7 @@ final class ContextBuffer {
         entries.removeAll { $0.at < cutoff }
     }
 
-    func snapshot() -> [Entry] { entries }
+    func snapshot() -> [Entry] {
+        entries
+    }
 }

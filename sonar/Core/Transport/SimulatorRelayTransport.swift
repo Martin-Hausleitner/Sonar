@@ -2,19 +2,19 @@ import AVFoundation
 import Combine
 import Foundation
 
-struct SimulatorRelayPeer: Codable, Equatable, Sendable {
+struct SimulatorRelayPeer: Codable, Equatable {
     let id: String
     let name: String
     let lastSeen: Double
 }
 
-struct SimulatorRelayFrame: Codable, Equatable, Sendable {
+struct SimulatorRelayFrame: Codable, Equatable {
     let from: String
     let seq: UInt32
     let wireDataBase64: String
 }
 
-struct SimulatorRelayPollResponse: Codable, Equatable, Sendable {
+struct SimulatorRelayPollResponse: Codable, Equatable {
     let serverSeq: Int
     let peers: [SimulatorRelayPeer]
     let frames: [SimulatorRelayFrame]
@@ -178,7 +178,7 @@ private final class URLSessionSimulatorRelayClient: SimulatorRelayClienting {
         return try decoder.decode(SimulatorRelayPollResponse.self, from: data)
     }
 
-    private func post<T: Encodable>(path: String, body: T, relayURL: URL) async throws {
+    private func post(path: String, body: some Encodable, relayURL: URL) async throws {
         var request = URLRequest(url: endpoint(path, relayURL: relayURL))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

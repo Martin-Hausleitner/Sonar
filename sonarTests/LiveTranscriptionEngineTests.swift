@@ -1,6 +1,6 @@
 import AVFoundation
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Tests for LiveTranscriptionEngine engine selection and lifecycle.
 /// Network calls are never made — the Parakeet path only sends audio once
@@ -8,7 +8,6 @@ import XCTest
 /// of short buffers is safe and free of network side-effects.
 @MainActor
 final class LiveTranscriptionEngineTests: XCTestCase {
-
     private let apiKeyUD = "sonar.parakeet.apiKey"
     private let localModelUD = "sonar.localmodel.selected"
 
@@ -40,8 +39,11 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         UserDefaults.standard.set("nvapi-test-key-1234", forKey: apiKeyUD)
         let engine = LiveTranscriptionEngine()
         try await engine.start()
-        XCTAssertEqual(engine.currentEngine, .parakeet,
-                       "Non-empty NVIDIA key must activate Parakeet engine")
+        XCTAssertEqual(
+            engine.currentEngine,
+            .parakeet,
+            "Non-empty NVIDIA key must activate Parakeet engine"
+        )
         engine.stop()
     }
 
@@ -50,21 +52,27 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         defer { UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey") }
         let engine = LiveTranscriptionEngine()
         try await engine.start()
-        XCTAssertEqual(engine.currentEngine, .openAIRealtime,
-                       "Non-empty OpenAI key must activate OpenAI Realtime engine")
+        XCTAssertEqual(
+            engine.currentEngine,
+            .openAIRealtime,
+            "Non-empty OpenAI key must activate OpenAI Realtime engine"
+        )
         engine.stop()
     }
 
     func testOpenAIRealtimeTakesPriorityOverParakeet() async throws {
-        UserDefaults.standard.set("sk-proj-test",         forKey: "sonar.openai.apiKey")
-        UserDefaults.standard.set("nvapi-test-key-1234",  forKey: apiKeyUD)
+        UserDefaults.standard.set("sk-proj-test", forKey: "sonar.openai.apiKey")
+        UserDefaults.standard.set("nvapi-test-key-1234", forKey: apiKeyUD)
         defer {
             UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey")
         }
         let engine = LiveTranscriptionEngine()
         try await engine.start()
-        XCTAssertEqual(engine.currentEngine, .openAIRealtime,
-                       "OpenAI Realtime must beat Parakeet in priority")
+        XCTAssertEqual(
+            engine.currentEngine,
+            .openAIRealtime,
+            "OpenAI Realtime must beat Parakeet in priority"
+        )
         engine.stop()
     }
 
@@ -94,7 +102,7 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         XCTAssertEqual(fake.stopCount, 1)
     }
 
-    func testAppleSpeechSelectedWhenAPIKeyEmpty() async throws {
+    func testAppleSpeechSelectedWhenAPIKeyEmpty() {
         UserDefaults.standard.set("", forKey: apiKeyUD)
         let engine = LiveTranscriptionEngine()
         let key = UserDefaults.standard.string(forKey: apiKeyUD) ?? ""
@@ -105,15 +113,18 @@ final class LiveTranscriptionEngineTests: XCTestCase {
     func testAppleSpeechSelectedWhenAPIKeyAbsent() {
         UserDefaults.standard.removeObject(forKey: apiKeyUD)
         let engine = LiveTranscriptionEngine()
-        XCTAssertEqual(engine.currentEngine, .appleSpeech,
-                       "Missing key must default to Apple Speech")
+        XCTAssertEqual(
+            engine.currentEngine,
+            .appleSpeech,
+            "Missing key must default to Apple Speech"
+        )
     }
 
     // MARK: - Lifecycle: stop before start must not crash
 
     func testStopBeforeStartDoesNotCrash() {
         let engine = LiveTranscriptionEngine()
-        engine.stop()   // must be a no-op, not a crash
+        engine.stop() // must be a no-op, not a crash
     }
 
     // MARK: - Parakeet path: append before chunk fills must not crash or send
@@ -126,10 +137,14 @@ final class LiveTranscriptionEngineTests: XCTestCase {
 
         // 160 frames × 10 = 1 600 samples ≪ 80 000 chunk threshold → no network call
         let buf = makePCMBuffer(frameCount: 160)
-        for _ in 0..<10 { engine.append(buf) }
+        for _ in 0 ..< 10 {
+            engine.append(buf)
+        }
 
-        XCTAssertTrue(engine.transcript.isEmpty,
-                      "Sub-chunk audio must not produce transcript entries")
+        XCTAssertTrue(
+            engine.transcript.isEmpty,
+            "Sub-chunk audio must not produce transcript entries"
+        )
         engine.stop()
     }
 
@@ -138,7 +153,7 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         let engine = LiveTranscriptionEngine()
         try await engine.start()
         engine.append(makePCMBuffer(frameCount: 160))
-        engine.stop()   // flush() called; buffer < chunk threshold → safe no-op
+        engine.stop() // flush() called; buffer < chunk threshold → safe no-op
     }
 
     // MARK: - Apple Speech path: append does not crash (request may be nil in sim)
@@ -168,7 +183,7 @@ final class LiveTranscriptionEngineTests: XCTestCase {
     // MARK: - Helpers
 
     private func makePCMBuffer(frameCount: Int) -> AVAudioPCMBuffer {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount))!
         buf.frameLength = AVAudioFrameCount(frameCount)
         return buf

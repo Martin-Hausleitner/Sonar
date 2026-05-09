@@ -3,9 +3,9 @@ import SwiftUI
 
 struct DistanceRingView: View {
     var distance: Double?
-    var direction: simd_float3? = nil
+    var direction: simd_float3?
 
-    // Ring distances in metres
+    /// Ring distances in metres
     private let rings: [Double] = [0.5, 1.0, 2.0, 5.0, 10.0]
 
     var body: some View {
@@ -108,10 +108,10 @@ struct DistanceRingView: View {
 
     private func dotColor(for dist: Double) -> Color {
         switch dist {
-        case ..<1.0:  .cyan
-        case ..<3.0:  .green
-        case ..<6.0:  .yellow
-        default:      .orange
+        case ..<1.0: .cyan
+        case ..<3.0: .green
+        case ..<6.0: .yellow
+        default: .orange
         }
     }
 

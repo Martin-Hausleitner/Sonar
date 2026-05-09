@@ -213,9 +213,12 @@ jobs:
             gh release delete "$TAG" --yes --cleanup-tag=false
           fi
 
+          NOTES="Automated release for ${TAG}. Unsigned iOS IPA built with CODE_SIGNING_ALLOWED=NO "
+          NOTES+="and IPHONEOS_DEPLOYMENT_TARGET=${DEPLOYMENT_TARGET}. Sideload with SideStore/AltStore."
+
           gh release create "$TAG" "$IPA_PATH" \
             --title "Sonar $TAG" \
-            --notes "Automated release for ${TAG}. Unsigned iOS IPA built with CODE_SIGNING_ALLOWED=NO and IPHONEOS_DEPLOYMENT_TARGET=${DEPLOYMENT_TARGET}. Sideload with SideStore/AltStore."
+            --notes "$NOTES"
 
       - name: Upload diagnostic logs
         if: always()

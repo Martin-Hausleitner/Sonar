@@ -1,9 +1,7 @@
+@testable import Sonar
 import XCTest
 
-@testable import Sonar
-
 final class PairingTokenTests: XCTestCase {
-
     func testEncodeDecodeRoundTripPreservesAllFields() throws {
         let token = PairingToken(
             id: "SIM-A-38D0B9",
@@ -56,15 +54,19 @@ final class PairingTokenTests: XCTestCase {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
-        XCTAssertNil(PairingToken.decode(b64),
-                     "v=99 must be rejected as unsupported schema version")
+        XCTAssertNil(
+            PairingToken.decode(b64),
+            "v=99 must be rejected as unsupported schema version"
+        )
     }
 
     func testDecodeRejectsMalformedJSON() {
         // Garbage base64 → not valid JSON after decoding.
         let garbage = "this-is-not-base64-or-json!!!"
-        XCTAssertNil(PairingToken.decode(garbage),
-                     "Malformed payload must decode to nil")
+        XCTAssertNil(
+            PairingToken.decode(garbage),
+            "Malformed payload must decode to nil"
+        )
     }
 
     func testDecodeRejectsEmptyString() {

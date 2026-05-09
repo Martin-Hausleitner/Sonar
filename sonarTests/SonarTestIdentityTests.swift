@@ -1,10 +1,8 @@
+@testable import Sonar
 import XCTest
 
-@testable import Sonar
-
 final class SonarTestIdentityTests: XCTestCase {
-
-    func testEnvironmentConfiguresStableDeviceAndRelay() throws {
+    func testEnvironmentConfiguresStableDeviceAndRelay() {
         let identity = SonarTestIdentity(
             environment: [
                 "SONAR_TEST_DEVICE_ID": "SIM-A-38D0B9",
@@ -26,7 +24,7 @@ final class SonarTestIdentityTests: XCTestCase {
         XCTAssertTrue(identity.autoStartSession)
     }
 
-    func testArgumentsConfigureWhenEnvironmentAbsent() throws {
+    func testArgumentsConfigureWhenEnvironmentAbsent() {
         let identity = SonarTestIdentity(
             environment: [:],
             arguments: [
@@ -46,7 +44,7 @@ final class SonarTestIdentityTests: XCTestCase {
         XCTAssertTrue(identity.autoStartSession)
     }
 
-    func testFallbackUsesDeviceNameAndVendorIdentifier() throws {
+    func testFallbackUsesDeviceNameAndVendorIdentifier() {
         let identity = SonarTestIdentity(
             environment: [:],
             arguments: [],
@@ -64,7 +62,7 @@ final class SonarTestIdentityTests: XCTestCase {
     }
 
     @MainActor
-    func testAppStateExposesLocalTestIdentity() throws {
+    func testAppStateExposesLocalTestIdentity() {
         let identity = SonarTestIdentity(
             environment: [
                 "SONAR_TEST_DEVICE_ID": "SIM-A-38D0B9",

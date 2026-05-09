@@ -1,9 +1,8 @@
 import Combine
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class SignalScoreCalculatorTests: XCTestCase {
-
     // MARK: - Helpers
 
     private func metrics(
@@ -12,8 +11,12 @@ final class SignalScoreCalculatorTests: XCTestCase {
         jitterMs: Double = 0,
         activePaths: Int = 4
     ) -> NetworkMetrics {
-        NetworkMetrics(rttMs: rttMs, lossPercent: lossPercent,
-                       jitterMs: jitterMs, activePaths: activePaths)
+        NetworkMetrics(
+            rttMs: rttMs,
+            lossPercent: lossPercent,
+            jitterMs: jitterMs,
+            activePaths: activePaths
+        )
     }
 
     // MARK: - Near-perfect conditions → high score
@@ -110,8 +113,11 @@ final class SignalScoreCalculatorTests: XCTestCase {
         let calc = SignalScoreCalculator()
         let initial = calc.score
         calc.update(metrics(rttMs: 5000, lossPercent: 50, jitterMs: 50, activePaths: 1))
-        XCTAssertNotEqual(calc.score, initial,
-                          "update() should change the published score")
+        XCTAssertNotEqual(
+            calc.score,
+            initial,
+            "update() should change the published score"
+        )
     }
 
     func testUpdateChangesPublishedGrade() {

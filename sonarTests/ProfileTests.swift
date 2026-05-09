@@ -1,5 +1,5 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 @MainActor
 final class ProfileTests: XCTestCase {
@@ -8,14 +8,14 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(Set(ids), ["zimmer", "roller", "festival", "club", "zen"])
     }
 
-    func testZimmerHasTransparency() {
-        let zimmer = SessionProfile.builtIn.first { $0.id == "zimmer" }!
+    func testZimmerHasTransparency() throws {
+        let zimmer = try XCTUnwrap(SessionProfile.builtIn.first { $0.id == "zimmer" })
         XCTAssertEqual(zimmer.listeningMode, "transparency")
         XCTAssertEqual(zimmer.musicMix, 0)
     }
 
-    func testClubMixesMusic() {
-        let club = SessionProfile.builtIn.first { $0.id == "club" }!
+    func testClubMixesMusic() throws {
+        let club = try XCTUnwrap(SessionProfile.builtIn.first { $0.id == "club" })
         XCTAssertGreaterThan(club.musicMix, 0)
         XCTAssertEqual(club.listeningMode, "noiseCancellation")
         XCTAssertEqual(club.aiTrigger, .doubleTap)
@@ -23,8 +23,11 @@ final class ProfileTests: XCTestCase {
 
     func testThresholdsSane() {
         for p in SessionProfile.builtIn {
-            XCTAssertLessThan(p.duplicateThreshold, p.nearFarThreshold,
-                              "\(p.id) duplicateThreshold must be < nearFarThreshold")
+            XCTAssertLessThan(
+                p.duplicateThreshold,
+                p.nearFarThreshold,
+                "\(p.id) duplicateThreshold must be < nearFarThreshold"
+            )
             XCTAssertGreaterThan(p.gain, 0)
             XCTAssertLessThanOrEqual(p.gain, 1)
             XCTAssertGreaterThanOrEqual(p.musicMix, 0)

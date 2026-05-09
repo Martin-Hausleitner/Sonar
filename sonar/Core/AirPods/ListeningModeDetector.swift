@@ -34,7 +34,9 @@ final class ListeningModeDetector {
 
     // MARK: - Public sync accessor (kept for legacy callers)
 
-    func current() -> String { currentMode.value }
+    func current() -> String {
+        currentMode.value
+    }
 
     // MARK: - Private
 

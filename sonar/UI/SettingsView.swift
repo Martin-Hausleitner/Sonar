@@ -3,19 +3,19 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var modelManager = LocalModelManager.shared
-    @StateObject private var tailscale    = TailscaleDetector.shared
+    @StateObject private var tailscale = TailscaleDetector.shared
 
-    @AppStorage("sonar.settings.audioFormat")    private var audioFormat: AudioFormat = .opus
-    @AppStorage("sonar.settings.retentionDays")  private var retentionDays: Int = 30
-    @AppStorage("sonar.settings.fecEnabled")     private var fecEnabled: Bool = false
-    @AppStorage("sonar.settings.profileID")      private var profileID: String = "zimmer"
-    @AppStorage("sonar.parakeet.apiKey")         private var parakeetAPIKey: String = ""
-    @AppStorage("sonar.openai.apiKey")           private var openAIKey: String = ""
-    @AppStorage("sonar.openai.endpoint")         private var openAIEndpoint: String = ""
-    @AppStorage("sonar.devmode.fakeDemo")         private var fakeDemoEnabled: Bool = false
+    @AppStorage("sonar.settings.audioFormat") private var audioFormat: AudioFormat = .opus
+    @AppStorage("sonar.settings.retentionDays") private var retentionDays: Int = 30
+    @AppStorage("sonar.settings.fecEnabled") private var fecEnabled: Bool = false
+    @AppStorage("sonar.settings.profileID") private var profileID: String = "zimmer"
+    @AppStorage("sonar.parakeet.apiKey") private var parakeetAPIKey: String = ""
+    @AppStorage("sonar.openai.apiKey") private var openAIKey: String = ""
+    @AppStorage("sonar.openai.endpoint") private var openAIEndpoint: String = ""
+    @AppStorage("sonar.devmode.fakeDemo") private var fakeDemoEnabled: Bool = false
     /// Output volume of Sonar's voice mix (0.0–1.0). Independent from system volume so
     /// the user can keep music loud and turn the peer's voice down (or vice-versa).
-    @AppStorage("sonar.audio.outputVolume")       private var outputVolume: Double = 1.0
+    @AppStorage("sonar.audio.outputVolume") private var outputVolume: Double = 1.0
 
     @State private var privacyActive: Bool = PrivacyMode.shared.isActive
     @State private var latency: (p50: Double, p95: Double, p99: Double)? = nil
@@ -90,7 +90,7 @@ struct SettingsView: View {
 
     private var pathIndicator: some View {
         HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { i in
+            ForEach(0 ..< 3, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(i < appState.activePathCount ? SonarTheme.accent : Color.secondary.opacity(0.25))
                     .frame(width: 10, height: 14 + CGFloat(i) * 4)
@@ -104,13 +104,12 @@ struct SettingsView: View {
 
     private var signalBadge: some View {
         let color: Color = appState.signalScore >= 80 ? .green
-                         : appState.signalScore >= 60 ? .yellow : .red
+            : appState.signalScore >= 60 ? .yellow : .red
         return Text("\(appState.signalScore) / 100")
             .font(.caption.weight(.bold).monospaced())
             .foregroundStyle(color)
     }
 
-    @ViewBuilder
     private var tailscaleRow: some View {
         HStack {
             Label("Tailscale", systemImage: "network.badge.shield.half.filled")
@@ -142,14 +141,14 @@ struct SettingsView: View {
                     Label("Sonar-Lautstärke", systemImage: "speaker.wave.2.fill")
                     Spacer()
                     Text("\(Int(outputVolume * 100)) %")
-                    .font(.caption.weight(.medium).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 10) {
                     Image(systemName: "speaker.fill")
                         .foregroundStyle(.secondary)
                         .font(.caption)
-                    Slider(value: $outputVolume, in: 0.0...1.0, step: 0.01)
+                    Slider(value: $outputVolume, in: 0.0 ... 1.0, step: 0.01)
                         .onChange(of: outputVolume) { _, v in
                             // Live-apply to the active mix node so the user
                             // hears the change instantly without restarting.
@@ -241,8 +240,8 @@ struct SettingsView: View {
     }
 
     private var activeEngineLabel: String {
-        if !openAIKey.isEmpty           { return "OpenAI Realtime" }
-        if !parakeetAPIKey.isEmpty      { return "Parakeet (NVIDIA)" }
+        if !openAIKey.isEmpty { return "OpenAI Realtime" }
+        if !parakeetAPIKey.isEmpty { return "Parakeet (NVIDIA)" }
         let lid = modelManager.selectedModelID
         if !lid.isEmpty,
            let m = LocalModelManager.availableModels.first(where: { $0.id == lid }),
@@ -251,7 +250,7 @@ struct SettingsView: View {
     }
 
     private var activeEngineColor: Color {
-        if !openAIKey.isEmpty      { return .green }
+        if !openAIKey.isEmpty { return .green }
         if !parakeetAPIKey.isEmpty { return SonarTheme.accent }
         let lid = modelManager.selectedModelID
         if !lid.isEmpty,
@@ -271,14 +270,14 @@ struct SettingsView: View {
                     case .notDownloaded:
                         Text("~\(model.approxMB) MB")
                             .foregroundStyle(.secondary)
-                    case .downloading(let p):
+                    case let .downloading(p):
                         ProgressView(value: p)
                             .tint(SonarTheme.accent)
                             .frame(maxWidth: 140)
-                    case .ready(let bytes):
+                    case let .ready(bytes):
                         Text(formatBytes(bytes))
                             .foregroundStyle(.secondary)
-                    case .failed(let msg):
+                    case let .failed(msg):
                         Text(msg)
                             .foregroundStyle(.red)
                     }
@@ -291,8 +290,10 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func modelRowAction(_ model: LocalModelManager.ModelInfo,
-                                state: LocalModelManager.DownloadState) -> some View {
+    private func modelRowAction(
+        _ model: LocalModelManager.ModelInfo,
+        state: LocalModelManager.DownloadState
+    ) -> some View {
         switch state {
         case .notDownloaded, .failed:
             Button(state == .notDownloaded ? "Laden" : "Erneut") {
@@ -324,7 +325,7 @@ struct SettingsView: View {
 
     private func formatBytes(_ bytes: Int64) -> String {
         if bytes > 1_000_000 { return String(format: "%.0f MB", Double(bytes) / 1_000_000) }
-        if bytes > 1_000     { return String(format: "%.0f KB", Double(bytes) / 1_000) }
+        if bytes > 1000 { return String(format: "%.0f KB", Double(bytes) / 1000) }
         return "\(bytes) B"
     }
 
@@ -387,6 +388,7 @@ struct SettingsView: View {
     }
 
     // MARK: - Diagnostics
+
     //
     // Every value below is read DIRECTLY from `appState` (an
     // `@EnvironmentObject`) so SwiftUI re-evaluates this body whenever any of
@@ -401,22 +403,22 @@ struct SettingsView: View {
             // Each row reads `appState.<prop>` inline — value re-computes on
             // every body invocation, which SwiftUI triggers when the
             // ObservableObject publishes.
-            metricRow("Signal Score",  "\(appState.signalScore) / 100")
-            metricRow("Aktive Pfade",  "\(appState.activePathCount)")
-            metricRow("Dieses Gerät",  appState.testIdentity.displayName)
-            metricRow("Peer",          appState.peerName ?? "—")
-            metricRow("Verbindung",    appState.connectionType.label)
-            metricRow("Quelle",        appState.connectionIsSimulated ? "Simuliert" : "Echt")
-            metricRow("Akku-Modus",    batteryLabel)
-            metricRow("Geräteprofil",  appState.deviceCapabilities.hasUWB ? "UWB · High-End" : "Standard")
-            metricRow("Tailscale",     tailscale.isAvailable ? (tailscale.localTailscaleIP ?? "ja") : "Nein")
+            metricRow("Signal Score", "\(appState.signalScore) / 100")
+            metricRow("Aktive Pfade", "\(appState.activePathCount)")
+            metricRow("Dieses Gerät", appState.testIdentity.displayName)
+            metricRow("Peer", appState.peerName ?? "—")
+            metricRow("Verbindung", appState.connectionType.label)
+            metricRow("Quelle", appState.connectionIsSimulated ? "Simuliert" : "Echt")
+            metricRow("Akku-Modus", batteryLabel)
+            metricRow("Geräteprofil", appState.deviceCapabilities.hasUWB ? "UWB · High-End" : "Standard")
+            metricRow("Tailscale", tailscale.isAvailable ? (tailscale.localTailscaleIP ?? "ja") : "Nein")
 
             if let lat = latency {
-                metricRow("Latenz P50",  fmtMs(lat.p50))
-                metricRow("Latenz P95",  fmtMs(lat.p95))
-                metricRow("Latenz P99",  fmtMs(lat.p99))
+                metricRow("Latenz P50", fmtMs(lat.p50))
+                metricRow("Latenz P95", fmtMs(lat.p95))
+                metricRow("Latenz P99", fmtMs(lat.p99))
             } else {
-                metricRow("Latenz",      "—")
+                metricRow("Latenz", "—")
             }
 
             Button("Aktualisieren") {
@@ -455,7 +457,7 @@ struct SettingsView: View {
     private var appInfoSection: some View {
         Section("App") {
             metricRow("Version", appVersion)
-            metricRow("Build",   buildNumber)
+            metricRow("Build", buildNumber)
             NavigationLink("Open-Source-Lizenzen") {
                 LicensesView()
             }
@@ -476,14 +478,16 @@ struct SettingsView: View {
 
     private var batteryLabel: String {
         switch appState.batteryTier {
-        case .normal:   "Normal"
-        case .eco:      "Eco"
-        case .saver:    "Sparen"
+        case .normal: "Normal"
+        case .eco: "Eco"
+        case .saver: "Sparen"
         case .critical: "Kritisch"
         }
     }
 
-    private func fmtMs(_ v: Double) -> String { String(format: "%.1f ms", v) }
+    private func fmtMs(_ v: Double) -> String {
+        String(format: "%.1f ms", v)
+    }
 }
 
 // MARK: - Supporting types
@@ -496,11 +500,11 @@ private struct LicensesView: View {
     var body: some View {
         List {
             Section("Verwendete Bibliotheken") {
-                licRow("swift-opus",         "BSD-3-Clause")
-                licRow("swift-nio",          "Apache 2.0")
-                licRow("LiveKit SDK",        "Apache 2.0")
-                licRow("Tailscale SDK",      "BSD-3-Clause")
-                licRow("CoreHaptics",        "Apple (proprietary)")
+                licRow("swift-opus", "BSD-3-Clause")
+                licRow("swift-nio", "Apache 2.0")
+                licRow("LiveKit SDK", "Apache 2.0")
+                licRow("Tailscale SDK", "BSD-3-Clause")
+                licRow("CoreHaptics", "Apple (proprietary)")
             }
         }
         .navigationTitle("Lizenzen")

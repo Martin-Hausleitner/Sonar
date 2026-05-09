@@ -62,8 +62,12 @@ final class HapticEngine {
         // Three increasing-intensity pulses
         let timings: [(Double, Float)] = [(0.0, 0.4), (0.15, 0.65), (0.30, 0.85)]
         for (time, intensity) in timings {
-            events.append(makeEvent(intensity: intensity, sharpness: 0.3,
-                                    relativeTime: time, duration: 0.1))
+            events.append(makeEvent(
+                intensity: intensity,
+                sharpness: 0.3,
+                relativeTime: time,
+                duration: 0.1
+            ))
         }
         play(events: events, engine: engine)
     }

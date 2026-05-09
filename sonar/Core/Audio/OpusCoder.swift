@@ -25,14 +25,14 @@ final class OpusCoder {
 
     init(
         sampleRate: Double = LatencyBudget.audioSampleRate,
-        frameMs: Int      = LatencyBudget.audioFrameMs,
-        bitrate: Int32    = LatencyBudget.opusBitrateBps,
+        frameMs: Int = LatencyBudget.audioFrameMs,
+        bitrate: Int32 = LatencyBudget.opusBitrateBps,
         complexity: Int32 = LatencyBudget.opusComplexity,
-        fecEnabled: Bool  = LatencyBudget.opusFECEnabledNear
+        fecEnabled: Bool = LatencyBudget.opusFECEnabledNear
     ) {
         self.sampleRate = sampleRate
-        self.frameMs    = frameMs
-        self.bitrate    = bitrate
+        self.frameMs = frameMs
+        self.bitrate = bitrate
         self.complexity = complexity
         self.fecEnabled = fecEnabled
 
@@ -46,18 +46,22 @@ final class OpusCoder {
         // kAudioFormatOpus is available on iOS 16+ (project min: iOS 18).
         // mFramesPerPacket = PCM samples per Opus frame (10 ms × 48 kHz = 480).
         var desc = AudioStreamBasicDescription()
-        desc.mSampleRate       = sampleRate
-        desc.mFormatID         = kAudioFormatOpus
+        desc.mSampleRate = sampleRate
+        desc.mFormatID = kAudioFormatOpus
         desc.mChannelsPerFrame = 1
-        desc.mFramesPerPacket  = UInt32(sampleRate * Double(frameMs) / 1000.0)
+        desc.mFramesPerPacket = UInt32(sampleRate * Double(frameMs) / 1000.0)
         opusFormat = AVAudioFormat(streamDescription: &desc)!
     }
 
     /// PCM samples consumed per encode call.
-    var samplesPerFrame: Int { Int(sampleRate * Double(frameMs) / 1000.0) }
+    var samplesPerFrame: Int {
+        Int(sampleRate * Double(frameMs) / 1000.0)
+    }
 
     /// Codec's contribution to glass-to-glass latency, in ms.
-    var theoreticalEncodeLatencyMs: Double { Double(frameMs) }
+    var theoreticalEncodeLatencyMs: Double {
+        Double(frameMs)
+    }
 
     // MARK: - Encode (PCM Float32 → Opus bytes)
 
@@ -74,7 +78,9 @@ final class OpusCoder {
         var provided = false
         var convErr: NSError?
         let status = enc.convert(to: out, error: &convErr) { _, outStatus in
-            guard !provided else { outStatus.pointee = .noDataNow; return nil }
+            guard !provided else { outStatus.pointee = .noDataNow
+                return nil
+            }
             provided = true
             outStatus.pointee = .haveData
             return buffer
@@ -104,8 +110,8 @@ final class OpusCoder {
             return true
         }
         guard copied else { throw CodecError.decodeFailed }
-        inp.byteLength   = UInt32(data.count)
-        inp.packetCount  = 1
+        inp.byteLength = UInt32(data.count)
+        inp.packetCount = 1
         inp.packetDescriptions?.pointee = AudioStreamPacketDescription(
             mStartOffset: 0, mVariableFramesInPacket: 0, mDataByteSize: UInt32(data.count)
         )
@@ -113,7 +119,9 @@ final class OpusCoder {
         var provided = false
         var convErr: NSError?
         let status = dec.convert(to: buffer, error: &convErr) { _, outStatus in
-            guard !provided else { outStatus.pointee = .noDataNow; return nil }
+            guard !provided else { outStatus.pointee = .noDataNow
+                return nil
+            }
             provided = true
             outStatus.pointee = .haveData
             return inp

@@ -126,7 +126,7 @@ struct RecordingsListView: View {
                     List(sessions, id: \.absoluteString) { url in
                         // While a session is actively recording, the most recent
                         // file is still being written — don't allow playback yet.
-                        if appState.isRecording && url == sessions.first {
+                        if appState.isRecording, url == sessions.first {
                             recordingRow(url, disabled: true)
                                 .listRowBackground(SonarTheme.secondaryBackground)
                         } else {
@@ -165,10 +165,12 @@ struct RecordingsListView: View {
             Image(systemName: disabled ? "record.circle.fill" : "waveform")
                 .foregroundStyle(disabled ? .red : SonarTheme.accent)
             VStack(alignment: .leading, spacing: 2) {
-                Text(url.lastPathComponent
-                    .replacingOccurrences(of: ".sonsess", with: ""))
-                    .font(.subheadline)
-                    .lineLimit(1)
+                Text(
+                    url.lastPathComponent
+                        .replacingOccurrences(of: ".sonsess", with: "")
+                )
+                .font(.subheadline)
+                .lineLimit(1)
                 if disabled {
                     Text("Aufnahme läuft …")
                         .font(.caption)

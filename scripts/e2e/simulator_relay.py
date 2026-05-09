@@ -25,7 +25,9 @@ class RelayState:
         with self.lock:
             now = time.time()
             self.devices[device_id] = {"id": device_id, "name": name, "lastSeen": now}
-            self.events.append({"seq": self._next_seq(), "type": "register", "device": device_id, "name": name, "time": now})
+            self.events.append(
+                {"seq": self._next_seq(), "type": "register", "device": device_id, "name": name, "time": now}
+            )
             return {"ok": True, "serverSeq": self.server_seq}
 
     def unregister(self, device_id):
@@ -42,7 +44,9 @@ class RelayState:
                 self.devices[sender]["lastSeen"] = now
             item = {"seq": self._next_seq(), "from": sender, "frame": frame, "time": now}
             self.frames.append(item)
-            self.events.append({"seq": item["seq"], "type": "frame", "device": sender, "frameSeq": frame.get("seq"), "time": now})
+            self.events.append(
+                {"seq": item["seq"], "type": "frame", "device": sender, "frameSeq": frame.get("seq"), "time": now}
+            )
             return {"ok": True, "serverSeq": self.server_seq}
 
     def poll(self, device_id, after):
@@ -68,6 +72,7 @@ class RelayState:
                 "serverSeq": self.server_seq,
                 "devices": list(self.devices.values()),
                 "frameCount": len(self.frames),
+                "frames": self.frames[-50:],
                 "eventCount": len(self.events),
                 "events": self.events[-50:],
             }
@@ -154,7 +159,8 @@ h1{font-size:24px;margin:0 0 4px}
 .value{font-size:22px;font-weight:700;margin-top:4px}
 .device{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #374151}
 .device:first-child{border-top:0}
-.pill{display:inline-block;background:#164e63;color:#67e8f9;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}
+.pill{display:inline-block;background:#164e63;color:#67e8f9;border-radius:999px;padding:3px 8px;
+font-size:12px;font-weight:700}
 pre{white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto}
 </style>
 </head>
@@ -178,7 +184,8 @@ async function refresh(){
   document.getElementById('serverSeq').textContent = state.serverSeq;
   document.getElementById('devices').innerHTML = state.devices.map(d => {
     const age = Math.max(0, Date.now()/1000 - d.lastSeen).toFixed(1);
-    return `<div class="device"><div><strong>${d.name}</strong><br><span class="sub">${d.id}</span></div><div><span class="pill">${age}s ago</span></div></div>`;
+    return `<div class="device"><div><strong>${d.name}</strong><br>
+      <span class="sub">${d.id}</span></div><div><span class="pill">${age}s ago</span></div></div>`;
   }).join('') || '<div class="sub">No devices yet</div>';
   document.getElementById('events').textContent = JSON.stringify(state.events.slice().reverse(), null, 2);
 }

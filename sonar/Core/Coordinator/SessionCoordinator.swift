@@ -19,47 +19,47 @@ final class SessionCoordinator: ObservableObject {
 
     // MARK: - Sub-systems
 
-    private let audioEngine      = AudioEngine()
-    private let bonder           = MultipathBonder()
-    private let battery          = BatteryManager.shared
-    private let signalCalc       = SignalScoreCalculator()
-    private let recorder         = LocalRecorder()
-    private let transcription    = LiveTranscriptionEngine()
-    private let privacy          = PrivacyMode.shared
-    private let spatialMixer     = SpatialMixer()
-    private let near             = NearTransport()
-    private let bluetooth        = BluetoothMeshTransport()
-    private let tailscalePath    = TailscaleTransport()
-    private let far              = FarTransport()
+    private let audioEngine = AudioEngine()
+    private let bonder = MultipathBonder()
+    private let battery = BatteryManager.shared
+    private let signalCalc = SignalScoreCalculator()
+    private let recorder = LocalRecorder()
+    private let transcription = LiveTranscriptionEngine()
+    private let privacy = PrivacyMode.shared
+    private let spatialMixer = SpatialMixer()
+    private let near = NearTransport()
+    private let bluetooth = BluetoothMeshTransport()
+    private let tailscalePath = TailscaleTransport()
+    private let far = FarTransport()
     private var simulatorRelay: SimulatorRelayTransport?
-    private let jitterBuffer     = JitterBuffer()
-    private let encoder          = OpusCoder()
-    private let decoder          = OpusCoder()
+    private let jitterBuffer = JitterBuffer()
+    private let encoder = OpusCoder()
+    private let decoder = OpusCoder()
 
     // Smart audio processing
     private let preCaptureBuffer = PreCaptureBuffer()
-    private let whisperDetector  = WhisperDetector()
-    private let smartMute        = SmartMuteDetector()
-    private let ambientSharing   = AmbientSharing()
+    private let whisperDetector = WhisperDetector()
+    private let smartMute = SmartMuteDetector()
+    private let ambientSharing = AmbientSharing()
 
     // Distance pipeline (§10/16)
-    private let rangingEngine     = NIRangingEngine()
-    private let rssiFallback      = RSSIFallback()
+    private let rangingEngine = NIRangingEngine()
+    private let rssiFallback = RSSIFallback()
     private let distancePublisher = DistancePublisher()
 
     // Profile-driven subsystems
-    private let airPods           = AirPodsController()
-    private let musicDucker       = MusicDucker()
-    private let vad               = VAD()
-    private let wakeWord          = WakeWordDetector()
-    private let agentConnector    = AgentConnector()
+    private let airPods = AirPodsController()
+    private let musicDucker = MusicDucker()
+    private let vad = VAD()
+    private let wakeWord = WakeWordDetector()
+    private let agentConnector = AgentConnector()
 
-    // Tailscale presence detector — drives `connectionType = .tailscale`
-    // when no peer-driven (simulator-relay) type is otherwise active.
-    private let tailscale         = TailscaleDetector.shared
+    /// Tailscale presence detector — drives `connectionType = .tailscale`
+    /// when no peer-driven (simulator-relay) type is otherwise active.
+    private let tailscale = TailscaleDetector.shared
 
-    // QR pairing — observes AppState.pendingPairing and reacts.
-    private let pairingService    = PairingService()
+    /// QR pairing — observes AppState.pendingPairing and reacts.
+    private let pairingService = PairingService()
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
@@ -143,18 +143,20 @@ final class SessionCoordinator: ObservableObject {
         spatialMixer.startRemotePlayer()
 
         // MARK: Distance pipeline (§10/16)
+
         distancePublisher.bind(uwb: rangingEngine, rssi: rssiFallback)
 
         // When NearTransport gets a peer's NIDiscoveryToken, start UWB ranging.
         near.localNIToken = rangingEngine.prepareLocalToken()
         near.onReceivedNIToken = { [weak self] token in
             guard let self else { return }
-            self.rangingEngine.start(with: token)
+            rangingEngine.start(with: token)
             // Publish our local token back so the peer can start ranging too.
-            self.near.localNIToken = self.rangingEngine.localToken
+            near.localNIToken = rangingEngine.localToken
         }
 
         // MARK: Distance → AppState.phase + SpatialMixer
+
         distancePublisher.$distance
             .receive(on: DispatchQueue.main)
             .sink { [weak self] distance in
@@ -172,6 +174,7 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Transport setup
+
         try? await near.start()
         try? tailscalePath.start()
         // stop() may have run during the await above. Bail out instead of
@@ -180,7 +183,12 @@ final class SessionCoordinator: ObservableObject {
         bonder.addPath(near)
         bonder.addPath(bluetooth)
         bonder.addPath(tailscalePath)
-        bonder.addPath(far)
+        let farConfig = farConfiguration()
+        far.configure(farConfig)
+        if farConfig.isStartable {
+            Task { try? await far.start() }
+            bonder.addPath(far)
+        }
 
         // Tailscale presence is advertised in the QR token. The UI only flips
         // to "Tailscale" after the TCP path itself is actually connected.
@@ -189,12 +197,14 @@ final class SessionCoordinator: ObservableObject {
         guard !Task.isCancelled else { return }
 
         // MARK: QR pairing — observe AppState.pendingPairing and translate
+
         // a successful scan into peerOnline + a targeted NearTransport invite.
         if let appState {
             pairingService.bind(appState: appState, near: near, bluetooth: bluetooth, tailscale: tailscalePath)
         }
 
         // MARK: Wake word → AI agent
+
         wakeWord.start()
         wakeWord.triggered
             .receive(on: DispatchQueue.main)
@@ -207,11 +217,12 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Profile application — apply initial profile and react to changes.
+
         applyProfile(SessionProfile.builtIn.first { $0.id == (appState?.profileID ?? "zimmer") })
 
         if let appState {
             appState.$profileID
-                .dropFirst()           // skip initial value, already applied above
+                .dropFirst() // skip initial value, already applied above
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] id in
                     let profile = SessionProfile.builtIn.first { $0.id == id }
@@ -221,39 +232,41 @@ final class SessionCoordinator: ObservableObject {
         }
 
         // MARK: SEND CHAIN: mic → pre-processing → Opus encode → bonder → transports.
+
         audioEngine.captured
             .receive(on: DispatchQueue.global(qos: .userInteractive))
-            .sink { [weak self] (_, buffer) in
+            .sink { [weak self] _, buffer in
                 guard let self else { return }
                 let rms = MicrophoneMonitor.rms(buffer)
                 Task { @MainActor [weak self] in
                     self?.appState?.inputLevelRMS = rms
                 }
-                self.preCaptureBuffer.push(buffer)
-                self.whisperDetector.process(buffer)
-                self.smartMute.process(buffer)
+                preCaptureBuffer.push(buffer)
+                whisperDetector.process(buffer)
+                smartMute.process(buffer)
                 // VAD drives music ducking when voice is detected.
-                let speaking = self.vad.feed(buffer)
+                let speaking = vad.feed(buffer)
                 Task { @MainActor [weak self] in
                     self?.musicDucker.duckOnVoice(active: speaking)
                 }
                 guard MicrophoneMonitor.shouldForwardCapturedAudio(
-                    isMuted: self.appState?.isMuted ?? false
+                    isMuted: appState?.isMuted ?? false
                 ) else {
                     return
                 }
                 if !simulatorRelayMode {
-                    self.transcription.append(buffer)
+                    transcription.append(buffer)
                 }
-                self.recorder.append(buffer)
-                self.wakeWord.feed(buffer)
-                if let data = try? self.encoder.encode(buffer) {
+                recorder.append(buffer)
+                wakeWord.feed(buffer)
+                if let data = try? encoder.encode(buffer) {
                     Task { await self.bonder.send(opusData: data) }
                 }
             }
             .store(in: &cancellables)
 
         // MARK: RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer.
+
         bonder.inboundFrames
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] frame in
@@ -263,7 +276,7 @@ final class SessionCoordinator: ObservableObject {
 
         // Drain the jitter buffer at the audio frame rate and schedule decoded PCM.
         playbackTimer = Timer.scheduledTimer(
-            withTimeInterval: Double(LatencyBudget.audioFrameMs) / 1_000.0,
+            withTimeInterval: Double(LatencyBudget.audioFrameMs) / 1000.0,
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -272,16 +285,18 @@ final class SessionCoordinator: ObservableObject {
         }
 
         // MARK: Battery tier → bonder mode + appState.
+
         battery.$tier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tier in
                 guard let self else { return }
-                self.applyBatteryTier(tier)
-                self.appState?.batteryTier = tier
+                applyBatteryTier(tier)
+                appState?.batteryTier = tier
             }
             .store(in: &cancellables)
 
         // MARK: Active paths → appState (count + per-path Set for the live icon row).
+
         bonder.$activePaths
             .receive(on: DispatchQueue.main)
             .sink { [weak self] paths in
@@ -290,6 +305,7 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Signal score → appState.
+
         signalCalc.$score
             .receive(on: DispatchQueue.main)
             .sink { [weak self] s in self?.appState?.signalScore = s }
@@ -301,22 +317,23 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Privacy mode → remove cellular path AND tear down cloud
+
         // transcription engines. Without this the comment "kills all cloud
         // connections" was a lie: OpenAI Realtime / Parakeet would keep
         // streaming PCM upstream even with privacy enabled.
         NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
             .sink { [weak self] _ in
                 guard let self else { return }
-                self.bonder.removePath(.mpquic)
-                switch self.transcription.currentEngine {
+                bonder.removePath(.mpquic)
+                switch transcription.currentEngine {
                 case .openAIRealtime, .parakeet:
-                    self.transcription.stop()
+                    transcription.stop()
                 case .appleSpeech, .local:
                     break
                 }
                 // Clear any cloud-sourced live transcript so stale text doesn't
                 // linger in the UI after the user pulls the kill switch.
-                self.appState?.transcriptSegments = []
+                appState?.transcriptSegments = []
             }
             .store(in: &cancellables)
 
@@ -423,6 +440,24 @@ final class SessionCoordinator: ObservableObject {
         }
     }
 
+    private func farConfiguration() -> FarTransport.Configuration {
+        let env = ProcessInfo.processInfo.environment
+        let liveKitURL = env["SONAR_LIVEKIT_URL"]
+            ?? UserDefaults.standard.string(forKey: "sonar.livekit.url")
+            ?? ""
+        let tokenServerURL = env["SONAR_TOKEN_SERVER_URL"]
+            ?? UserDefaults.standard.string(forKey: "sonar.tokenServer.url")
+            ?? ""
+        let roomName = env["SONAR_LIVEKIT_ROOM"]
+            ?? UserDefaults.standard.string(forKey: "sonar.livekit.room")
+            ?? "sonar-main"
+        return FarTransport.Configuration(
+            liveKitURL: liveKitURL,
+            tokenServerURL: tokenServerURL,
+            roomName: roomName
+        )
+    }
+
     private var activeProfile: SessionProfile? {
         guard let id = appState?.profileID else { return nil }
         return SessionProfile.builtIn.first { $0.id == id }
@@ -490,7 +525,7 @@ final class SessionCoordinator: ObservableObject {
         }
 
         // Encoder FEC: on for outdoor/noisy profiles, off for quiet ones.
-        let fecProfiles: Set<String> = ["roller", "festival", "club"]
+        let fecProfiles: Set = ["roller", "festival", "club"]
         encoder.fecEnabled = fecProfiles.contains(profile.id)
     }
 
@@ -498,7 +533,7 @@ final class SessionCoordinator: ObservableObject {
 
     private func applyBatteryTier(_ tier: BatteryManager.Tier) {
         switch tier {
-        case .normal, .eco:     bonder.mode = .redundant
+        case .normal, .eco: bonder.mode = .redundant
         case .saver, .critical: bonder.mode = .primaryStandby
         }
         if !tier.transcriptionEnabled { transcription.stop() }

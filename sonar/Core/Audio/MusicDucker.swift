@@ -4,7 +4,7 @@ import Foundation
 import MediaPlayer
 
 #if canImport(MusicKit)
-import MusicKit
+    import MusicKit
 #endif
 
 /// Apple Music background mix-in for Club mode. Plan §7.2 / §10/13.
@@ -20,7 +20,6 @@ import MusicKit
 /// `AVAudioMixerNode` (which requires a running engine context).
 @MainActor
 final class MusicDucker {
-
     // MARK: - State
 
     /// Observable duck level in the range [0, 1].  1.0 = full (undducked).
@@ -35,7 +34,7 @@ final class MusicDucker {
 
     // Ramp timer drives the published duckLevel for UI observers.
     private var rampTimer: DispatchSourceTimer?
-    private let stepInterval: TimeInterval = 0.020   // 20 ms steps
+    private let stepInterval: TimeInterval = 0.020 // 20 ms steps
 
     // MARK: - Enable / Disable
 
@@ -44,13 +43,15 @@ final class MusicDucker {
     func enable(targetGain: Double = 0.16) async throws {
         self.targetGain = Float(targetGain)
 
-#if canImport(MusicKit)
-        _ = await MusicAuthorization.request()
-#endif
+        #if canImport(MusicKit)
+            _ = await MusicAuthorization.request()
+        #endif
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord,
-                                mode: .voiceChat,
-                                options: [.mixWithOthers, .allowBluetoothHFP])
+        try session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.mixWithOthers, .allowBluetoothHFP]
+        )
         try session.setActive(true, options: [.notifyOthersOnDeactivation])
         isEnabled = true
 
@@ -66,7 +67,8 @@ final class MusicDucker {
         // Remove duck; the system will restore Music volume automatically.
         unduck()
         try? AVAudioSession.sharedInstance().setActive(
-            false, options: [.notifyOthersOnDeactivation])
+            false, options: [.notifyOthersOnDeactivation]
+        )
     }
 
     // MARK: - Duck / Unduck
@@ -89,7 +91,7 @@ final class MusicDucker {
     func duckOnVoice(active: Bool) {
         isVoiceDucked = active
         if active {
-            rampTo(targetGain * 0.5, duration: 0.3)   // 0.5 ≈ -6 dB
+            rampTo(targetGain * 0.5, duration: 0.3) // 0.5 ≈ -6 dB
             applySessionDucking(enabled: true)
         } else {
             rampTo(targetGain, duration: 0.8)
@@ -131,18 +133,20 @@ final class MusicDucker {
         var stepsDone = 0
 
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
-        timer.schedule(deadline: .now() + stepInterval,
-                       repeating: stepInterval,
-                       leeway: .milliseconds(2))
+        timer.schedule(
+            deadline: .now() + stepInterval,
+            repeating: stepInterval,
+            leeway: .milliseconds(2)
+        )
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             stepsDone += 1
             if stepsDone >= totalSteps {
-                self.duckLevel = target
-                self.rampTimer?.cancel()
-                self.rampTimer = nil
+                duckLevel = target
+                rampTimer?.cancel()
+                rampTimer = nil
             } else {
-                self.duckLevel = start + gainStep * Float(stepsDone)
+                duckLevel = start + gainStep * Float(stepsDone)
             }
         }
         rampTimer = timer

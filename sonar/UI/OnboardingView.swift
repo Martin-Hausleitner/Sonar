@@ -17,6 +17,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 0) {
                 // MARK: Scrollable content
+
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 28) {
                         heroSection
@@ -29,6 +30,7 @@ struct OnboardingView: View {
                 }
 
                 // MARK: Pinned bottom CTA (never scrolls away)
+
                 Divider()
                     .background(SonarTheme.separator)
 
@@ -65,8 +67,8 @@ struct OnboardingView: View {
                         .scaleEffect(radarPulse + CGFloat(i) * 0.07)
                         .animation(
                             .easeInOut(duration: 2.6 + Double(i) * 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.35),
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.35),
                             value: radarPulse
                         )
                 }
@@ -154,7 +156,6 @@ struct OnboardingView: View {
         .offset(y: appeared ? 0 : 24)
     }
 
-    @ViewBuilder
     private func permissionCard(
         icon: String,
         iconColor: Color,

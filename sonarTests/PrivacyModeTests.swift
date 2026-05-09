@@ -1,14 +1,13 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Tests for PrivacyMode.
 /// We instantiate fresh instances via init() — we do NOT use .shared
 /// to avoid cross-test state contamination.
 @MainActor
 final class PrivacyModeTests: XCTestCase {
-
-    // PrivacyMode.init() is private, so we test via the shared singleton
-    // but reset its state before each test.
+    /// PrivacyMode.init() is private, so we test via the shared singleton
+    /// but reset its state before each test.
     private var mode: PrivacyMode!
 
     override func setUp() {

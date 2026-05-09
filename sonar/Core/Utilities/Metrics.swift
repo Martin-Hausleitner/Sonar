@@ -15,18 +15,18 @@ final class Metrics: @unchecked Sendable {
 
     /// Stages in the audio pipeline. Each Frame gets a Trace with timestamps
     /// per stage, then the trace is closed and the durations are recorded.
-    enum Stage: String, Sendable, CaseIterable {
-        case captured        // mic -> AVAudioEngine tap
-        case encoded         // PCM -> Opus bytes
-        case sentOnWire      // bytes handed to MPC stream / LiveKit
-        case receivedOnWire  // bytes pulled out of MPC / LiveKit
-        case decoded         // Opus -> PCM
-        case rendered        // PCM -> AVAudio output
+    enum Stage: String, CaseIterable {
+        case captured // mic -> AVAudioEngine tap
+        case encoded // PCM -> Opus bytes
+        case sentOnWire // bytes handed to MPC stream / LiveKit
+        case receivedOnWire // bytes pulled out of MPC / LiveKit
+        case decoded // Opus -> PCM
+        case rendered // PCM -> AVAudio output
     }
 
-    struct Trace: Sendable {
+    struct Trace {
         let frameID: UInt64
-        var stamps: [Stage: UInt64] = [:]   // mach_absolute_time ticks
+        var stamps: [Stage: UInt64] = [:] // mach_absolute_time ticks
 
         mutating func mark(_ stage: Stage) {
             stamps[stage] = mach_absolute_time()
@@ -40,7 +40,9 @@ final class Metrics: @unchecked Sendable {
 
         /// Total glass-to-glass: capture → render. Returns nil if either
         /// missing (e.g. local-only echo of own voice).
-        var glassToGlassMs: Double? { elapsedMs(.captured, .rendered) }
+        var glassToGlassMs: Double? {
+            elapsedMs(.captured, .rendered)
+        }
 
         /// `mach_timebase_info` cached once.
         private static let timebase: mach_timebase_info_data_t = {
@@ -61,13 +63,15 @@ final class Metrics: @unchecked Sendable {
     private let capacity = 500
 
     func openTrace() -> UInt64 {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         nextID &+= 1
         return nextID
     }
 
     func mark(_ frameID: UInt64, _ stage: Stage) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         if let i = traces.firstIndex(where: { $0.frameID == frameID }) {
             traces[i].mark(stage)
         } else {
@@ -81,7 +85,8 @@ final class Metrics: @unchecked Sendable {
     }
 
     func snapshot() -> [Trace] {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         return traces
     }
 

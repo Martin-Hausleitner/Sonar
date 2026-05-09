@@ -12,7 +12,7 @@ final class SonarUITests: XCTestCase {
         ]
     }
 
-    func testPrimarySessionButtonsMuteAndProfilePicker() throws {
+    func testPrimarySessionButtonsMuteAndProfilePicker() {
         launchApp()
 
         XCTAssertTrue(app.buttons["Session starten"].waitForExistence(timeout: 6))
@@ -33,7 +33,7 @@ final class SonarUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Session starten"].waitForExistence(timeout: 4))
     }
 
-    func testTabsSettingsGuideAndPairingButtons() throws {
+    func testTabsSettingsGuideAndPairingButtons() {
         launchApp()
 
         app.tabBars.buttons["Transkript"].tap()
@@ -92,7 +92,7 @@ final class SonarUITests: XCTestCase {
         app.buttons["Fertig"].tap()
     }
 
-    func testProfileDetailsPairingQRCodeAndAudioVolumeControls() throws {
+    func testProfileDetailsPairingQRCodeAndAudioVolumeControls() {
         launchApp()
 
         XCTAssertTrue(app.buttons["Details zum aktiven Profil"].waitForExistence(timeout: 6))
@@ -146,7 +146,7 @@ final class SonarUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
 
         while Date() < deadline {
-            for index in 0..<buttons.count {
+            for index in 0 ..< buttons.count {
                 let button = buttons.element(boundBy: index)
                 if button.exists, button.isHittable {
                     button.tap()
@@ -206,12 +206,12 @@ final class SonarUITests: XCTestCase {
     private func waitForAnyElement(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if elements.contains(where: { $0.exists }) {
+            if elements.contains(where: \.exists) {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
-        return elements.contains(where: { $0.exists })
+        return elements.contains(where: \.exists)
     }
 
     private func isSwitchOn(_ toggle: XCUIElement) -> Bool {

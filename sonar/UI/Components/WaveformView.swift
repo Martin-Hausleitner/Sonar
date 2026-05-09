@@ -33,7 +33,7 @@ struct WaveformView: View {
 // MARK: - Preview helper
 
 private struct WaveformPreview: View {
-    @State private var samples: [Float] = (0..<32).map { _ in Float.random(in: 0.05...0.95) }
+    @State private var samples: [Float] = (0 ..< 32).map { _ in Float.random(in: 0.05 ... 0.95) }
     private let timer = Timer.publish(every: 0.12, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -43,7 +43,7 @@ private struct WaveformPreview: View {
             .background(.black)
             .onReceive(timer) { _ in
                 withAnimation {
-                    samples = (0..<32).map { _ in Float.random(in: 0.05...0.95) }
+                    samples = (0 ..< 32).map { _ in Float.random(in: 0.05 ... 0.95) }
                 }
             }
     }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 enum SonarTheme {
@@ -10,17 +10,45 @@ enum SonarTheme {
     static let horizontalPadding: CGFloat = 20
 
     #if canImport(UIKit)
-    static var appBackground: Color { Color(uiColor: .systemBackground) }
-    static var groupedBackground: Color { Color(uiColor: .systemGroupedBackground) }
-    static var secondaryBackground: Color { Color(uiColor: .secondarySystemGroupedBackground) }
-    static var tertiaryBackground: Color { Color(uiColor: .tertiarySystemGroupedBackground) }
-    static var separator: Color { Color(uiColor: .separator).opacity(0.35) }
+        static var appBackground: Color {
+            Color(uiColor: .systemBackground)
+        }
+
+        static var groupedBackground: Color {
+            Color(uiColor: .systemGroupedBackground)
+        }
+
+        static var secondaryBackground: Color {
+            Color(uiColor: .secondarySystemGroupedBackground)
+        }
+
+        static var tertiaryBackground: Color {
+            Color(uiColor: .tertiarySystemGroupedBackground)
+        }
+
+        static var separator: Color {
+            Color(uiColor: .separator).opacity(0.35)
+        }
     #else
-    static var appBackground: Color { Color(.black) }
-    static var groupedBackground: Color { Color(.black) }
-    static var secondaryBackground: Color { Color(.secondary.opacity(0.16)) }
-    static var tertiaryBackground: Color { Color(.secondary.opacity(0.24)) }
-    static var separator: Color { Color.secondary.opacity(0.25) }
+        static var appBackground: Color {
+            Color(.black)
+        }
+
+        static var groupedBackground: Color {
+            Color(.black)
+        }
+
+        static var secondaryBackground: Color {
+            Color(.secondary.opacity(0.16))
+        }
+
+        static var tertiaryBackground: Color {
+            Color(.secondary.opacity(0.24))
+        }
+
+        static var separator: Color {
+            Color.secondary.opacity(0.25)
+        }
     #endif
 
     static var screenBackground: LinearGradient {

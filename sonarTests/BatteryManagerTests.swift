@@ -1,11 +1,10 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Tests for BatteryManager.Tier only.
 /// BatteryManager.shared is @MainActor and requires UIKit hardware,
 /// so we only test the pure value-type enum extensions here.
 final class BatteryManagerTests: XCTestCase {
-
     // MARK: - activePaths
 
     func testNormalTierHasFourActivePaths() {
@@ -73,12 +72,12 @@ final class BatteryManagerTests: XCTestCase {
 
     func testOpusBitrateDecreasing() {
         let normal = BatteryManager.Tier.normal.opusBitrateKbps
-        let eco    = BatteryManager.Tier.eco.opusBitrateKbps
-        let saver  = BatteryManager.Tier.saver.opusBitrateKbps
+        let eco = BatteryManager.Tier.eco.opusBitrateKbps
+        let saver = BatteryManager.Tier.saver.opusBitrateKbps
 
-        XCTAssertGreaterThan(normal, eco,   "normal bitrate should exceed eco")
-        XCTAssertGreaterThan(eco,    saver, "eco bitrate should exceed saver")
-        XCTAssertGreaterThan(saver,  0,     "saver bitrate should be positive")
+        XCTAssertGreaterThan(normal, eco, "normal bitrate should exceed eco")
+        XCTAssertGreaterThan(eco, saver, "eco bitrate should exceed saver")
+        XCTAssertGreaterThan(saver, 0, "saver bitrate should be positive")
     }
 
     func testNormalBitrateIs32kbps() {

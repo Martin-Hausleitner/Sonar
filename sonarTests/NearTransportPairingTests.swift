@@ -1,6 +1,5 @@
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 @MainActor
 final class NearTransportPairingTests: XCTestCase {
@@ -34,6 +33,36 @@ final class NearTransportPairingTests: XCTestCase {
 
         XCTAssertTrue(hint.matches(displayName: "Alex iPhone", discoveryInfo: nil))
         XCTAssertTrue(hint.matches(displayName: "Different", discoveryInfo: ["host": "alex.local"]))
+    }
+
+    func testInboundInvitationWithoutPairingHintIsAcceptedForAutoDiscovery() {
+        XCTAssertTrue(NearTransport.shouldAcceptInvitation(
+            currentPairingHint: nil,
+            displayName: "Alex iPhone",
+            discoveryInfo: nil
+        ))
+    }
+
+    func testInboundInvitationWithMismatchedPairingHintIsRejected() {
+        let token = makeToken(id: "peer-A", name: "Alex iPhone", host: "alex.local")
+        let hint = NearTransport.PairingHint(token: token)
+
+        XCTAssertFalse(NearTransport.shouldAcceptInvitation(
+            currentPairingHint: hint,
+            displayName: "Mallory iPhone",
+            discoveryInfo: ["peerID": "peer-B", "host": "mallory.local"]
+        ))
+    }
+
+    func testInboundInvitationWithMatchingPairingHintIsAccepted() {
+        let token = makeToken(id: "peer-A", name: "Alex iPhone", host: "alex.local")
+        let hint = NearTransport.PairingHint(token: token)
+
+        XCTAssertTrue(NearTransport.shouldAcceptInvitation(
+            currentPairingHint: hint,
+            displayName: "Anything",
+            discoveryInfo: ["peerID": "peer-A"]
+        ))
     }
 
     func testPairingServiceAppliesAcceptedTokenToNearTransport() {

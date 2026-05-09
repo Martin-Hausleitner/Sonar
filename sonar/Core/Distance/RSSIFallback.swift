@@ -12,7 +12,6 @@ import Foundation
 /// A simple exponential moving average smooths the noisy per-scan RSSI values
 /// before conversion so that distance doesn't jitter on every advertisement.
 final class RSSIFallback: NSObject {
-
     // MARK: - Public
 
     /// Estimated distance in metres, or nil when no partner is visible.
@@ -35,7 +34,7 @@ final class RSSIFallback: NSObject {
     // MARK: - Private state
 
     private var central: CBCentralManager?
-    private var smoothedRSSI: Double? = nil
+    private var smoothedRSSI: Double?
     private let lock = NSLock()
 
     // MARK: - Lifecycle
@@ -49,7 +48,9 @@ final class RSSIFallback: NSObject {
     func stop() {
         central?.stopScan()
         central = nil
-        lock.lock(); smoothedRSSI = nil; lock.unlock()
+        lock.lock()
+        smoothedRSSI = nil
+        lock.unlock()
         distance.send(nil)
     }
 
@@ -67,7 +68,7 @@ final class RSSIFallback: NSObject {
         } else {
             smoothedRSSI = rssi
         }
-        let metres = rssiToMetres(smoothedRSSI!)   // safe: set above in same lock
+        let metres = rssiToMetres(smoothedRSSI!) // safe: set above in same lock
         lock.unlock()
         distance.send(metres)
     }
@@ -100,7 +101,7 @@ extension RSSIFallback: CBCentralManagerDelegate {
         let rssiValue = RSSI.doubleValue
         // Ignore readings that are clearly out of range or invalid (CoreBluetooth
         // returns 127 when RSSI cannot be read).
-        guard rssiValue < 0 && rssiValue > -100 else { return }
+        guard rssiValue < 0, rssiValue > -100 else { return }
         updateDistance(rssi: rssiValue)
     }
 }

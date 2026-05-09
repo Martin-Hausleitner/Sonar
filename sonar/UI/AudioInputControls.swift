@@ -7,7 +7,7 @@ struct AudioLevelMeter: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 3) {
-            ForEach(0..<5, id: \.self) { index in
+            ForEach(0 ..< 5, id: \.self) { index in
                 Capsule()
                     .fill(index < Self.activeBarCount(for: rms) ? activeColor : Color.secondary.opacity(0.18))
                     .frame(width: 5, height: heights[index])

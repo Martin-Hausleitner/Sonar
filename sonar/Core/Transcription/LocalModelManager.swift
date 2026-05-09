@@ -1,21 +1,20 @@
-import Foundation
 import Combine
+import Foundation
 
 #if canImport(WhisperKit)
-import WhisperKit
+    import WhisperKit
 #endif
 
 /// Manages on-device Whisper model downloads and local storage.
 /// Models are stored in Application Support/SonarModels/ and survive app updates.
 @MainActor
 final class LocalModelManager: ObservableObject {
-
     static let shared = LocalModelManager()
 
     private static let legacyModelIDMap = [
         "ggml-tiny-en": "whisperkit-tiny-en",
         "ggml-base-en": "whisperkit-base-en",
-        "ggml-small-en": "whisperkit-small-en",
+        "ggml-small-en": "whisperkit-small-en"
     ]
 
     struct ModelInfo: Identifiable {
@@ -24,11 +23,15 @@ final class LocalModelManager: ObservableObject {
         let sourceURL: URL
         let approxMB: Int
         let whisperKitVariant: String
-        var metadataFilename: String { "\(id).json" }
+        var metadataFilename: String {
+            "\(id).json"
+        }
 
         /// Legacy tests and cleanup still refer to a model "filename"; keep this
         /// as the metadata filename because WhisperKit models are directories.
-        var filename: String { metadataFilename }
+        var filename: String {
+            metadataFilename
+        }
     }
 
     enum DownloadState: Equatable {
@@ -59,7 +62,7 @@ final class LocalModelManager: ObservableObject {
             sourceURL: URL(string: "https://huggingface.co/argmaxinc/whisperkit-coreml/tree/main/openai_whisper-small.en")!,
             approxMB: 466,
             whisperKitVariant: "openai_whisper-small.en"
-        ),
+        )
     ]
 
     @Published var states: [String: DownloadState] = [:]
@@ -100,29 +103,29 @@ final class LocalModelManager: ObservableObject {
         Task {
             do {
                 #if canImport(WhisperKit)
-                let folder = try await WhisperKit.download(
-                    variant: model.whisperKitVariant,
-                    downloadBase: modelsDir,
-                    progressCallback: { [weak self] progress in
-                        let fraction = progress.fractionCompleted.isFinite ? progress.fractionCompleted : 0
-                        Task { @MainActor [weak self] in
-                            self?.states[model.id] = .downloading(fraction)
-                        }
-                    }
-                )
-                let size = folderSize(folder)
-                try writeMetadata(
-                    LocalModelMetadata(
-                        modelID: model.id,
+                    let folder = try await WhisperKit.download(
                         variant: model.whisperKitVariant,
-                        folderPath: folder.path,
-                        size: size
-                    ),
-                    for: model
-                )
-                states[model.id] = .ready(size)
+                        downloadBase: modelsDir,
+                        progressCallback: { [weak self] progress in
+                            let fraction = progress.fractionCompleted.isFinite ? progress.fractionCompleted : 0
+                            Task { @MainActor [weak self] in
+                                self?.states[model.id] = .downloading(fraction)
+                            }
+                        }
+                    )
+                    let size = folderSize(folder)
+                    try writeMetadata(
+                        LocalModelMetadata(
+                            modelID: model.id,
+                            variant: model.whisperKitVariant,
+                            folderPath: folder.path,
+                            size: size
+                        ),
+                        for: model
+                    )
+                    states[model.id] = .ready(size)
                 #else
-                states[model.id] = .failed("WhisperKit ist nicht verfügbar")
+                    states[model.id] = .failed("WhisperKit ist nicht verfügbar")
                 #endif
             } catch {
                 states[model.id] = .failed(error.localizedDescription)

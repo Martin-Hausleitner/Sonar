@@ -171,12 +171,24 @@ struct LiveDataSheet: View {
     private var sessionCard: some View {
         GlassCard {
             HStack(spacing: 16) {
-                sessionStatus(icon: "circle.fill", label: "Aufnahme",
-                              active: appState.isRecording, activeColor: .red)
-                sessionStatus(icon: "captions.bubble", label: "Transkript",
-                              active: !appState.transcriptSegments.isEmpty, activeColor: .blue)
-                sessionStatus(icon: "lock.shield", label: "Privacy",
-                              active: appState.privacyModeActive, activeColor: .orange)
+                sessionStatus(
+                    icon: "circle.fill",
+                    label: "Aufnahme",
+                    active: appState.isRecording,
+                    activeColor: .red
+                )
+                sessionStatus(
+                    icon: "captions.bubble",
+                    label: "Transkript",
+                    active: !appState.transcriptSegments.isEmpty,
+                    activeColor: .blue
+                )
+                sessionStatus(
+                    icon: "lock.shield",
+                    label: "Privacy",
+                    active: appState.privacyModeActive,
+                    activeColor: .orange
+                )
             }
         }
     }
@@ -198,45 +210,45 @@ struct LiveDataSheet: View {
 
     private var signalColor: Color {
         switch appState.signalScore {
-        case 80...100: .green
-        case 60..<80:  .yellow
-        case 40..<60:  .orange
-        default:       .red
+        case 80 ... 100: .green
+        case 60 ..< 80: .yellow
+        case 40 ..< 60: .orange
+        default: .red
         }
     }
 
     private var batteryTierLabel: String {
         switch appState.batteryTier {
-        case .normal:   "Normal"
-        case .eco:      "Eco"
-        case .saver:    "Saver"
+        case .normal: "Normal"
+        case .eco: "Eco"
+        case .saver: "Saver"
         case .critical: "Kritisch"
         }
     }
 
     private var batteryDescription: String {
         switch appState.batteryTier {
-        case .normal:   "~6 %/h · 4 Pfade aktiv"
-        case .eco:      "~4 %/h · 2 Pfade aktiv"
-        case .saver:    "~2.5 %/h · 1 Pfad aktiv"
+        case .normal: "~6 %/h · 4 Pfade aktiv"
+        case .eco: "~4 %/h · 2 Pfade aktiv"
+        case .saver: "~2.5 %/h · 1 Pfad aktiv"
         case .critical: "~1 %/h · PTT erzwungen"
         }
     }
 
     private var batteryColor: Color {
         switch appState.batteryTier {
-        case .normal:   .green
-        case .eco:      .yellow
-        case .saver:    .orange
+        case .normal: .green
+        case .eco: .yellow
+        case .saver: .orange
         case .critical: .red
         }
     }
 
     private var batteryFill: CGFloat {
         switch appState.batteryTier {
-        case .normal:   0.95
-        case .eco:      0.65
-        case .saver:    0.3
+        case .normal: 0.95
+        case .eco: 0.65
+        case .saver: 0.3
         case .critical: 0.08
         }
     }

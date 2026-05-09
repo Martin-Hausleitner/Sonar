@@ -1,7 +1,6 @@
 import Combine
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 /// Tests for DistancePublisher state and RSSIFallback math.
 ///
@@ -12,7 +11,6 @@ import XCTest
 ///   • GATT UUID format validity
 @MainActor
 final class DistancePublisherTests: XCTestCase {
-
     // MARK: - Initial state
 
     func testInitialDistanceIsNil() {
@@ -26,8 +24,8 @@ final class DistancePublisherTests: XCTestCase {
     // MARK: - Bind wires up publishers without crashing
 
     func testBindDoesNotCrash() {
-        let dp   = DistancePublisher()
-        let uwb  = NIRangingEngine()
+        let dp = DistancePublisher()
+        let uwb = NIRangingEngine()
         let rssi = RSSIFallback()
         // bind() wires Combine subscriptions — just ensure no exception/crash.
         dp.bind(uwb: uwb, rssi: rssi)
@@ -35,6 +33,7 @@ final class DistancePublisherTests: XCTestCase {
     }
 
     // MARK: - RSSI → distance math (log-distance path-loss model)
+
     // Mirrors the private formula in RSSIFallback: d = 10^((txPower-RSSI)/(10*n))
     // txPower = -59 dBm, n = 2.0
 
@@ -64,8 +63,10 @@ final class DistancePublisherTests: XCTestCase {
     // MARK: - GATT UUID format invariants
 
     func testServiceUUIDIsValidRFC4122() {
-        XCTAssertNotNil(UUID(uuidString: "A7F3E2B1-4C8D-4F9A-B6E0-1D2C3F4A5B6C"),
-                        "RSSIFallback and BluetoothMeshTransport must share the same UUID")
+        XCTAssertNotNil(
+            UUID(uuidString: "A7F3E2B1-4C8D-4F9A-B6E0-1D2C3F4A5B6C"),
+            "RSSIFallback and BluetoothMeshTransport must share the same UUID"
+        )
     }
 
     func testAudioCharUUIDIsValidRFC4122() {

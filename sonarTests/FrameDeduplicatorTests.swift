@@ -1,8 +1,7 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class FrameDeduplicatorTests: XCTestCase {
-
     private func makeFrame(seq: UInt32) -> AudioFrame {
         AudioFrame(seq: seq, timestamp: 0, payload: Data([0x01]))
     }
@@ -29,15 +28,17 @@ final class FrameDeduplicatorTests: XCTestCase {
     func testDuplicateDifferentPayloadSameSeqIsRejected() {
         let dedup = FrameDeduplicator()
         XCTAssertNotNil(dedup.receive(AudioFrame(seq: 10, payload: Data([0xAA]))))
-        XCTAssertNil(dedup.receive(AudioFrame(seq: 10, payload: Data([0xBB]))),
-                     "Same seq with different payload should still be rejected")
+        XCTAssertNil(
+            dedup.receive(AudioFrame(seq: 10, payload: Data([0xBB]))),
+            "Same seq with different payload should still be rejected"
+        )
     }
 
     // MARK: - Different seq numbers are all allowed
 
     func testDifferentSeqsAllPass() {
         let dedup = FrameDeduplicator()
-        for seq in UInt32(0)..<UInt32(10) {
+        for seq in UInt32(0) ..< UInt32(10) {
             let result = dedup.receive(makeFrame(seq: seq))
             XCTAssertNotNil(result, "Frame with seq \(seq) should pass")
         }
@@ -50,20 +51,24 @@ final class FrameDeduplicatorTests: XCTestCase {
         let dedup = FrameDeduplicator(capacity: capacity)
 
         // Fill the deduplicator to capacity
-        for seq in UInt32(0)..<UInt32(capacity) {
+        for seq in UInt32(0) ..< UInt32(capacity) {
             XCTAssertNotNil(dedup.receive(makeFrame(seq: seq)))
         }
 
         // seq 0 is still remembered; sending again should be rejected
-        XCTAssertNil(dedup.receive(makeFrame(seq: 0)),
-                     "seq 0 should still be in the seen-set (capacity not exceeded yet)")
+        XCTAssertNil(
+            dedup.receive(makeFrame(seq: 0)),
+            "seq 0 should still be in the seen-set (capacity not exceeded yet)"
+        )
 
         // Adding one more (seq = capacity) causes eviction of seq 0
         XCTAssertNotNil(dedup.receive(makeFrame(seq: UInt32(capacity))))
 
         // Now seq 0 is forgotten and should be allowed again
-        XCTAssertNotNil(dedup.receive(makeFrame(seq: 0)),
-                        "After eviction seq 0 should be allowed through again")
+        XCTAssertNotNil(
+            dedup.receive(makeFrame(seq: 0)),
+            "After eviction seq 0 should be allowed through again"
+        )
     }
 
     func testCapacityEvictionFIFOOrder() {
@@ -71,7 +76,7 @@ final class FrameDeduplicatorTests: XCTestCase {
         let dedup = FrameDeduplicator(capacity: capacity)
 
         // Insert seqs 0, 1, 2
-        for seq in UInt32(0)..<UInt32(capacity) {
+        for seq in UInt32(0) ..< UInt32(capacity) {
             _ = dedup.receive(makeFrame(seq: seq))
         }
         // Insert seq 3 → evicts seq 0
@@ -89,19 +94,23 @@ final class FrameDeduplicatorTests: XCTestCase {
         _ = dedup.receive(makeFrame(seq: 99))
         dedup.reset()
         // After reset seq 99 should pass through again
-        XCTAssertNotNil(dedup.receive(makeFrame(seq: 99)),
-                        "After reset, previously seen seq should be accepted")
+        XCTAssertNotNil(
+            dedup.receive(makeFrame(seq: 99)),
+            "After reset, previously seen seq should be accepted"
+        )
     }
 
     func testResetAllowsAllSeqsAgain() {
         let dedup = FrameDeduplicator()
-        for seq in UInt32(0)..<UInt32(20) {
+        for seq in UInt32(0) ..< UInt32(20) {
             _ = dedup.receive(makeFrame(seq: seq))
         }
         dedup.reset()
-        for seq in UInt32(0)..<UInt32(20) {
-            XCTAssertNotNil(dedup.receive(makeFrame(seq: seq)),
-                            "After reset all seqs should be accepted")
+        for seq in UInt32(0) ..< UInt32(20) {
+            XCTAssertNotNil(
+                dedup.receive(makeFrame(seq: seq)),
+                "After reset all seqs should be accepted"
+            )
         }
     }
 }

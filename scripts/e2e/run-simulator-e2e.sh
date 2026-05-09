@@ -119,12 +119,16 @@ with open(out_path, "w", encoding="utf-8") as handle:
     json.dump(state, handle, indent=2, sort_keys=True)
 if len(state.get("devices", [])) < 2:
     raise SystemExit(f"expected 2 relay devices, got {len(state.get('devices', []))}")
-print(json.dumps({
-    "devices": [d["name"] for d in state["devices"]],
-    "frameCount": state.get("frameCount", 0),
-    "serverSeq": state.get("serverSeq", 0),
-}, sort_keys=True))
 PY
+
+EXPECTED_A_ID="${EXPECTED_A_ID:-SIM-A-${DEVICE_A:0:6}}"
+EXPECTED_B_ID="${EXPECTED_B_ID:-SIM-B-${DEVICE_B:0:6}}"
+python3 scripts/e2e/assert_relay_state.py \
+  "$OUT_DIR/state.json" \
+  --expected-a-id "$EXPECTED_A_ID" \
+  --expected-b-id "$EXPECTED_B_ID" \
+  --expected-a-name SIM-A \
+  --expected-b-name SIM-B
 
 xcrun simctl io "$DEVICE_A" screenshot --type=png "$OUT_DIR_ABS/screens/SIM-A-session.png" 2>&1
 xcrun simctl io "$DEVICE_B" screenshot --type=png "$OUT_DIR_ABS/screens/SIM-B-session.png" 2>&1

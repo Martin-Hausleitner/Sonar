@@ -6,10 +6,10 @@ import Foundation
 /// observes the change and:
 ///
 /// 1. Validates the token's TTL (rejects anything older than 5 minutes).
-/// 2. Mirrors `id` / `name` into AppState's peer fields so the UI immediately
-///    reflects "paired" — even before the actual transport handshake completes.
-/// 3. Passes the token to `NearTransport` so Multipeer discovery only invites
-///    the intended peer when the QR target appears.
+/// 2. Mirrors `id` / `name` into AppState's peer fields as pairing intent while
+///    keeping online state behind real transport signals.
+/// 3. Passes the token to the transports so discovery can target the scanned
+///    peer where the transport supports it.
 ///
 /// MainActor-isolated; the Combine subscription is torn down on `deinit`.
 @MainActor
@@ -80,6 +80,10 @@ final class PairingService {
         if age > Self.tokenTTL {
             Log.app.warning("Pairing token expired")
             appState.pendingPairing = nil
+            appState.peerName = nil
+            appState.peerID = nil
+            appState.peerOnline = false
+            appState.peerLastSeen = nil
             return
         }
 
@@ -87,15 +91,13 @@ final class PairingService {
             "PairingService accepted token id=\(token.id, privacy: .public) name=\(token.name, privacy: .public) host=\(token.host, privacy: .public)"
         )
 
-        // Optimistic UI: surface "paired" immediately. The actual transport
-        // handshake (Multipeer, BLE) lands later via NearTransport / BondedPath
-        // signals which will overwrite peerOnline if the connection drops.
         appState.peerName = token.name
         appState.peerID = token.id
-        appState.peerOnline = true
-        appState.peerLastSeen = now()
+        appState.peerOnline = false
+        appState.peerLastSeen = nil
 
         near?.applyPairingToken(token)
+        bluetooth?.applyPairingToken(token)
         tailscale?.applyPairingToken(token)
 
         // Keep a NotificationCenter event for diagnostics and older observers.
@@ -106,7 +108,7 @@ final class PairingService {
                 userInfo: [
                     "host": token.host,
                     "bonjour": token.bonjour,
-                    "peerID": token.id,
+                    "peerID": token.id
                 ]
             )
         }

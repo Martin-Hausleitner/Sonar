@@ -1,5 +1,5 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Tests for `TailscaleDetector.isInCGNATRange(_:)` — pure CGNAT-membership
 /// logic. We cannot deterministically test the live `getifaddrs(3)` walk
@@ -7,7 +7,6 @@ import XCTest
 /// so we focus on the membership predicate that gates which interfaces
 /// count as Tailscale.
 final class TailscaleDetectorTests: XCTestCase {
-
     // MARK: - Inside the 100.64.0.0/10 block (Tailscale CGNAT)
 
     func testCGNATLowBoundary() {
@@ -61,8 +60,8 @@ final class TailscaleDetectorTests: XCTestCase {
         XCTAssertFalse(TailscaleDetector.isInCGNATRange("100.64.0"))
         XCTAssertFalse(TailscaleDetector.isInCGNATRange("100.64.0.0.1"))
         XCTAssertFalse(TailscaleDetector.isInCGNATRange("not-an-ip"))
-        XCTAssertFalse(TailscaleDetector.isInCGNATRange("256.64.0.1"))      // first octet overflow
-        XCTAssertFalse(TailscaleDetector.isInCGNATRange("100.999.0.1"))     // second octet overflow
+        XCTAssertFalse(TailscaleDetector.isInCGNATRange("256.64.0.1")) // first octet overflow
+        XCTAssertFalse(TailscaleDetector.isInCGNATRange("100.999.0.1")) // second octet overflow
     }
 
     // MARK: - IPv6 not supported (Tailscale's 4via6 still presents IPv4)

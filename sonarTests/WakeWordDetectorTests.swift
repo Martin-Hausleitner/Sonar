@@ -1,25 +1,30 @@
 import AVFoundation
+@testable import Sonar
 import XCTest
 
-@testable import Sonar
-
 final class WakeWordDetectorTests: XCTestCase {
-
     // MARK: - Helpers
 
-    private func makePCMBuffer(rms: Float, sampleRate: Double = 16_000, frameCount: Int = 160) -> AVAudioPCMBuffer {
+    private func makePCMBuffer(rms: Float, sampleRate: Double = 16000, frameCount: Int = 160) -> AVAudioPCMBuffer {
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount))!
         buf.frameLength = AVAudioFrameCount(frameCount)
         let ptr = buf.floatChannelData![0]
         // Fill with a constant amplitude that produces the requested RMS.
         let amp = rms
-        for i in 0..<frameCount { ptr[i] = (i % 2 == 0) ? amp : -amp }
+        for i in 0 ..< frameCount {
+            ptr[i] = (i % 2 == 0) ? amp : -amp
+        }
         return buf
     }
 
-    private func silentBuffer() -> AVAudioPCMBuffer { makePCMBuffer(rms: 0.001) }
-    private func loudBuffer()  -> AVAudioPCMBuffer { makePCMBuffer(rms: 0.10)  }
+    private func silentBuffer() -> AVAudioPCMBuffer {
+        makePCMBuffer(rms: 0.001)
+    }
+
+    private func loudBuffer() -> AVAudioPCMBuffer {
+        makePCMBuffer(rms: 0.10)
+    }
 
     // MARK: - Tests
 
@@ -30,7 +35,9 @@ final class WakeWordDetectorTests: XCTestCase {
         var fired = false
         let sub = detector.triggered.sink { fired = true }
 
-        for _ in 0..<20 { detector.feed(silentBuffer()) }
+        for _ in 0 ..< 20 {
+            detector.feed(silentBuffer())
+        }
 
         XCTAssertFalse(fired)
         sub.cancel()
@@ -43,8 +50,8 @@ final class WakeWordDetectorTests: XCTestCase {
         var count = 0
         let sub = detector.triggered.sink { count += 1 }
 
-        detector.feed(loudBuffer())   // first spike
-        detector.feed(loudBuffer())   // second spike — within window
+        detector.feed(loudBuffer()) // first spike
+        detector.feed(loudBuffer()) // second spike — within window
 
         XCTAssertEqual(count, 1)
         sub.cancel()
@@ -57,7 +64,7 @@ final class WakeWordDetectorTests: XCTestCase {
         var fired = false
         let sub = detector.triggered.sink { fired = true }
 
-        detector.feed(loudBuffer())   // only one spike
+        detector.feed(loudBuffer()) // only one spike
 
         XCTAssertFalse(fired)
         sub.cancel()
@@ -117,9 +124,9 @@ final class WakeWordDetectorTests: XCTestCase {
         sub.cancel()
     }
 
-    func testEmptyBufferIsIgnored() {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
-        let empty = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 0)!
+    func testEmptyBufferIsIgnored() throws {
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1))
+        let empty = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 0))
         empty.frameLength = 0
 
         let detector = WakeWordDetector()

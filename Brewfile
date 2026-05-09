@@ -1,0 +1,6 @@
+brew "actionlint"
+brew "ruff"
+brew "shellcheck"
+brew "swiftformat"
+brew "swiftlint"
+brew "yamllint"

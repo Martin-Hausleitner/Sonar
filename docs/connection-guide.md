@@ -14,7 +14,7 @@ Priorität   Pfad         Latenz    Reichweite   Voraussetzung
    1        AWDL         ~3 ms     ~30 m        WLAN an, gleiches AWDL-Mesh
    2        BLE GATT     ~30 ms    ~10 m        Bluetooth an
    3        Tailscale    ~50 ms    global       beide im selben Tailnet
-   4        MPQUIC       ~80 ms    global       Internet erreichbar
+   4        Internet     ~80 ms    global       LiveKit + Token-Server konfiguriert
 ```
 
 `MultipathBonder` aggregiert alle aktiven Pfade. Im `redundant`-Modus wird auf allen Pfaden gleichzeitig gesendet, der `FrameDeduplicator` auf der Empfangsseite verwirft Duplikate. Im `primaryStandby`-Modus wird nur der schnellste aktive Pfad bedient — Akku-schonend, aber kein Failover ohne Reconnect.
@@ -46,7 +46,7 @@ Der Empfänger füttert das Token in `NISession.run(_:)` und startet UWB-Ranging
 bonder.send(frame, mode: .redundant)
 //   ├─► NearTransport.send(frame)        // AWDL
 //   ├─► BluetoothMeshTransport.send(frame) // BLE
-//   └─► FarTransport.send(frame)          // MPQUIC + LiveKit
+//   └─► FarTransport.send(frame)          // LiveKit data channel
 ```
 
 Der `FrameDeduplicator` hält ein `Set<UInt32>` der zuletzt gesehenen Sequenz-IDs (Größe ~256). Identische Sequenzen werden nach dem ersten Empfang verworfen.
@@ -83,7 +83,7 @@ Quick-Check via Web:
 
 ### 3.3 Sonar starten
 
-Beide Geräte: Sonar öffnen. `FarTransport` testet die Tailscale-IP des Peers per QUIC-Handshake. Bei Erfolg meldet die TopBar **`Tailscale`** als aktiven Pfad.
+Beide Geräte: Sonar öffnen. `TailscaleTransport` testet die Tailscale-IP des Peers per TCP-Handshake. Bei Erfolg meldet die TopBar **`Tailscale`** als aktiven Pfad.
 
 ### 3.4 Stolperfallen
 
@@ -91,7 +91,7 @@ Beide Geräte: Sonar öffnen. `FarTransport` testet die Tailscale-IP des Peers p
 |---|---|---|
 | **Different Tailnets** | Auf Gerät A Login mit Google, auf Gerät B mit GitHub → Tailscale legt zwei getrennte Tailnets an, Geräte sehen sich nie. | Auf beiden Geräten ausloggen, mit **demselben** Provider neu einloggen. |
 | MagicDNS deaktiviert | Geräte haben IP, aber keine Auflösung von `<host>.tail-scale.ts.net`. | Im Admin-Panel "DNS" → MagicDNS aktivieren. |
-| Exit Node aktiv | Gerät A routet allen Traffic über Gerät B → AWDL-Pfad bricht. | Exit Node deaktivieren, sonst dominiert MPQUIC. |
+| Exit Node aktiv | Gerät A routet allen Traffic über Gerät B → AWDL-Pfad bricht. | Exit Node deaktivieren, sonst dominiert der Internet-Pfad. |
 | Background killed | iOS hat Tailscale im Hintergrund beendet. | Tailscale erneut öffnen, "Connect" tippen. |
 | ACLs blockieren Port | Tailscale ACLs lassen QUIC-Port nicht durch. | Default-ACL `accept *:*` zwischen den eigenen Geräten genügt. |
 
@@ -155,6 +155,10 @@ Wenn keine Verbindung zustande kommt, der Reihe nach:
 [ ] Im Zweifel: Sonar auf beiden Geräten beenden (Force-Quit) und neu starten.
 ```
 
-Detaillierte Logs im `Diagnostics`-Tab der App. Pfad-Status (AWDL/BLE/Tailscale/MPQUIC) und letzte Verbindungs-Events sind dort live einsehbar.
+Detaillierte Logs im `Diagnostics`-Tab der App. Pfad-Status (AWDL/BLE/Tailscale/Internet) und letzte Verbindungs-Events sind dort live einsehbar.
 
 Für QR-basiertes manuelles Pairing siehe [`docs/pairing.md`](pairing.md).
+
+Für den physischen Nachweis auf zwei echten iPhones siehe [`docs/hardware-connection-verification.md`](hardware-connection-verification.md).
+
+Internet: LiveKit data channel via `FarTransport`, enabled only when `SONAR_LIVEKIT_URL` and `SONAR_TOKEN_SERVER_URL` are configured. Raw MPQUIC exists as experimental code and is not part of the default session path.

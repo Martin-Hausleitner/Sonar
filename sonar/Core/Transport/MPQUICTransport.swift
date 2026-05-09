@@ -2,25 +2,35 @@ import Combine
 import Foundation
 import Network
 
-/// Cellular transport via MPQUIC / Multipath TCP on Network.framework. §2.2 Pfad 3.
-/// Uses NWConnection with .multipath service type for iOS 17+ MPQUIC support (RFC 9440).
+/// Experimental raw QUIC path.
+/// Not wired into SessionCoordinator. Production internet transport is FarTransport
+/// via LiveKit data channel because it provides room membership, NAT traversal,
+/// and a server-side token flow.
 final class MPQUICTransport: BondedPath {
     let id: MultipathBonder.PathID = .mpquic
 
     private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
     private let inboundSubject = PassthroughSubject<AudioFrame, Never>()
 
-    var isConnected: AnyPublisher<Bool, Never> { connectedSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundSubject.eraseToAnyPublisher() }
+    var isConnected: AnyPublisher<Bool, Never> {
+        connectedSubject.eraseToAnyPublisher()
+    }
+
+    var inboundFrames: AnyPublisher<AudioFrame, Never> {
+        inboundSubject.eraseToAnyPublisher()
+    }
+
     /// Cellular is most expensive in eco mode.
-    var estimatedCostPerByte: Double { 1.0 }
+    var estimatedCostPerByte: Double {
+        1.0
+    }
 
     private var connection: NWConnection?
     private let endpoint: NWEndpoint
     private let queue = DispatchQueue(label: "sonar.mpquic", qos: .userInteractive)
 
     init(host: String, port: UInt16) {
-        self.endpoint = .hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
+        endpoint = .hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
     }
 
     func connect() {
@@ -32,10 +42,10 @@ final class MPQUICTransport: BondedPath {
             guard let self else { return }
             switch state {
             case .ready:
-                self.connectedSubject.send(true)
-                self.receiveLoop(conn)
+                connectedSubject.send(true)
+                receiveLoop(conn)
             case .failed, .cancelled:
-                self.connectedSubject.send(false)
+                connectedSubject.send(false)
             default: break
             }
         }
@@ -60,7 +70,7 @@ final class MPQUICTransport: BondedPath {
             if let data, let frame = AudioFrame(wireData: data) {
                 self?.inboundSubject.send(frame)
             }
-            if error == nil && !isComplete {
+            if error == nil, !isComplete {
                 self?.receiveLoop(conn)
             }
         }

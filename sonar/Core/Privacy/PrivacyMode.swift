@@ -28,6 +28,6 @@ final class PrivacyMode: ObservableObject {
 }
 
 extension Notification.Name {
-    static let sonarPrivacyModeActivated   = Notification.Name("sonar.privacyMode.activated")
+    static let sonarPrivacyModeActivated = Notification.Name("sonar.privacyMode.activated")
     static let sonarPrivacyModeDeactivated = Notification.Name("sonar.privacyMode.deactivated")
 }

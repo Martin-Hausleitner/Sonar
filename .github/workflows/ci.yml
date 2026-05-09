@@ -112,10 +112,12 @@ jobs:
             tail -80 xcodegen.log 2>/dev/null || echo "(no xcodegen.log)"
             echo
             echo "## Errors and warnings from build (last 60)"
-            grep -E "(error:|warning:|note:|Undefined symbol|Failed |Linker command failed)" build.log 2>/dev/null | tail -60 || echo "(no build.log or no matches)"
+            BUILD_PATTERN="(error:|warning:|note:|Undefined symbol|Failed |Linker command failed)"
+            grep -E "$BUILD_PATTERN" build.log 2>/dev/null | tail -60 || echo "(no build.log or no matches)"
             echo
             echo "## Errors and warnings from test (last 60)"
-            grep -E "(error:|warning:|FAIL|XCTAssert|Test Suite|Test Case)" test.log 2>/dev/null | tail -60 || echo "(no test.log or no matches)"
+            TEST_PATTERN="(error:|warning:|FAIL|XCTAssert|Test Suite|Test Case)"
+            grep -E "$TEST_PATTERN" test.log 2>/dev/null | tail -60 || echo "(no test.log or no matches)"
             echo
             echo "## Build log tail (last 80 lines)"
             tail -80 build.log 2>/dev/null || echo "(no build.log)"

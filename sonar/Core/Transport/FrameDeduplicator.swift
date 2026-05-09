@@ -16,7 +16,8 @@ final class FrameDeduplicator: @unchecked Sendable {
 
     /// Returns the frame if it is new, nil if it is a duplicate.
     func receive(_ frame: AudioFrame) -> AudioFrame? {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         guard !seen.contains(frame.seq) else { return nil }
         seen.insert(frame.seq)
         seenOrdered.append(frame.seq)
@@ -28,7 +29,8 @@ final class FrameDeduplicator: @unchecked Sendable {
     }
 
     func reset() {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         seen.removeAll()
         seenOrdered.removeAll()
     }

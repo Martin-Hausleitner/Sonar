@@ -1,8 +1,7 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class AudioFrameTests: XCTestCase {
-
     // MARK: - Init
 
     func testInitStoresProperties() {
@@ -28,7 +27,7 @@ final class AudioFrameTests: XCTestCase {
 
     func testWireDataRoundTrip() throws {
         let payload = Data([0x10, 0x20, 0x30, 0x40])
-        let original = AudioFrame(seq: 1234, timestamp: 9876543210, payload: payload, codec: .opus)
+        let original = AudioFrame(seq: 1234, timestamp: 9_876_543_210, payload: payload, codec: .opus)
         let wire = original.wireData
 
         let decoded = try XCTUnwrap(AudioFrame(wireData: wire))
@@ -98,7 +97,7 @@ final class AudioFrameTests: XCTestCase {
 
     func testSeqCounterArithmetic() {
         // Simulate overflow: UInt32.max &+ 1 == 0
-        var counter: UInt32 = UInt32.max
+        var counter = UInt32.max
         counter &+= 1
         XCTAssertEqual(counter, 0)
     }

@@ -18,13 +18,15 @@ final class JitterBuffer: @unchecked Sendable {
     private(set) var depthMs: Int = 60
 
     func enqueue(_ frame: AudioFrame) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         buffer[frame.seq] = frame
         updateJitter()
     }
 
     func dequeue() -> AudioFrame? {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         guard let frame = buffer[nextExpected] else { return nil }
         buffer.removeValue(forKey: nextExpected)
         nextExpected &+= 1
@@ -32,17 +34,20 @@ final class JitterBuffer: @unchecked Sendable {
     }
 
     var needsConcealment: Bool {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         return buffer[nextExpected] == nil
     }
 
     func advanceOnConceal() {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         nextExpected &+= 1
     }
 
     func reset() {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         buffer.removeAll()
         nextExpected = 0
         jitterMs = 0
@@ -72,18 +77,18 @@ final class JitterBuffer: @unchecked Sendable {
 
         depthMs = switch tier {
         case .excellent: 20
-        case .good:      60
-        case .fair:      120
-        case .poor:      200
+        case .good: 60
+        case .fair: 120
+        case .poor: 200
         }
     }
 
     private var tier: Tier {
         switch jitterMs {
-        case ..<5:  .excellent
+        case ..<5: .excellent
         case ..<15: .good
         case ..<30: .fair
-        default:    .poor
+        default: .poor
         }
     }
 }

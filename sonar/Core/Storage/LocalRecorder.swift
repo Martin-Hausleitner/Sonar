@@ -49,7 +49,7 @@ final class LocalRecorder {
         let url = dir.appendingPathComponent(filename)
         sessionURL = url
 
-        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
         file = try AVAudioFile(forWriting: url, settings: format.settings)
         isRecording = true
     }
@@ -119,7 +119,7 @@ extension LocalRecorder {
     }
 
     static func deleteOlderThan(days: Int = 30) {
-        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
         for url in allSessions() {
             guard let created = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate,
                   created < cutoff else { continue }

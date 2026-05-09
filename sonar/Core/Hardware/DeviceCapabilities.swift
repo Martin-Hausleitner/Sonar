@@ -3,18 +3,18 @@ import Foundation
 import NearbyInteraction
 
 /// Detects hardware capabilities once at launch and derives the Sonar tier. §9.2.
-struct DeviceCapabilities: Sendable {
+struct DeviceCapabilities {
     let hasUWB: Bool
     let uwbGen: UWBGen?
     let hasNeuralEngine: Bool
     let supportsSpatialAudio: Bool
 
-    enum UWBGen: Sendable { case gen1, gen2 }
+    enum UWBGen { case gen1, gen2 }
 
-    enum SonarTier: Sendable {
-        case a  // iPhone 17 Pro (U2) — full experience
-        case b  // iPhone 14–16 (U1) — ~80%
-        case c  // No UWB / older  — ~60%
+    enum SonarTier {
+        case a // iPhone 17 Pro (U2) — full experience
+        case b // iPhone 14–16 (U1) — ~80%
+        case c // No UWB / older  — ~60%
     }
 
     var sonarTier: SonarTier {
@@ -25,7 +25,7 @@ struct DeviceCapabilities: Sendable {
 
     static func detect() -> DeviceCapabilities {
         let uwbSupported = NISession.deviceCapabilities.supportsDirectionMeasurement ||
-                           NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
+            NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
         let modelID = Self.modelIdentifier()
         let isU2Model = modelID.hasPrefix("iPhone17") || modelID.hasPrefix("iPhone18")
         let uwbGen: UWBGen? = uwbSupported ? (isU2Model ? .gen2 : .gen1) : nil
@@ -38,7 +38,7 @@ struct DeviceCapabilities: Sendable {
             guard let numStr = modelID
                 .components(separatedBy: "iPhone").last?
                 .components(separatedBy: ",").first,
-                  let gen = Int(numStr) else { return false }
+                let gen = Int(numStr) else { return false }
             return gen >= spatialMinGeneration
         }()
 
@@ -59,6 +59,6 @@ struct DeviceCapabilities: Sendable {
     }
 
     private static func hasNeuralEngineHeuristic() -> Bool {
-        return AVAudioSession.sharedInstance().availableInputs?.isEmpty == false
+        AVAudioSession.sharedInstance().availableInputs?.isEmpty == false
     }
 }

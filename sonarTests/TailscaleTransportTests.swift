@@ -1,9 +1,8 @@
 import Combine
 import Foundation
 import Network
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 @MainActor
 final class TailscaleTransportTests: XCTestCase {
@@ -16,7 +15,7 @@ final class TailscaleTransportTests: XCTestCase {
     func testPairingTokenConnectsAndCarriesAudioFramesOverLoopbackTCP() async throws {
         let port = try XCTUnwrap(freeTCPPort())
         let receiver = TailscaleTransport(listenPort: port)
-        let sender = TailscaleTransport(listenPort: try XCTUnwrap(freeTCPPort()))
+        let sender = try TailscaleTransport(listenPort: XCTUnwrap(freeTCPPort()))
         defer {
             receiver.stop()
             sender.stop()

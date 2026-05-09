@@ -41,7 +41,7 @@ final class AudioEngine {
             guard let self else { return }
             let id = Metrics.shared.openTrace()
             Metrics.shared.mark(id, .captured)
-            self.captured.send((frameID: id, buffer: buf))
+            captured.send((frameID: id, buffer: buf))
         }
 
         engine.prepare()

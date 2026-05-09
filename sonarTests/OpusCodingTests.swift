@@ -1,6 +1,6 @@
 import AVFoundation
-import XCTest
 @testable import Sonar
+import XCTest
 
 final class OpusCodingTests: XCTestCase {
     func testCoderInitialises() {
@@ -27,14 +27,14 @@ final class OpusCodingTests: XCTestCase {
         let sampleRate = Double(coder.sampleRate)
         let frameCount = coder.samplesPerFrame
 
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
-        let src = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount))!
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1))
+        let src = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)))
         src.frameLength = AVAudioFrameCount(frameCount)
 
         // 1 kHz sine at half amplitude — well above codec noise floor.
-        let ptr = src.floatChannelData![0]
-        for i in 0..<frameCount {
-            ptr[i] = 0.5 * sin(2 * .pi * 1_000 * Float(i) / Float(sampleRate))
+        let ptr = try XCTUnwrap(src.floatChannelData?[0])
+        for i in 0 ..< frameCount {
+            ptr[i] = 0.5 * sin(2 * .pi * 1000 * Float(i) / Float(sampleRate))
         }
 
         // Encode — skip if Opus codec is unavailable on this simulator.
@@ -64,9 +64,11 @@ final class OpusCodingTests: XCTestCase {
 
         // Decoded audio must not be silence (Opus priming delay is < 80 samples,
         // so most of the decoded frame should contain the input sine wave).
-        let decoded = dst.floatChannelData![0]
+        let decoded = try XCTUnwrap(dst.floatChannelData?[0])
         var maxAbs: Float = 0
-        for i in 0..<Int(dst.frameLength) { maxAbs = max(maxAbs, abs(decoded[i])) }
+        for i in 0 ..< Int(dst.frameLength) {
+            maxAbs = max(maxAbs, abs(decoded[i]))
+        }
         XCTAssertGreaterThan(maxAbs, 0.01, "decoded audio must not be silence")
     }
 }

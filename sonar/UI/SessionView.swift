@@ -12,8 +12,8 @@ struct SessionView: View {
     @AppStorage("sonar.devmode.fakeDemo") private var fakeDemoEnabled: Bool = false
 
     @State private var showSettings = false
-    @State private var showGuide    = false
-    @State private var showPairing  = false
+    @State private var showGuide = false
+    @State private var showPairing = false
     @State private var sessionActive = false
     @State private var previewDistance: Double? = nil
     @State private var profileDetail: SessionProfile? = nil
@@ -21,7 +21,7 @@ struct SessionView: View {
     // Live stats
     @State private var sessionStart: Date?
     @State private var sessionElapsed: String = "0:00"
-    @State private var latencyMs: Double?  = nil
+    @State private var latencyMs: Double? = nil
     private let statsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -64,12 +64,12 @@ struct SessionView: View {
         .background(backgroundLayer.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { settingsSheet }
-        .sheet(isPresented: $showGuide)    { guideSheet    }
+        .sheet(isPresented: $showGuide) { guideSheet }
         .sheet(item: $profileDetail) { p in
             NavigationStack { ProfileDetailView(profile: p) }
                 .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $showPairing)  { pairingSheet  }
+        .sheet(isPresented: $showPairing) { pairingSheet }
         .onChange(of: sessionActive) { _, active in
             withAnimation(.easeInOut(duration: 0.3)) {
                 if active {
@@ -117,10 +117,10 @@ struct SessionView: View {
 
     private var accentColor: Color {
         switch appState.signalScore {
-        case 80...: return .cyan
-        case 60..<80: return .green
-        case 40..<60: return .yellow
-        default: return .red
+        case 80...: .cyan
+        case 60 ..< 80: .green
+        case 40 ..< 60: .yellow
+        default: .red
         }
     }
 
@@ -240,7 +240,7 @@ struct SessionView: View {
                 Text(profile.displayName)
                     .font(.caption.weight(.semibold))
             }
-        .foregroundStyle(isSelected ? tint : .secondary)
+            .foregroundStyle(isSelected ? tint : .secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
@@ -282,12 +282,12 @@ struct SessionView: View {
             return appState.peerOnline ? "Simulator · verbunden" : "Simulator · wartet"
         }
         switch appState.phase {
-        case .idle:              return sessionActive ? "Verbinde…" : "Bereit"
-        case .connecting:        return "Verbinde…"
-        case .near(let d):       return String(format: "Nah · %.1f m", d)
-        case .far:               return "Fern · Internet"
-        case .degrading:         return "Verbindung schwach"
-        case .recovering:        return "Verbindung stellt sich wieder her"
+        case .idle: return sessionActive ? "Verbinde…" : "Bereit"
+        case .connecting: return "Verbinde…"
+        case let .near(d): return String(format: "Nah · %.1f m", d)
+        case .far: return "Fern · Internet"
+        case .degrading: return "Verbindung schwach"
+        case .recovering: return "Verbindung stellt sich wieder her"
         }
     }
 
@@ -296,21 +296,21 @@ struct SessionView: View {
             return "desktopcomputer"
         }
         switch appState.phase {
-        case .idle:        return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
-        case .connecting:  return "antenna.radiowaves.left.and.right"
-        case .near:        return "dot.radiowaves.left.and.right"
-        case .far:         return "globe"
-        case .degrading:   return "exclamationmark.triangle"
-        case .recovering:  return "arrow.triangle.2.circlepath"
+        case .idle: return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
+        case .connecting: return "antenna.radiowaves.left.and.right"
+        case .near: return "dot.radiowaves.left.and.right"
+        case .far: return "globe"
+        case .degrading: return "exclamationmark.triangle"
+        case .recovering: return "arrow.triangle.2.circlepath"
         }
     }
 
     private var statusColor: Color {
         switch appState.phase {
-        case .near:      return .cyan
-        case .far:       return .white
-        case .degrading: return .yellow
-        default:         return .secondary
+        case .near: .cyan
+        case .far: .white
+        case .degrading: .yellow
+        default: .secondary
         }
     }
 
@@ -381,17 +381,32 @@ struct SessionView: View {
     private var activePathsRow: some View {
         HStack(spacing: 6) {
             if appState.connectionType == .simulatorRelay {
-                pathPill("desktopcomputer", "Simulator",
-                         active: appState.activePathIDs.contains("simulatorRelay") || appState.peerOnline)
+                pathPill(
+                    "desktopcomputer",
+                    "Simulator",
+                    active: appState.activePathIDs.contains("simulatorRelay") || appState.peerOnline
+                )
             } else {
-                pathPill("dot.radiowaves.left.and.right", "AWDL",
-                         active: appState.activePathIDs.contains("multipeer"))
-                pathPill("wave.3.right.circle.fill", "Bluetooth",
-                         active: appState.activePathIDs.contains("bluetooth"))
-                pathPill("network.badge.shield.half.filled", "Tailscale",
-                         active: appState.activePathIDs.contains("tailscale"))
-                pathPill("globe", "Internet",
-                         active: appState.activePathIDs.contains("mpquic"))
+                pathPill(
+                    "dot.radiowaves.left.and.right",
+                    "AWDL",
+                    active: appState.activePathIDs.contains("multipeer")
+                )
+                pathPill(
+                    "wave.3.right.circle.fill",
+                    "Bluetooth",
+                    active: appState.activePathIDs.contains("bluetooth")
+                )
+                pathPill(
+                    "network.badge.shield.half.filled",
+                    "Tailscale",
+                    active: appState.activePathIDs.contains("tailscale")
+                )
+                pathPill(
+                    "globe",
+                    "Internet",
+                    active: appState.activePathIDs.contains("mpquic")
+                )
             }
             Spacer()
             if appState.isRecording {
@@ -517,17 +532,17 @@ struct SessionView: View {
 
     private var gradeLabel: String {
         switch appState.signalGrade {
-        case .excellent: return "Excellent"
-        case .good:      return "Good"
-        case .ok:        return "OK"
-        case .poor:      return "Poor"
-        case .unstable:  return "Unstable"
+        case .excellent: "Excellent"
+        case .good: "Good"
+        case .ok: "OK"
+        case .poor: "Poor"
+        case .unstable: "Unstable"
         }
     }
 
     private var distanceLabel: String {
         if let d = previewDistance { return String(format: "%.1f m", d) }
-        if case .near(let d) = appState.phase { return String(format: "%.1f m", d) }
+        if case let .near(d) = appState.phase { return String(format: "%.1f m", d) }
         return "—"
     }
 
@@ -538,28 +553,28 @@ struct SessionView: View {
 
     private var batteryLabel: String {
         switch appState.batteryTier {
-        case .normal:   return "Normal"
-        case .eco:      return "Eco"
-        case .saver:    return "Sparen"
-        case .critical: return "Kritisch"
+        case .normal: "Normal"
+        case .eco: "Eco"
+        case .saver: "Sparen"
+        case .critical: "Kritisch"
         }
     }
 
     private var batteryIcon: String {
         switch appState.batteryTier {
-        case .normal:   return "battery.100"
-        case .eco:      return "battery.75"
-        case .saver:    return "battery.25"
-        case .critical: return "battery.0"
+        case .normal: "battery.100"
+        case .eco: "battery.75"
+        case .saver: "battery.25"
+        case .critical: "battery.0"
         }
     }
 
     private var batteryColor: Color {
         switch appState.batteryTier {
-        case .normal: return .green
-        case .eco:    return .yellow
-        case .saver:  return .orange
-        case .critical: return .red
+        case .normal: .green
+        case .eco: .yellow
+        case .saver: .orange
+        case .critical: .red
         }
     }
 
@@ -726,22 +741,24 @@ struct SessionView: View {
         let distances: [Double] = [8.0, 5.5, 3.2, 1.8, 1.0, 0.8, 1.2, 2.4, 4.0, 6.0]
         for (i, d) in distances.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 1.5) {
-                guard self.sessionActive else { return }
-                withAnimation(.easeInOut(duration: 1.0)) { self.previewDistance = d }
+                guard sessionActive else { return }
+                withAnimation(.easeInOut(duration: 1.0)) { previewDistance = d }
             }
         }
         let scores = [100, 94, 87, 78, 65, 82, 91, 96]
         for (i, s) in scores.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 2.0) {
-                guard self.sessionActive else { return }
-                self.appState.signalScore = s
-                self.appState.activePathCount = s > 80 ? 3 : s > 60 ? 2 : 1
+                guard sessionActive else { return }
+                appState.signalScore = s
+                appState.activePathCount = s > 80 ? 3 : s > 60 ? 2 : 1
             }
         }
         // Simulate peer coming online
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            guard self.sessionActive else { return }
-            withAnimation { self.appState.peerOnline = true; self.appState.peerName = "Demo Peer · FAKE" }
+            guard sessionActive else { return }
+            withAnimation { appState.peerOnline = true
+                appState.peerName = "Demo Peer · FAKE"
+            }
         }
     }
 }

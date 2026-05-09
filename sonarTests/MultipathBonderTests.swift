@@ -1,6 +1,6 @@
 import Combine
-import XCTest
 @testable import Sonar
+import XCTest
 
 // MARK: - Mock
 
@@ -13,6 +13,7 @@ final class MockBondedPath: BondedPath, @unchecked Sendable {
     var isConnected: AnyPublisher<Bool, Never> {
         connectedSubject.eraseToAnyPublisher()
     }
+
     var inboundFrames: AnyPublisher<AudioFrame, Never> {
         inboundSubject.eraseToAnyPublisher()
     }
@@ -21,8 +22,8 @@ final class MockBondedPath: BondedPath, @unchecked Sendable {
 
     init(id: MultipathBonder.PathID, connected: Bool = true, cost: Double = 1.0) {
         self.id = id
-        self.connectedSubject = CurrentValueSubject(connected)
-        self.estimatedCostPerByte = cost
+        connectedSubject = CurrentValueSubject(connected)
+        estimatedCostPerByte = cost
     }
 
     func send(_ frame: AudioFrame) async {
@@ -44,7 +45,6 @@ final class MockBondedPath: BondedPath, @unchecked Sendable {
 
 @MainActor
 final class MultipathBonderTests: XCTestCase {
-
     // MARK: - Initial state
 
     func testStartsWithEmptyActivePaths() {
@@ -143,8 +143,11 @@ final class MultipathBonderTests: XCTestCase {
         await bonder.send(opusData: Data([0xAB]))
         try await Task.sleep(nanoseconds: 30_000_000)
 
-        XCTAssertEqual(pathA.sentFrames.first?.seq, pathB.sentFrames.first?.seq,
-                       "Both paths must carry the same seq number")
+        XCTAssertEqual(
+            pathA.sentFrames.first?.seq,
+            pathB.sentFrames.first?.seq,
+            "Both paths must carry the same seq number"
+        )
     }
 
     // MARK: - Mode .primaryStandby
@@ -185,11 +188,14 @@ final class MultipathBonderTests: XCTestCase {
 
         let frame = AudioFrame(seq: 1, payload: Data([0x11]))
         pathA.receiveInbound(frame)
-        pathB.receiveInbound(frame)   // duplicate
+        pathB.receiveInbound(frame) // duplicate
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(receivedFrames.count, 1,
-                       "Duplicate inbound frame should be filtered by deduplicator")
+        XCTAssertEqual(
+            receivedFrames.count,
+            1,
+            "Duplicate inbound frame should be filtered by deduplicator"
+        )
     }
 }

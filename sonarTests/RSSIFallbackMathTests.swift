@@ -1,5 +1,5 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// White-box tests for RSSIFallback's path-loss distance formula and
 /// EMA smoothing — verified against the model:
@@ -8,12 +8,11 @@ import XCTest
 ///
 /// These are pure-math tests that don't require BLE hardware.
 final class RSSIFallbackMathTests: XCTestCase {
-
     // MARK: - Reference implementation (mirrors RSSIFallback internals)
 
     private let txPower: Double = -59
-    private let n:       Double =  2.0
-    private let alpha:   Double =  0.3
+    private let n: Double = 2.0
+    private let alpha: Double = 0.3
 
     private func rssiToMetres(_ rssi: Double) -> Double {
         pow(10.0, (txPower - rssi) / (10.0 * n))
@@ -83,19 +82,21 @@ final class RSSIFallbackMathTests: XCTestCase {
         XCTAssertEqual(result, -66.0, accuracy: 0.0001)
     }
 
-    func testEMAConvergesToStableValue() {
+    func testEMAConvergesToStableValue() throws {
         // Repeated same input should converge to that value
         var smoothed: Double? = nil
-        for _ in 0..<50 { smoothed = ema(prev: smoothed, new: -70) }
-        XCTAssertEqual(smoothed!, -70.0, accuracy: 0.1)
+        for _ in 0 ..< 50 {
+            smoothed = ema(prev: smoothed, new: -70)
+        }
+        XCTAssertEqual(try XCTUnwrap(smoothed), -70.0, accuracy: 0.1)
     }
 
     func testEMABoundedBetweenPrevAndNew() {
         let prev: Double = -60
-        let new:  Double = -80
+        let new: Double = -80
         let result = ema(prev: prev, new: new)
-        XCTAssertGreaterThanOrEqual(result, new,  "EMA must not overshoot new value")
-        XCTAssertLessThanOrEqual(result,    prev, "EMA must not overshoot prev value")
+        XCTAssertGreaterThanOrEqual(result, new, "EMA must not overshoot new value")
+        XCTAssertLessThanOrEqual(result, prev, "EMA must not overshoot prev value")
     }
 
     // MARK: - Valid RSSI range guard (mirrors centralManager didDiscover filter)

@@ -14,9 +14,9 @@ import Speech
 final class PermissionsManager: NSObject, ObservableObject {
     enum State: Equatable { case unknown, granted, denied }
 
-    @Published var microphone: State       = .unknown
-    @Published var bluetooth: State        = .unknown
-    @Published var localNetwork: State     = .unknown
+    @Published var microphone: State = .unknown
+    @Published var bluetooth: State = .unknown
+    @Published var localNetwork: State = .unknown
     @Published var nearbyInteraction: State = .unknown
     @Published var speechRecognition: State = .unknown
 
@@ -25,10 +25,10 @@ final class PermissionsManager: NSObject, ObservableObject {
 
     var allGranted: Bool {
         microphone == .granted &&
-        bluetooth  == .granted &&
-        localNetwork == .granted &&
-        nearbyInteraction == .granted &&
-        speechRecognition == .granted
+            bluetooth == .granted &&
+            localNetwork == .granted &&
+            nearbyInteraction == .granted &&
+            speechRecognition == .granted
     }
 
     var anyDenied: Bool {
@@ -36,7 +36,7 @@ final class PermissionsManager: NSObject, ObservableObject {
     }
 
     func requestAll() async {
-        microphone        = await requestMicrophone() ? .granted : .denied
+        microphone = await requestMicrophone() ? .granted : .denied
         if SonarTestIdentity.current().isSimulatorRelayEnabled {
             speechRecognition = .granted
         } else {
@@ -51,9 +51,9 @@ final class PermissionsManager: NSObject, ObservableObject {
 
     private func requestMicrophone() async -> Bool {
         if #available(iOS 17, *) {
-            return await AVAudioApplication.requestRecordPermission()
+            await AVAudioApplication.requestRecordPermission()
         } else {
-            return await withCheckedContinuation { cont in
+            await withCheckedContinuation { cont in
                 AVAudioSession.sharedInstance().requestRecordPermission { cont.resume(returning: $0) }
             }
         }
@@ -82,9 +82,9 @@ final class PermissionsManager: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 switch state {
-                case .ready:                self.localNetwork = .granted
-                case .failed, .cancelled:  self.localNetwork = .denied
-                default:                   break
+                case .ready: self.localNetwork = .granted
+                case .failed, .cancelled: self.localNetwork = .denied
+                default: break
                 }
             }
         }
@@ -109,9 +109,9 @@ extension PermissionsManager: CBCentralManagerDelegate {
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
             switch central.state {
-            case .poweredOn:                   self.bluetooth = .granted
-            case .unauthorized, .unsupported:  self.bluetooth = .denied
-            default:                           break
+            case .poweredOn: self.bluetooth = .granted
+            case .unauthorized, .unsupported: self.bluetooth = .denied
+            default: break
             }
         }
     }

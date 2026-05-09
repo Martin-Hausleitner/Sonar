@@ -1,9 +1,9 @@
 import Foundation
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 
 /// Builds a `PairingToken` for the *current* device. Pulls the stable

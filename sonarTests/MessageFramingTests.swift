@@ -1,12 +1,10 @@
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 /// Tests for NearTransport's 1-byte message-type framing protocol.
 /// Validates that audio frames and NIDiscoveryToken messages are correctly
 /// prefixed and that unknown types are silently dropped.
 final class MessageFramingTests: XCTestCase {
-
     // MARK: - AudioFrame wire encoding
 
     func testAudioFrameWireRoundtrip() {
@@ -26,7 +24,7 @@ final class MessageFramingTests: XCTestCase {
     func testNITokenMessagePrefix() {
         // Simulate the niToken message prefix byte
         let fakeTokenData = Data(repeating: 0xAB, count: 32)
-        var msg = Data([0x02])  // Msg.niToken
+        var msg = Data([0x02]) // Msg.niToken
         msg.append(fakeTokenData)
 
         XCTAssertEqual(msg[0], 0x02, "First byte must be Msg.niToken tag")
@@ -55,7 +53,7 @@ final class MessageFramingTests: XCTestCase {
     func testAudioFrameWithEmptyPayload() {
         let frame = AudioFrame(seq: 0, timestamp: 0, payload: Data())
         let wire = frame.wireData
-        XCTAssertEqual(wire.count, 13)  // header only
+        XCTAssertEqual(wire.count, 13) // header only
         let decoded = AudioFrame(wireData: wire)
         XCTAssertNotNil(decoded)
         XCTAssertTrue(decoded?.payload.isEmpty == true)

@@ -1,7 +1,6 @@
 import Combine
-import XCTest
-
 @testable import Sonar
+import XCTest
 
 @MainActor
 final class SimulatorRelayTransportTests: XCTestCase {
@@ -13,7 +12,7 @@ final class SimulatorRelayTransportTests: XCTestCase {
 
     func testStartRegistersAndPublishesConnectedPeer() async throws {
         let client = MockSimulatorRelayClient()
-        let peer = SimulatorRelayPeer(id: "SIM-B-97D949", name: "SIM-B", lastSeen: 1_234)
+        let peer = SimulatorRelayPeer(id: "SIM-B-97D949", name: "SIM-B", lastSeen: 1234)
         client.pollResponses = [
             SimulatorRelayPollResponse(serverSeq: 1, peers: [peer], frames: [])
         ]
@@ -42,7 +41,7 @@ final class SimulatorRelayTransportTests: XCTestCase {
         client.pollResponses = [
             SimulatorRelayPollResponse(
                 serverSeq: 5,
-                peers: [SimulatorRelayPeer(id: "SIM-B-97D949", name: "SIM-B", lastSeen: 1_234)],
+                peers: [SimulatorRelayPeer(id: "SIM-B-97D949", name: "SIM-B", lastSeen: 1234)],
                 frames: [
                     SimulatorRelayFrame(from: "SIM-B-97D949", seq: 42, wireDataBase64: frame.wireData.base64EncodedString())
                 ]
@@ -63,7 +62,7 @@ final class SimulatorRelayTransportTests: XCTestCase {
         XCTAssertEqual(received.first?.payload, frame.payload)
     }
 
-    func testSendPostsWireFrameToClient() async throws {
+    func testSendPostsWireFrameToClient() async {
         let client = MockSimulatorRelayClient()
         let transport = makeTransport(client: client)
         let frame = AudioFrame(seq: 7, payload: Data([0xCA, 0xFE]))

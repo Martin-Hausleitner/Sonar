@@ -1,5 +1,5 @@
-import AVFoundation
 import Accelerate
+import AVFoundation
 import Foundation
 import QuartzCore
 
@@ -12,7 +12,6 @@ import QuartzCore
 ///  - Fingerprint compute is O(n·log n) FFT; runs on the audio thread, so
 ///    must complete inside the per-frame budget (~10 ms).
 final class DuplicateVoiceSuppressor {
-
     // MARK: - MFCC constants
 
     /// Window size for FFT — nearest power-of-2 that covers 20 ms @ 48 kHz (960 samples).
@@ -22,21 +21,19 @@ final class DuplicateVoiceSuppressor {
 
     // MARK: - Shared FFT setup (created once)
 
-    private static let fftSetup: vDSP_DFT_Setup? = {
-        vDSP_DFT_zop_CreateSetup(
-            nil,
-            vDSP_Length(fftSize),
-            vDSP_DFT_Direction.FORWARD
-        )
-    }()
+    private static let fftSetup: vDSP_DFT_Setup? = vDSP_DFT_zop_CreateSetup(
+        nil,
+        vDSP_Length(fftSize),
+        vDSP_DFT_Direction.FORWARD
+    )
 
     private static let melFilterbank: [[Float]] = buildMelFilterbank()
 
     // MARK: - FingerPrint
 
-    struct FingerPrint: Sendable {
+    struct FingerPrint {
         let timestamp: TimeInterval
-        let mfcc: [Float]   // 8 coefficients
+        let mfcc: [Float] // 8 coefficients
 
         // MARK: compute
 
@@ -62,18 +59,18 @@ final class DuplicateVoiceSuppressor {
             vDSP_vmul(floatData[0], 1, hannWindow, 1, &windowed, 1, vDSP_Length(windowedCount))
 
             // ── 2. Pack into split-complex buffers ────────────────────────────
-            var realIn  = [Float](repeating: 0, count: n)
-            let imagIn  = [Float](repeating: 0, count: n)
+            var realIn = [Float](repeating: 0, count: n)
+            let imagIn = [Float](repeating: 0, count: n)
             var realOut = [Float](repeating: 0, count: n)
             var imagOut = [Float](repeating: 0, count: n)
-            realIn = windowed   // imagIn stays zero (purely real input)
+            realIn = windowed // imagIn stays zero (purely real input)
 
             vDSP_DFT_Execute(setup, realIn, imagIn, &realOut, &imagOut)
 
             // ── 3. Compute power spectrum for positive frequencies ─────────────
             let halfN = n / 2
             var power = [Float](repeating: 0, count: halfN)
-            for i in 0..<halfN {
+            for i in 0 ..< halfN {
                 power[i] = realOut[i] * realOut[i] + imagOut[i] * imagOut[i]
             }
 
@@ -81,7 +78,7 @@ final class DuplicateVoiceSuppressor {
             let filterbank = DuplicateVoiceSuppressor.melFilterbank
             let numBands = filterbank.count
             var melPower = [Float](repeating: 0, count: numBands)
-            for b in 0..<numBands {
+            for b in 0 ..< numBands {
                 var sum: Float = 0
                 vDSP_dotpr(power, 1, filterbank[b], 1, &sum, vDSP_Length(halfN))
                 melPower[b] = log(max(sum, 1e-10))
@@ -90,16 +87,16 @@ final class DuplicateVoiceSuppressor {
             // ── 5. DCT-II to get cepstral coefficients ────────────────────────
             var dct = [Float](repeating: 0, count: numBands)
             let piOverN = Float.pi / Float(numBands)
-            for k in 0..<numBands {
+            for k in 0 ..< numBands {
                 var coeff: Float = 0
-                for n in 0..<numBands {
+                for n in 0 ..< numBands {
                     coeff += melPower[n] * cos(piOverN * (Float(n) + 0.5) * Float(k))
                 }
                 dct[k] = coeff
             }
 
             // Take the first `numCoefficients` coefficients (skip DC at index 0)
-            let mfcc = Array(dct[1..<(1 + numCoefficients)])
+            let mfcc = Array(dct[1 ..< (1 + numCoefficients)])
 
             return FingerPrint(timestamp: timestamp, mfcc: mfcc)
         }
@@ -155,9 +152,13 @@ final class DuplicateVoiceSuppressor {
         let halfN = fftSize / 2
         let freqResolution = sampleRate / Float(fftSize)
 
-        // Mel scale helpers
-        func hzToMel(_ hz: Float) -> Float { 2595 * log10(1 + hz / 700) }
-        func melToHz(_ mel: Float) -> Float { 700 * (pow(10, mel / 2595) - 1) }
+        /// Mel scale helpers
+        func hzToMel(_ hz: Float) -> Float {
+            2595 * log10(1 + hz / 700)
+        }
+        func melToHz(_ mel: Float) -> Float {
+            700 * (pow(10, mel / 2595) - 1)
+        }
 
         let lowFreqHz: Float = 80
         let highFreqHz: Float = min(8000, sampleRate / 2)
@@ -166,28 +167,28 @@ final class DuplicateVoiceSuppressor {
 
         // numMelBands + 2 equally spaced mel points
         var melPoints = [Float](repeating: 0, count: numMelBands + 2)
-        for i in 0..<(numMelBands + 2) {
+        for i in 0 ..< (numMelBands + 2) {
             melPoints[i] = melToHz(lowMel + Float(i) * (highMel - lowMel) / Float(numMelBands + 1))
         }
 
         // Convert mel-centre frequencies to FFT bin indices
         var binPoints = [Int](repeating: 0, count: numMelBands + 2)
-        for i in 0..<(numMelBands + 2) {
+        for i in 0 ..< (numMelBands + 2) {
             binPoints[i] = min(halfN - 1, Int((melPoints[i] / freqResolution).rounded()))
         }
 
         // Build triangular filters
         var filterbank = [[Float]](repeating: [Float](repeating: 0, count: halfN), count: numMelBands)
-        for m in 0..<numMelBands {
+        for m in 0 ..< numMelBands {
             let lo = binPoints[m]
             let center = binPoints[m + 1]
             let hi = binPoints[m + 2]
-            for k in lo..<center {
+            for k in lo ..< center {
                 if center > lo {
                     filterbank[m][k] = Float(k - lo) / Float(center - lo)
                 }
             }
-            for k in center..<hi {
+            for k in center ..< hi {
                 if hi > center {
                     filterbank[m][k] = Float(hi - k) / Float(hi - center)
                 }

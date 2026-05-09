@@ -28,7 +28,6 @@ cd "$ROOT_DIR"
 
 APPS_JSON="apps.json"
 INFO_PLIST="sonar/Resources/Info.plist"
-ROOT_IPA="Sonar-unsigned-iOS26.ipa"
 
 if [[ ! -f "$APPS_JSON" ]]; then
   echo "error: $APPS_JSON missing — run from repo root or restore from git." >&2

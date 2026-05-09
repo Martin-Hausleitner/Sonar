@@ -12,22 +12,34 @@ import UIKit
 ///   0x01 — AudioFrame wire payload
 ///   0x02 — NIDiscoveryToken (NSKeyedArchiver, for UWB ranging)
 final class NearTransport: NSObject, Transport, BondedPath {
-
     // MARK: - Protocol requirements
 
     let kind: TransportKind = .near
     let id: MultipathBonder.PathID = .multipeer
-    var estimatedCostPerByte: Double { 0.001 }
+    var estimatedCostPerByte: Double {
+        0.001
+    }
 
-    private let connectedSubject   = CurrentValueSubject<Bool, Never>(false)
-    private let inboundPCMSubject  = PassthroughSubject<AVAudioPCMBuffer, Never>()
+    private let connectedSubject = CurrentValueSubject<Bool, Never>(false)
+    private let inboundPCMSubject = PassthroughSubject<AVAudioPCMBuffer, Never>()
     private let inboundFrameSubject = PassthroughSubject<AudioFrame, Never>()
-    private let qualitySubject     = CurrentValueSubject<Double, Never>(0)
+    private let qualitySubject = CurrentValueSubject<Double, Never>(0)
 
-    var isConnected: AnyPublisher<Bool, Never>       { connectedSubject.eraseToAnyPublisher() }
-    var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> { inboundPCMSubject.eraseToAnyPublisher() }
-    var inboundFrames: AnyPublisher<AudioFrame, Never> { inboundFrameSubject.eraseToAnyPublisher() }
-    var qualityScore: AnyPublisher<Double, Never>    { qualitySubject.eraseToAnyPublisher() }
+    var isConnected: AnyPublisher<Bool, Never> {
+        connectedSubject.eraseToAnyPublisher()
+    }
+
+    var inboundPCMFrames: AnyPublisher<AVAudioPCMBuffer, Never> {
+        inboundPCMSubject.eraseToAnyPublisher()
+    }
+
+    var inboundFrames: AnyPublisher<AudioFrame, Never> {
+        inboundFrameSubject.eraseToAnyPublisher()
+    }
+
+    var qualityScore: AnyPublisher<Double, Never> {
+        qualitySubject.eraseToAnyPublisher()
+    }
 
     // MARK: - UWB token exchange callback
 
@@ -46,10 +58,10 @@ final class NearTransport: NSObject, Transport, BondedPath {
         let bonjour: String
 
         init(token: PairingToken) {
-            self.peerID = token.id
-            self.displayName = token.name
-            self.host = token.host
-            self.bonjour = token.bonjour
+            peerID = token.id
+            displayName = token.name
+            host = token.host
+            bonjour = token.bonjour
         }
 
         func matches(displayName: String, discoveryInfo: [String: String]?) -> Bool {
@@ -74,11 +86,12 @@ final class NearTransport: NSObject, Transport, BondedPath {
         let peerID: MCPeerID
         let discoveryInfo: [String: String]?
     }
-    private var discoveredPeers: [String: DiscoveredPeer] = [:]
 
-    private lazy var session: MCSession = {
-        MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
-    }()
+    private var discoveredPeers: [MCPeerID: DiscoveredPeer] = [:]
+    private var invitedPeerIDs = Set<MCPeerID>()
+
+    private lazy var session: MCSession = .init(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
+
     private lazy var advertiser = MCNearbyServiceAdvertiser(
         peer: peerID, discoveryInfo: advertisedDiscoveryInfo, serviceType: serviceType
     )
@@ -90,7 +103,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
     ) {
         self.identity = identity
         self.localHost = localHost
-        self.peerID = MCPeerID(displayName: identity.deviceName)
+        peerID = MCPeerID(displayName: identity.deviceName)
         super.init()
     }
 
@@ -98,7 +111,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
         var info = [
             "peerID": identity.deviceID,
             "peerName": identity.deviceName,
-            "bonjour": serviceType,
+            "bonjour": serviceType
         ]
         let host = localHost()
         if !host.isEmpty { info["host"] = host }
@@ -120,6 +133,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
         browser.stopBrowsingForPeers()
         session.disconnect()
         discoveredPeers.removeAll()
+        invitedPeerIDs.removeAll()
         connectedSubject.send(false)
     }
 
@@ -132,7 +146,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
 
     // MARK: - Send
 
-    func send(_ buffer: AVAudioPCMBuffer) async {}  // legacy
+    func send(_ buffer: AVAudioPCMBuffer) async {} // legacy
 
     func send(_ frame: AudioFrame) async {
         let peers = session.connectedPeers
@@ -152,6 +166,15 @@ final class NearTransport: NSObject, Transport, BondedPath {
         var msg = Data([Msg.niToken.rawValue])
         msg.append(tokenData)
         try? session.send(msg, toPeers: peers, with: .reliable)
+    }
+
+    static func shouldAcceptInvitation(
+        currentPairingHint: PairingHint?,
+        displayName: String,
+        discoveryInfo: [String: String]?
+    ) -> Bool {
+        guard let currentPairingHint else { return true }
+        return currentPairingHint.matches(displayName: displayName, discoveryInfo: discoveryInfo)
     }
 }
 
@@ -194,7 +217,13 @@ extension NearTransport: MCSessionDelegate {
 
 extension NearTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        invitationHandler(true, session)
+        let discoveryInfo = discoveredPeers[peerID]?.discoveryInfo
+        let accept = Self.shouldAcceptInvitation(
+            currentPairingHint: currentPairingHint,
+            displayName: peerID.displayName,
+            discoveryInfo: discoveryInfo
+        )
+        invitationHandler(accept, accept ? session : nil)
     }
 }
 
@@ -202,18 +231,22 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
 
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        discoveredPeers[peerID.displayName] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        discoveredPeers[peerID] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
         inviteIfAllowed(peerID, discoveryInfo: info)
     }
+
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        discoveredPeers.removeValue(forKey: peerID.displayName)
+        discoveredPeers.removeValue(forKey: peerID)
     }
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
         if let hint = currentPairingHint,
-           !hint.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) {
+           !hint.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo)
+        {
             return
         }
+        guard !invitedPeerIDs.contains(peerID) else { return }
+        invitedPeerIDs.insert(peerID)
         browser.invitePeer(peerID, to: session, withContext: nil, timeout: 10)
     }
 }

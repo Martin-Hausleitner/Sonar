@@ -25,7 +25,7 @@ final class NIRangingEngine: NSObject {
     }
 
     func start(with token: NIDiscoveryToken) {
-        let session = self.session ?? NISession()
+        let session = session ?? NISession()
         session.delegate = self
         let config = NINearbyPeerConfiguration(peerToken: token)
         session.run(config)
@@ -37,7 +37,9 @@ final class NIRangingEngine: NSObject {
         session = nil
     }
 
-    var localToken: NIDiscoveryToken? { session?.discoveryToken }
+    var localToken: NIDiscoveryToken? {
+        session?.discoveryToken
+    }
 }
 
 extension NIRangingEngine: NISessionDelegate {

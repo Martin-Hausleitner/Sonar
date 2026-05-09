@@ -1,11 +1,10 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Tests for LocalModelManager state machine and file-system behaviour.
 /// No network calls are made — downloads are not triggered in this suite.
 @MainActor
 final class LocalModelManagerTests: XCTestCase {
-
     // A fresh manager that uses an isolated temp directory (not the real one).
     // We test state transitions without touching the real Application Support folder.
 
@@ -22,24 +21,33 @@ final class LocalModelManagerTests: XCTestCase {
 
     func testAllModelsHaveNonEmptyURLs() {
         for model in LocalModelManager.availableModels {
-            XCTAssertFalse(model.sourceURL.absoluteString.isEmpty,
-                           "\(model.id) must have a non-empty source URL")
+            XCTAssertFalse(
+                model.sourceURL.absoluteString.isEmpty,
+                "\(model.id) must have a non-empty source URL"
+            )
         }
     }
 
     func testAllModelsHavePositiveApproxMB() {
         for model in LocalModelManager.availableModels {
-            XCTAssertGreaterThan(model.approxMB, 0,
-                                 "\(model.id) must declare a positive approxMB")
+            XCTAssertGreaterThan(
+                model.approxMB,
+                0,
+                "\(model.id) must declare a positive approxMB"
+            )
         }
     }
 
     func testFilenameMatchesID() {
         for model in LocalModelManager.availableModels {
-            XCTAssertTrue(model.filename.hasPrefix(model.id),
-                          "Metadata filename must start with the model id")
-            XCTAssertTrue(model.filename.hasSuffix(".json"),
-                          "Metadata filename must end in .json")
+            XCTAssertTrue(
+                model.filename.hasPrefix(model.id),
+                "Metadata filename must start with the model id"
+            )
+            XCTAssertTrue(
+                model.filename.hasSuffix(".json"),
+                "Metadata filename must end in .json"
+            )
         }
     }
 
@@ -51,8 +59,10 @@ final class LocalModelManagerTests: XCTestCase {
         // We check the first model with .notDownloaded state.
         for model in LocalModelManager.availableModels {
             if case .notDownloaded = manager.states[model.id] ?? .notDownloaded {
-                XCTAssertNil(manager.localURL(for: model),
-                             "localURL must be nil when model is not downloaded")
+                XCTAssertNil(
+                    manager.localURL(for: model),
+                    "localURL must be nil when model is not downloaded"
+                )
                 return
             }
         }
@@ -64,7 +74,7 @@ final class LocalModelManagerTests: XCTestCase {
     func testSelectedModelIDRoundTrips() {
         let manager = LocalModelManager.shared
         let original = manager.selectedModelID
-        defer { manager.selectedModelID = original }   // restore
+        defer { manager.selectedModelID = original } // restore
 
         manager.selectedModelID = "test-roundtrip-id"
         XCTAssertEqual(manager.selectedModelID, "test-roundtrip-id")
@@ -105,7 +115,7 @@ final class LocalModelManagerTests: XCTestCase {
         for model in LocalModelManager.availableModels {
             let state = manager.states[model.id] ?? .notDownloaded
             switch state {
-            case .notDownloaded, .ready: break   // both valid at test time
+            case .notDownloaded, .ready: break // both valid at test time
             case .downloading, .failed:
                 XCTFail("Model \(model.id) must not be in downloading/failed state at init")
             }
@@ -113,18 +123,30 @@ final class LocalModelManagerTests: XCTestCase {
     }
 
     func testStateEquatability() {
-        XCTAssertEqual(LocalModelManager.DownloadState.notDownloaded,
-                       LocalModelManager.DownloadState.notDownloaded)
-        XCTAssertEqual(LocalModelManager.DownloadState.downloading(0.5),
-                       LocalModelManager.DownloadState.downloading(0.5))
-        XCTAssertNotEqual(LocalModelManager.DownloadState.downloading(0.3),
-                          LocalModelManager.DownloadState.downloading(0.7))
-        XCTAssertEqual(LocalModelManager.DownloadState.ready(100),
-                       LocalModelManager.DownloadState.ready(100))
-        XCTAssertNotEqual(LocalModelManager.DownloadState.ready(100),
-                          LocalModelManager.DownloadState.ready(200))
-        XCTAssertEqual(LocalModelManager.DownloadState.failed("err"),
-                       LocalModelManager.DownloadState.failed("err"))
+        XCTAssertEqual(
+            LocalModelManager.DownloadState.notDownloaded,
+            LocalModelManager.DownloadState.notDownloaded
+        )
+        XCTAssertEqual(
+            LocalModelManager.DownloadState.downloading(0.5),
+            LocalModelManager.DownloadState.downloading(0.5)
+        )
+        XCTAssertNotEqual(
+            LocalModelManager.DownloadState.downloading(0.3),
+            LocalModelManager.DownloadState.downloading(0.7)
+        )
+        XCTAssertEqual(
+            LocalModelManager.DownloadState.ready(100),
+            LocalModelManager.DownloadState.ready(100)
+        )
+        XCTAssertNotEqual(
+            LocalModelManager.DownloadState.ready(100),
+            LocalModelManager.DownloadState.ready(200)
+        )
+        XCTAssertEqual(
+            LocalModelManager.DownloadState.failed("err"),
+            LocalModelManager.DownloadState.failed("err")
+        )
     }
 
     // MARK: - delete (with a synthetic file)
@@ -132,7 +154,8 @@ final class LocalModelManagerTests: XCTestCase {
     func testDeleteResetsStateAndClearsSelection() throws {
         let manager = LocalModelManager.shared
         guard let model = LocalModelManager.availableModels.first else {
-            XCTFail("Need at least one model"); return
+            XCTFail("Need at least one model")
+            return
         }
 
         let original = manager.selectedModelID
@@ -140,8 +163,10 @@ final class LocalModelManagerTests: XCTestCase {
 
         // Manually plant a fake WhisperKit folder plus metadata where
         // LocalModelManager would store it.
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory,
-                                                   in: .userDomainMask)[0]
+        let supportDir = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0]
         let modelDir = supportDir.appendingPathComponent("SonarModels")
         try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
         let fakeFolder = modelDir.appendingPathComponent("fake-\(model.id)", isDirectory: true)

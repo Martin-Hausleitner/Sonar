@@ -42,23 +42,23 @@ final class TransportMultiplexer {
         let incomingLayer: AudioRouter.Layer = kind == .near ? .voiceNear : .voiceFar
         let outgoingLayer: AudioRouter.Layer = previousKind == .near ? .voiceNear : .voiceFar
 
-        let stepMs: Int = 10
+        let stepMs = 10
         let steps = max(1, crossfadeMs / stepMs)
         let stepInterval = Double(stepMs) / 1000.0
 
         fadeGeneration &+= 1
         let myGen = fadeGeneration
 
-        for i in 0...steps {
+        for i in 0 ... steps {
             let delay = stepInterval * Double(i)
-            let progress = Float(i) / Float(steps)   // 0.0 → 1.0
+            let progress = Float(i) / Float(steps) // 0.0 → 1.0
 
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, self.fadeGeneration == myGen else { return }
+                guard let self, fadeGeneration == myGen else { return }
                 // Incoming: fade in (0 → 1).
-                self.audioRouter.setLayerGain(incomingLayer, progress)
+                audioRouter.setLayerGain(incomingLayer, progress)
                 // Outgoing: fade out (1 → 0).
-                self.audioRouter.setLayerGain(outgoingLayer, 1.0 - progress)
+                audioRouter.setLayerGain(outgoingLayer, 1.0 - progress)
             }
         }
     }

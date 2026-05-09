@@ -1,5 +1,5 @@
-import XCTest
 @testable import Sonar
+import XCTest
 
 @MainActor
 final class ContextBufferTests: XCTestCase {

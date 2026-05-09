@@ -1,12 +1,74 @@
 import AVFoundation
-import XCTest
+import Combine
 @testable import Sonar
+import XCTest
+
+@MainActor
+final class FarTransportConfigurationTests: XCTestCase {
+    private var cancellables = Set<AnyCancellable>()
+
+    override func tearDown() {
+        cancellables.removeAll()
+        super.tearDown()
+    }
+
+    func testMissingConfigurationIsNotStartable() {
+        let config = FarTransport.Configuration(liveKitURL: "", tokenServerURL: "", roomName: "sonar-main")
+        XCTAssertFalse(config.isStartable)
+    }
+
+    func testCompleteConfigurationIsStartable() {
+        let config = FarTransport.Configuration(
+            liveKitURL: "wss://livekit.example.test",
+            tokenServerURL: "https://token.example.test",
+            roomName: "room-a"
+        )
+        XCTAssertTrue(config.isStartable)
+    }
+
+    func testRoomConnectionAloneDoesNotMarkInternetPathConnected() {
+        let transport = FarTransport()
+        var connectedValues: [Bool] = []
+        transport.isConnected
+            .sink { connectedValues.append($0) }
+            .store(in: &cancellables)
+
+        transport.debugSetConnectionState(roomConnected: true, remoteParticipantCount: 0)
+
+        XCTAssertEqual(connectedValues.last, false)
+    }
+
+    func testInternetPathRequiresRemoteParticipant() {
+        let transport = FarTransport()
+        var connectedValues: [Bool] = []
+        transport.isConnected
+            .sink { connectedValues.append($0) }
+            .store(in: &cancellables)
+
+        transport.debugSetConnectionState(roomConnected: true, remoteParticipantCount: 1)
+
+        XCTAssertEqual(connectedValues.last, true)
+    }
+
+    func testInternetPathDisconnectsWhenLastRemoteParticipantLeaves() {
+        let transport = FarTransport()
+        var connectedValues: [Bool] = []
+        transport.isConnected
+            .sink { connectedValues.append($0) }
+            .store(in: &cancellables)
+
+        transport.debugSetConnectionState(roomConnected: true, remoteParticipantCount: 1)
+        transport.debugSetConnectionState(roomConnected: true, remoteParticipantCount: 0)
+
+        XCTAssertEqual(connectedValues.suffix(2), [true, false])
+    }
+}
 
 // MARK: - RoomTokenProvider
 
 final class SonarTokenProviderTests: XCTestCase {
     func testBadURLThrows() async {
-        let p = SonarTokenProvider(serverURL: "not-a-url\u{00}")   // NUL → malformed
+        let p = SonarTokenProvider(serverURL: "not-a-url\u{00}") // NUL → malformed
         do {
             _ = try await p.fetchToken(roomName: "r", participantIdentity: "i")
             XCTFail("expected throw")
@@ -40,7 +102,7 @@ final class AgentConnectorTests: XCTestCase {
 
     func testUtteranceWithEmptyServerURLIsNoOp() async {
         let connector = AgentConnector()
-        await connector.sendUserUtterance("Hallo")   // must not crash
+        await connector.sendUserUtterance("Hallo") // must not crash
     }
 }
 
@@ -52,9 +114,9 @@ final class VADTests: XCTestCase {
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameLength))!
         buf.frameLength = AVAudioFrameCount(frameLength)
         // Fill with sine amplitude so RMS == rms.
-        let amp = rms * Float(2).squareRoot()  // sine peak = rms * sqrt(2)
+        let amp = rms * Float(2).squareRoot() // sine peak = rms * sqrt(2)
         let ptr = buf.floatChannelData![0]
-        for i in 0..<frameLength {
+        for i in 0 ..< frameLength {
             ptr[i] = amp * sin(2 * .pi * Float(i) / Float(frameLength))
         }
         return buf

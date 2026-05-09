@@ -1,8 +1,8 @@
-import SwiftUI
 import AVFoundation
 import CoreImage.CIFilterBuiltins
+import SwiftUI
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 /// QR-code pairing MVP. Two modes:
@@ -17,17 +17,20 @@ struct PairingView: View {
     enum Mode: String, CaseIterable, Identifiable {
         case show = "Anzeigen"
         case scan = "Scannen"
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
+
         var icon: String {
             switch self {
-            case .show: return "qrcode"
-            case .scan: return "qrcode.viewfinder"
+            case .show: "qrcode"
+            case .scan: "qrcode.viewfinder"
             }
         }
     }
 
     @State private var mode: Mode = .show
-    @State private var tokenTimestamp: Int64 = Int64(Date().timeIntervalSince1970)
+    @State private var tokenTimestamp: Int64 = .init(Date().timeIntervalSince1970)
     @State private var scannedToken: PairingToken? = nil
     @State private var showConfirm: Bool = false
 
@@ -132,7 +135,7 @@ struct PairingView: View {
             scannedToken = token
             showConfirm = true
             #if canImport(UIKit)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             #endif
         }
     }
@@ -215,10 +218,6 @@ struct PairingView: View {
 
     private func applyPairing(_ token: PairingToken) {
         appState.pendingPairing = token
-        appState.peerID         = token.id
-        appState.peerName       = token.name
-        appState.peerLastSeen   = Date()
-        appState.peerOnline     = true
     }
 }
 
@@ -312,18 +311,18 @@ private struct QRScannerContainer: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
             #if canImport(UIKit)
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("Einstellungen öffnen", systemImage: "gearshape")
+                        .font(.callout.weight(.semibold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
                 }
-            } label: {
-                Label("Einstellungen öffnen", systemImage: "gearshape")
-                    .font(.callout.weight(.semibold))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(SonarTheme.accent)
+                .buttonStyle(.borderedProminent)
+                .tint(SonarTheme.accent)
             #endif
             Spacer()
         }
@@ -332,98 +331,99 @@ private struct QRScannerContainer: View {
 }
 
 #if canImport(UIKit)
-private struct QRScannerView: UIViewControllerRepresentable {
-    let onToken: (PairingToken) -> Void
+    private struct QRScannerView: UIViewControllerRepresentable {
+        let onToken: (PairingToken) -> Void
 
-    func makeUIViewController(context: Context) -> QRScannerViewController {
-        let vc = QRScannerViewController()
-        vc.onToken = onToken
-        return vc
+        func makeUIViewController(context: Context) -> QRScannerViewController {
+            let vc = QRScannerViewController()
+            vc.onToken = onToken
+            return vc
+        }
+
+        func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
     }
 
-    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
-}
+    final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+        var onToken: ((PairingToken) -> Void)?
 
-final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
-    var onToken: ((PairingToken) -> Void)?
+        private let session = AVCaptureSession()
+        private var preview: AVCaptureVideoPreviewLayer?
 
-    private let session = AVCaptureSession()
-    private var preview: AVCaptureVideoPreviewLayer?
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .black
+            configureSession()
+        }
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .black
-        configureSession()
-    }
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            if !session.isRunning {
+                DispatchQueue.global(qos: .userInitiated).async { [session] in
+                    session.startRunning()
+                }
+            }
+        }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        if !session.isRunning {
-            DispatchQueue.global(qos: .userInitiated).async { [session] in
-                session.startRunning()
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            if session.isRunning { session.stopRunning() }
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            preview?.frame = view.bounds
+        }
+
+        private func configureSession() {
+            guard let device = AVCaptureDevice.default(for: .video),
+                  let input = try? AVCaptureDeviceInput(device: device) else { return }
+            session.beginConfiguration()
+            if session.canAddInput(input) { session.addInput(input) }
+            let output = AVCaptureMetadataOutput()
+            if session.canAddOutput(output) {
+                session.addOutput(output)
+                output.setMetadataObjectsDelegate(self, queue: .main)
+                if output.availableMetadataObjectTypes.contains(.qr) {
+                    output.metadataObjectTypes = [.qr]
+                }
+            }
+            session.commitConfiguration()
+
+            let preview = AVCaptureVideoPreviewLayer(session: session)
+            preview.videoGravity = .resizeAspectFill
+            preview.frame = view.bounds
+            view.layer.addSublayer(preview)
+            self.preview = preview
+        }
+
+        // MARK: - Delegate
+
+        func metadataOutput(
+            _ output: AVCaptureMetadataOutput,
+            didOutput metadataObjects: [AVMetadataObject],
+            from connection: AVCaptureConnection
+        ) {
+            for obj in metadataObjects {
+                guard let m = obj as? AVMetadataMachineReadableCodeObject,
+                      m.type == .qr,
+                      let payload = m.stringValue else { continue }
+                if let token = PairingToken.decode(payload) {
+                    onToken?(token)
+                    // Pause to avoid re-firing while the confirm sheet is up.
+                    session.stopRunning()
+                    return
+                }
             }
         }
     }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        if session.isRunning { session.stopRunning() }
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        preview?.frame = view.bounds
-    }
-
-    private func configureSession() {
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device) else { return }
-        session.beginConfiguration()
-        if session.canAddInput(input) { session.addInput(input) }
-        let output = AVCaptureMetadataOutput()
-        if session.canAddOutput(output) {
-            session.addOutput(output)
-            output.setMetadataObjectsDelegate(self, queue: .main)
-            if output.availableMetadataObjectTypes.contains(.qr) {
-                output.metadataObjectTypes = [.qr]
-            }
-        }
-        session.commitConfiguration()
-
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspectFill
-        preview.frame = view.bounds
-        view.layer.addSublayer(preview)
-        self.preview = preview
-    }
-
-    // MARK: - Delegate
-    func metadataOutput(
-        _ output: AVCaptureMetadataOutput,
-        didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection
-    ) {
-        for obj in metadataObjects {
-            guard let m = obj as? AVMetadataMachineReadableCodeObject,
-                  m.type == .qr,
-                  let payload = m.stringValue else { continue }
-            if let token = PairingToken.decode(payload) {
-                onToken?(token)
-                // Pause to avoid re-firing while the confirm sheet is up.
-                session.stopRunning()
-                return
-            }
-        }
-    }
-}
 #else
-private struct QRScannerView: View {
-    let onToken: (PairingToken) -> Void
-    var body: some View {
-        Text("Kamera-Scan nur auf iOS verfügbar.")
-            .foregroundStyle(.secondary)
+    private struct QRScannerView: View {
+        let onToken: (PairingToken) -> Void
+        var body: some View {
+            Text("Kamera-Scan nur auf iOS verfügbar.")
+                .foregroundStyle(.secondary)
+        }
     }
-}
 #endif
 
 // MARK: - Preview

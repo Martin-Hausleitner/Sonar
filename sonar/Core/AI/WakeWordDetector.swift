@@ -11,10 +11,10 @@ final class WakeWordDetector {
     let triggered = PassthroughSubject<Void, Never>()
 
     // Porcupine would replace these thresholds with ML inference.
-    private let rmsThreshold: Float   = 0.04
-    private let windowSec: Double     = 0.80   // two-hit window
-    private var hitTimes: [Date]      = []
-    private var isStarted: Bool       = false
+    private let rmsThreshold: Float = 0.04
+    private let windowSec: Double = 0.80 // two-hit window
+    private var hitTimes: [Date] = []
+    private var isStarted: Bool = false
 
     func start() {
         isStarted = true
@@ -27,7 +27,9 @@ final class WakeWordDetector {
         guard count > 0 else { return }
 
         var sumSq: Float = 0
-        for i in 0..<count { sumSq += data[i] * data[i] }
+        for i in 0 ..< count {
+            sumSq += data[i] * data[i]
+        }
         let rms = sqrt(sumSq / Float(count))
 
         guard rms > rmsThreshold else { return }

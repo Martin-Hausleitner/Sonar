@@ -1,12 +1,11 @@
 import AVFoundation
-import XCTest
 @testable import Sonar
+import XCTest
 
 /// Verifies the V30 privacy hardening: when PrivacyMode is active, audio must
 /// not reach disk, and a mid-session activation must wipe any in-progress file.
 @MainActor
 final class PrivacyHardeningTests: XCTestCase {
-
     private var tempDir: URL!
     private var recorder: LocalRecorder!
 
@@ -35,12 +34,12 @@ final class PrivacyHardeningTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeBuffer() -> AVAudioPCMBuffer {
-        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480)!
         buf.frameLength = 480
         // Fill with a tiny sine so the file is non-trivial.
         if let ch = buf.floatChannelData?[0] {
-            for i in 0..<Int(buf.frameLength) {
+            for i in 0 ..< Int(buf.frameLength) {
                 ch[i] = 0.01 * sinf(Float(i) * 0.05)
             }
         }
@@ -70,8 +69,10 @@ final class PrivacyHardeningTests: XCTestCase {
         // Even if a buffer is fed, nothing must be written.
         recorder.append(makeBuffer())
 
-        XCTAssertTrue(filesInTempDir().isEmpty,
-                      "No file may exist in recordings dir when privacy was active before startSession")
+        XCTAssertTrue(
+            filesInTempDir().isEmpty,
+            "No file may exist in recordings dir when privacy was active before startSession"
+        )
     }
 
     /// Activating privacy mid-session must close the recorder and delete the
@@ -93,8 +94,10 @@ final class PrivacyHardeningTests: XCTestCase {
         wait(for: [exp], timeout: 1.0)
 
         XCTAssertFalse(recorder.isRecording, "Recorder must stop when privacy activates mid-session")
-        XCTAssertTrue(filesInTempDir().isEmpty,
-                      "In-progress recording file must be deleted when privacy activates")
+        XCTAssertTrue(
+            filesInTempDir().isEmpty,
+            "In-progress recording file must be deleted when privacy activates"
+        )
     }
 
     /// Deactivating privacy after a session has ended must not crash and must

@@ -27,7 +27,7 @@ enum NvidiaRivaASRClient {
             languageCode: languageCode
         )
         let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        if let http = response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
             throw ClientError.httpStatus(http.statusCode)
         }
         return try extractTranscript(fromGRPCResponse: data)
@@ -70,7 +70,7 @@ enum NvidiaRivaASRClient {
     static func grpcPayloadLength(frame: Data) -> Int {
         guard frame.count >= 5 else { return -1 }
         var length: UInt32 = 0
-        for byte in frame[1..<5] {
+        for byte in frame[1 ..< 5] {
             length = (length << 8) | UInt32(byte)
         }
         return Int(length)
@@ -87,14 +87,14 @@ enum NvidiaRivaASRClient {
             let lengthStart = data.index(after: offset)
             let lengthEnd = data.index(lengthStart, offsetBy: 4)
             var length: UInt32 = 0
-            for byte in data[lengthStart..<lengthEnd] {
+            for byte in data[lengthStart ..< lengthEnd] {
                 length = (length << 8) | UInt32(byte)
             }
 
             let payloadStart = lengthEnd
             let payloadEnd = data.index(payloadStart, offsetBy: Int(length), limitedBy: data.endIndex)
             guard let payloadEnd else { throw ClientError.invalidGRPCFrame }
-            let payload = data[payloadStart..<payloadEnd]
+            let payload = data[payloadStart ..< payloadEnd]
 
             if let text = firstTranscript(in: Data(payload)), !text.isEmpty {
                 return text
@@ -172,11 +172,12 @@ private enum Proto {
                 index = next
             case 2:
                 guard let length = readVarint(from: data, index: &index),
-                      let end = data.index(index, offsetBy: Int(length), limitedBy: data.endIndex) else {
+                      let end = data.index(index, offsetBy: Int(length), limitedBy: data.endIndex)
+                else {
                     return matches
                 }
                 if fieldNumber == number {
-                    matches.append(Data(data[index..<end]))
+                    matches.append(Data(data[index ..< end]))
                 }
                 index = end
             case 5:

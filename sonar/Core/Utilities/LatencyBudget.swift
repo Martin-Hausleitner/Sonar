@@ -10,7 +10,7 @@ enum LatencyBudget {
     static let audioFrameMs: Int = 10
 
     /// Sample rate in Hz. Mono channel.
-    static let audioSampleRate: Double = 48_000
+    static let audioSampleRate: Double = 48000
 
     /// Samples per frame. Computed from `audioFrameMs` and `audioSampleRate`.
     static var samplesPerFrame: Int {
@@ -28,7 +28,7 @@ enum LatencyBudget {
     static let opusComplexity: Int32 = 5
 
     /// Bitrate in bps. 24 kbps is plenty for mono voice at 48 kHz.
-    static let opusBitrateBps: Int32 = 24_000
+    static let opusBitrateBps: Int32 = 24000
 
     /// Forward Error Correction. On for Far, off for Near (FEC adds 2–4 ms).
     static let opusFECEnabledNear: Bool = false

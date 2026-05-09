@@ -46,6 +46,7 @@ The script:
   `simctl privacy` does not expose that service
 - skips onboarding for the test run
 - launches both apps with `SONAR_TEST_DEVICE_*`, `SONAR_SIM_RELAY_URL`, and `SONAR_AUTOSTART_SESSION`
+- asserts both simulator identities are present and both sides send relayed frames
 - captures relay state and screenshots under `build/e2e/simulator-relay-run`
 
 ## Pass Criteria
@@ -53,6 +54,8 @@ The script:
 The run counts as a simulator E2E pass when:
 
 - `state.json` contains both `SIM-A` and `SIM-B`
+- `state.json` contains at least 10 routed frames
+- relay frame events include traffic from both simulator identities
 - each app shows its own local identity
 - each app sees the other peer through `Simulator Relay`
 - screenshots are captured for both devices

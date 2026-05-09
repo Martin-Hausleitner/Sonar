@@ -8,7 +8,7 @@ enum MicrophoneMonitor {
         guard frameCount > 0 else { return 0 }
 
         var sumSquares: Float = 0
-        for index in 0..<frameCount {
+        for index in 0 ..< frameCount {
             let sample = channel[index]
             sumSquares += sample * sample
         }
