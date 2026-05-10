@@ -62,12 +62,14 @@ final class AudioEngine {
         )
         try session.setPreferredIOBufferDuration(LatencyBudget.preferredIOBufferDurationSec)
         try session.setPreferredSampleRate(LatencyBudget.audioSampleRate)
-        try session.setActive(true, options: [])
 
-        // Voice processing must be enabled BEFORE prepare(). RESEARCH.md §6.
-        // Same toggle as the mode above — disabling here is what actually
-        // bypasses the AGC pipeline at the input node.
+        // Voice processing must be configured BEFORE setActive(true). Calling
+        // setVoiceProcessingEnabled after the session is active is silently
+        // ignored — that was the v0.2.9 bug where flipping "Ungefiltertes
+        // Audio" had no audible effect.
         try engine.inputNode.setVoiceProcessingEnabled(!rawAudioMode)
+
+        try session.setActive(true, options: [])
 
         let format = engine.inputNode.inputFormat(forBus: 0)
         let bufSize = AVAudioFrameCount(LatencyBudget.samplesPerFrame)
@@ -81,12 +83,86 @@ final class AudioEngine {
 
         engine.prepare()
         try engine.start()
+        observeInterruptions()
     }
 
     func stop() {
+        stopObservingInterruptions()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
+    // MARK: - Interruption handling
+
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
+
+    /// Real-device test on v0.2.9: a phone call / Siri / AirPods drop would
+    /// silently kill the input — the engine kept "running" but produced no
+    /// frames. Subscribe to the system interruption + route-change
+    /// notifications and restart the engine on `.ended` / valid route.
+    private func observeInterruptions() {
+        let center = NotificationCenter.default
+        interruptionObserver = center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            self?.handleInterruption(note)
+        }
+        routeChangeObserver = center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            self?.handleRouteChange(note)
+        }
+    }
+
+    private func stopObservingInterruptions() {
+        let center = NotificationCenter.default
+        if let token = interruptionObserver { center.removeObserver(token) }
+        if let token = routeChangeObserver { center.removeObserver(token) }
+        interruptionObserver = nil
+        routeChangeObserver = nil
+    }
+
+    private func handleInterruption(_ note: Notification) {
+        guard
+            let info = note.userInfo,
+            let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: raw)
+        else { return }
+
+        switch type {
+        case .began:
+            // The system stops our engine for us; nothing to do here. Holding
+            // the tap installed is fine — `.ended` will reactivate.
+            break
+        case .ended:
+            let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt).map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+            guard opts.contains(.shouldResume) else { return }
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
+            if !engine.isRunning { try? engine.start() }
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRouteChange(_ note: Notification) {
+        guard
+            let info = note.userInfo,
+            let raw = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: raw)
+        else { return }
+
+        // Old device unavailable (AirPods unplugged, headphones disconnect)
+        // pauses the engine on iOS — kick it back on so the live session
+        // keeps streaming through the new route (built-in mic/speaker).
+        if reason == .oldDeviceUnavailable || reason == .newDeviceAvailable {
+            if !engine.isRunning { try? engine.start() }
+        }
     }
 
     /// Multiply each sample by the current `inputGain`, in-place, on the audio

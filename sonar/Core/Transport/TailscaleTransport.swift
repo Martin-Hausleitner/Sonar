@@ -35,6 +35,11 @@ final class TailscaleTransport: BondedPath {
     /// without this the same peer would get N parallel connections and every
     /// audio frame would be sent N times.
     private var dialedEndpoints: Set<String> = []
+    /// Reverse map from connection identity to endpoint key, so when an
+    /// outbound dial fails (`remove(_:)`) we can free the endpoint and let
+    /// the next replay re-dial. Pre-fix, a single network blip permanently
+    /// blacklisted the peer until session restart.
+    private var connectionEndpoint: [ObjectIdentifier: String] = [:]
 
     init(listenPort: UInt16 = defaultPort) {
         self.listenPort = listenPort
@@ -67,6 +72,7 @@ final class TailscaleTransport: BondedPath {
             readyConnections.removeAll()
             receiveBuffers.removeAll()
             dialedEndpoints.removeAll()
+            connectionEndpoint.removeAll()
             connectedSubject.send(false)
         }
     }
@@ -81,7 +87,7 @@ final class TailscaleTransport: BondedPath {
             if !alreadyDialed { dialedEndpoints.insert(key) }
         }
         guard !alreadyDialed else { return }
-        connect(host: ip, port: port)
+        connect(host: ip, port: port, key: key)
     }
 
     func clearPairingTokens() {
@@ -96,8 +102,15 @@ final class TailscaleTransport: BondedPath {
     }
 
     func connect(host: String, port: UInt16 = defaultPort) {
+        connect(host: host, port: port, key: "\(host):\(port)")
+    }
+
+    private func connect(host: String, port: UInt16, key: String) {
         guard let endpointPort = NWEndpoint.Port(rawValue: port) else { return }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: endpointPort, using: .tcp)
+        queue.async { [weak self] in
+            self?.connectionEndpoint[ObjectIdentifier(connection)] = key
+        }
         configure(connection)
     }
 
@@ -187,6 +200,12 @@ final class TailscaleTransport: BondedPath {
         connections.removeAll { $0 === connection }
         readyConnections.removeAll { $0 === connection }
         receiveBuffers.removeValue(forKey: key)
+        // Free the dialed-endpoint slot so a future replay can re-dial after
+        // a network blip — pre-fix, a single failure permanently blacklisted
+        // the peer until the user restarted the session.
+        if let endpointKey = connectionEndpoint.removeValue(forKey: key) {
+            dialedEndpoints.remove(endpointKey)
+        }
         connectedSubject.send(!readyConnections.isEmpty)
     }
 }

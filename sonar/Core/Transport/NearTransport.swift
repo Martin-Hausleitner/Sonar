@@ -114,6 +114,13 @@ final class NearTransport: NSObject, Transport, BondedPath {
         let discoveryInfo: [String: String]?
     }
 
+    /// Protects every read/write of `discoveredPeers`, `invitedPeerIDs`, and
+    /// `currentPairingHints`. MPC delegate callbacks come on an arbitrary
+    /// queue — without this serial queue they'd race against `addPairingToken`
+    /// being called from the main thread by `PairingService`. Pre-fix, that
+    /// race could corrupt the discovered-peers map mid-iteration.
+    private let stateQueue = DispatchQueue(label: "app.sonar.near.state")
+
     private var discoveredPeers: [MCPeerID: DiscoveredPeer] = [:]
     private var invitedPeerIDs = Set<MCPeerID>()
 
@@ -159,9 +166,12 @@ final class NearTransport: NSObject, Transport, BondedPath {
         advertiser.stopAdvertisingPeer()
         browser.stopBrowsingForPeers()
         session.disconnect()
-        discoveredPeers.removeAll()
-        invitedPeerIDs.removeAll()
-        connectedSubject.send(false)
+        stateQueue.sync {
+            discoveredPeers.removeAll()
+            invitedPeerIDs.removeAll()
+        }
+        publishLivePeers()
+        emitConnectedIfChanged(false)
     }
 
     /// Add a peer to the allow-list. Replay path (contact book) and the live
@@ -169,8 +179,11 @@ final class NearTransport: NSObject, Transport, BondedPath {
     /// is what makes "I scanned Alice yesterday and Bob today, both should
     /// auto-connect" work without re-scanning either of them.
     func addPairingToken(_ token: PairingToken) {
-        currentPairingHints.insert(PairingHint(token: token))
-        for peer in discoveredPeers.values {
+        let snapshotPeers: [DiscoveredPeer] = stateQueue.sync {
+            currentPairingHints.insert(PairingHint(token: token))
+            return Array(discoveredPeers.values)
+        }
+        for peer in snapshotPeers {
             inviteIfAllowed(peer.peerID, discoveryInfo: peer.discoveryInfo)
         }
     }
@@ -179,7 +192,17 @@ final class NearTransport: NSObject, Transport, BondedPath {
     /// vergessen"). Live MPC sessions are untouched; only future invitations
     /// will fall back to "accept everything" mode.
     func clearPairingTokens() {
-        currentPairingHints.removeAll()
+        stateQueue.sync { currentPairingHints.removeAll() }
+    }
+
+    /// Forget a single peer's allow-list entry. Call this when the user
+    /// removes a contact from the book mid-session — otherwise the deleted
+    /// peer would silently re-connect because the hint stays cached until
+    /// the next session restart.
+    func removePairingToken(forPeerID peerID: String) {
+        stateQueue.sync {
+            currentPairingHints = currentPairingHints.filter { $0.peerID != peerID }
+        }
     }
 
     /// Back-compat alias kept for callers that haven't migrated yet.
@@ -196,7 +219,14 @@ final class NearTransport: NSObject, Transport, BondedPath {
         guard !peers.isEmpty else { return }
         var msg = Data([Msg.audio.rawValue])
         msg.append(frame.wireData)
-        try? session.send(msg, toPeers: peers, with: .unreliable)
+        do {
+            try session.send(msg, toPeers: peers, with: .unreliable)
+        } catch {
+            // Pre-fix, this was `try?` and silent. Real-device test on
+            // v0.2.9 showed audio "abgehackt" came in part from invisible
+            // send failures during AWDL flaps — log so we can see them.
+            Log.app.error("NearTransport audio send failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Private helpers
@@ -208,7 +238,21 @@ final class NearTransport: NSObject, Transport, BondedPath {
               ) else { return }
         var msg = Data([Msg.niToken.rawValue])
         msg.append(tokenData)
-        try? session.send(msg, toPeers: peers, with: .reliable)
+        do {
+            try session.send(msg, toPeers: peers, with: .reliable)
+        } catch {
+            Log.app.error("NearTransport NI token send failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Only push a new value into `connectedSubject` when the truth flips —
+    /// raw MCSession state changes (`.connecting`, `.notConnected`, …) flap
+    /// many times during AWDL handover and would generate connect/disconnect
+    /// storms in the bonder otherwise.
+    private func emitConnectedIfChanged(_ connected: Bool) {
+        if connectedSubject.value != connected {
+            connectedSubject.send(connected)
+        }
     }
 
     static func shouldAcceptInvitation(
@@ -237,10 +281,11 @@ final class NearTransport: NSObject, Transport, BondedPath {
 
 extension NearTransport: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        let connected = state == .connected
-        connectedSubject.send(connected)
+        // Truth = "any peer is connected", not "this individual state change
+        // is .connected". Prevents the connect/disconnect storm on AWDL flap.
+        emitConnectedIfChanged(!session.connectedPeers.isEmpty)
         // As soon as a peer connects, exchange NIDiscoveryTokens for UWB ranging.
-        if connected { sendLocalNIToken(to: [peerID]) }
+        if state == .connected { sendLocalNIToken(to: [peerID]) }
     }
 
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
@@ -272,9 +317,13 @@ extension NearTransport: MCSessionDelegate {
 
 extension NearTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        let discoveryInfo = discoveredPeers[peerID]?.discoveryInfo
+        // Snapshot the relevant state under the lock so we don't race with
+        // a concurrent foundPeer/addPairingToken mutating the dictionaries.
+        let (discoveryInfo, hints): ([String: String]?, Set<PairingHint>) = stateQueue.sync {
+            (discoveredPeers[peerID]?.discoveryInfo, currentPairingHints)
+        }
         let accept = Self.shouldAcceptInvitation(
-            currentPairingHints: currentPairingHints,
+            currentPairingHints: hints,
             displayName: peerID.displayName,
             discoveryInfo: discoveryInfo
         )
@@ -286,19 +335,29 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
 
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        discoveredPeers[peerID] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        stateQueue.sync {
+            discoveredPeers[peerID] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        }
         publishLivePeers()
         inviteIfAllowed(peerID, discoveryInfo: info)
     }
 
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        discoveredPeers.removeValue(forKey: peerID)
+        stateQueue.sync {
+            discoveredPeers.removeValue(forKey: peerID)
+            // Drop the invited mark too so a future re-discovery (after the
+            // peer comes back into range) gets a fresh invite. Without this,
+            // a peer that briefly disappears would never reconnect this
+            // session.
+            invitedPeerIDs.remove(peerID)
+        }
         publishLivePeers()
     }
 
     private func publishLivePeers() {
+        let snapshot = stateQueue.sync { Array(discoveredPeers.values) }
         let now = Date()
-        let items = discoveredPeers.values.map { peer -> LiveMPCPeer in
+        let items = snapshot.map { peer -> LiveMPCPeer in
             let info = peer.discoveryInfo
             let stableID = info?["peerID"] ?? peer.peerID.displayName
             return LiveMPCPeer(
@@ -312,13 +371,17 @@ extension NearTransport: MCNearbyServiceBrowserDelegate {
     }
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
-        if !currentPairingHints.isEmpty,
-           !currentPairingHints.contains(where: { $0.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) })
-        {
-            return
+        let shouldInvite: Bool = stateQueue.sync {
+            if !currentPairingHints.isEmpty,
+               !currentPairingHints.contains(where: { $0.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) })
+            {
+                return false
+            }
+            guard !invitedPeerIDs.contains(peerID) else { return false }
+            invitedPeerIDs.insert(peerID)
+            return true
         }
-        guard !invitedPeerIDs.contains(peerID) else { return }
-        invitedPeerIDs.insert(peerID)
+        guard shouldInvite else { return }
         browser.invitePeer(peerID, to: session, withContext: nil, timeout: 10)
     }
 }

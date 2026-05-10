@@ -128,9 +128,13 @@ final class LivePeerDirectory: ObservableObject {
             )
         }
         for peer in blePeers where !knownBLEIDs.contains(peer.id) {
-            if nearbyByID[peer.id] != nil { continue }
-            nearbyByID[peer.id] = Entry(
-                id: peer.id,
+            // Namespace BLE-only entries so a CB UUID can never collide with
+            // an MPC peerID (different ID-spaces, but a List crash on
+            // duplicate `Identifiable.id` is a hard crash worth $5 of code).
+            let entryID = "ble:\(peer.id)"
+            if nearbyByID[entryID] != nil { continue }
+            nearbyByID[entryID] = Entry(
+                id: entryID,
                 displayName: peer.name,
                 source: .nearby,
                 isOnline: true,

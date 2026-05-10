@@ -94,6 +94,12 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
 
                 for peripheral in connectedPeripherals {
                     guard let characteristic = writableCharacteristics[peripheral.identifier] else { continue }
+                    // CB silently drops writes once its outbound buffer fills
+                    // (typical for sustained audio at 50 fps over BLE). Skip
+                    // sends when the peripheral can't accept them — better to
+                    // drop one frame at the source than fill a queue that
+                    // never drains and stalls every subsequent frame.
+                    guard peripheral.canSendWriteWithoutResponse else { continue }
                     peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                 }
 
@@ -120,10 +126,22 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
 
 extension BluetoothMeshTransport: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        guard central.state == .poweredOn else { return }
+        guard central.state == .poweredOn else {
+            // Bluetooth turned off mid-session: drop everything we cached so
+            // the UI doesn't lie ("online" for a peer we can't reach).
+            connectedPeripherals.removeAll()
+            writableCharacteristics.removeAll()
+            discoveredPeripheralCache.removeAll()
+            liveSubject.send([])
+            connectedSubject.send(false)
+            return
+        }
+        // `AllowDuplicates: true` so a peer that briefly leaves range and
+        // returns is re-discovered — without this, mesh stability across
+        // walls / pockets is awful (CB only reports each UUID once per scan).
         central.scanForPeripherals(
             withServices: [Self.serviceUUID],
-            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+            options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
         )
     }
 
@@ -162,8 +180,15 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
+        let key = peripheral.identifier.uuidString
         connectedPeripherals.removeAll { $0.identifier == peripheral.identifier }
         writableCharacteristics.removeValue(forKey: peripheral.identifier)
+        // Drop the cache entry too so the live UI ("In der Nähe" / "Bekannte
+        // online dot") stops claiming the peer is reachable. A subsequent
+        // didDiscover on reconnect will repopulate it.
+        if discoveredPeripheralCache.removeValue(forKey: key) != nil {
+            liveSubject.send(Array(discoveredPeripheralCache.values))
+        }
         if connectedPeripherals.isEmpty { connectedSubject.send(false) }
     }
 }

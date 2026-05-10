@@ -75,6 +75,11 @@ final class SessionCoordinator: ObservableObject {
     // MARK: - Lifecycle
 
     func start() {
+        // Pre-fix, calling start() twice in quick succession (e.g. user
+        // double-taps "Session starten") spawned two parallel
+        // startAudioPipeline tasks that fought over `bonder.addPath` and
+        // could leave duplicate sinks behind on the next stop()/start().
+        guard audioTask == nil else { return }
         phase = .connecting
         appState?.phase = .connecting
         audioTask = Task { [weak self] in
@@ -89,6 +94,11 @@ final class SessionCoordinator: ObservableObject {
         audioTask = nil
         simulatorRelayFrameTask?.cancel()
         simulatorRelayFrameTask = nil
+        // Drop Combine subscriptions BEFORE stopping the engine — otherwise
+        // an in-flight `audioEngine.captured` sink can still fire after
+        // engine.stop() is called and try to encode/send on a torn-down
+        // bonder, which would log spurious errors and leak frames.
+        cancellables.removeAll()
         audioEngine.stop()
         transcription.stop()
         _ = recorder.stopSession()
@@ -106,7 +116,6 @@ final class SessionCoordinator: ObservableObject {
         }
         simulatorRelay = nil
         jitterBuffer.reset()
-        cancellables.removeAll()
         phase = .idle
         appState?.phase = .idle
         appState?.isRecording = false
@@ -574,6 +583,11 @@ final class SessionCoordinator: ObservableObject {
             decodeAndSchedule(frame)
         } else if jitterBuffer.needsConcealment {
             jitterBuffer.advanceOnConceal()
+            // Pre-fix, missing frames just advanced the seq counter and
+            // scheduled nothing — audible hard gap. Schedule a frame of
+            // silence to keep the audio graph continuous so packet loss
+            // sounds like a brief muffle instead of a click.
+            scheduleSilenceFrame()
         }
     }
 
@@ -583,6 +597,19 @@ final class SessionCoordinator: ObservableObject {
             frameCapacity: AVAudioFrameCount(decoder.samplesPerFrame)
         ) else { return }
         guard (try? decoder.decode(frame.payload, into: buf)) != nil else { return }
+        spatialMixer.scheduleBuffer(buf)
+    }
+
+    private func scheduleSilenceFrame() {
+        let frames = AVAudioFrameCount(decoder.samplesPerFrame)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: pcmPlaybackFormat, frameCapacity: frames) else { return }
+        buf.frameLength = frames
+        if let channels = buf.floatChannelData {
+            let count = Int(buf.format.channelCount)
+            for ch in 0 ..< count {
+                memset(channels[ch], 0, Int(frames) * MemoryLayout<Float>.size)
+            }
+        }
         spatialMixer.scheduleBuffer(buf)
     }
 

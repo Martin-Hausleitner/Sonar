@@ -116,16 +116,22 @@ final class LivePeerDirectoryTests: XCTestCase {
         XCTAssertEqual(entries.last?.id, "peer-OLD")
     }
 
-    func testNearbyPeerIsNotDuplicatedAcrossMPCAndBLEListsWithSameID() {
-        // Pathological but cheap to guard: a stranger reachable via both MPC
-        // and BLE under the same id should produce a single nearby row.
+    func testNearbyMPCAndBLEAreNamespacedSoCollisionCannotCrashList() {
+        // Even if MPC peerID and BLE UUID happen to share the same string
+        // (different ID-spaces, but a collision is theoretically possible
+        // and would crash a SwiftUI ForEach on duplicate Identifiable.id),
+        // the directory must produce TWO distinct entries with distinct ids.
         let id = "peer-X"
         let entries = LivePeerDirectory.merge(
             known: [],
             mpc: [makeMPC(id: id, name: "X via MPC")],
             ble: [makeBLE(id: id, name: "X via BLE")]
         )
-        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.count, 2)
+        let ids = Set(entries.map(\.id))
+        XCTAssertEqual(ids.count, 2, "Identifiable ids must be unique across transports")
+        XCTAssertTrue(ids.contains("peer-X"))
+        XCTAssertTrue(ids.contains("ble:peer-X"))
     }
 
     // MARK: - makeToken
