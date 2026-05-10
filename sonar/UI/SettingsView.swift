@@ -28,6 +28,7 @@ struct SettingsView: View {
     /// privacy, live diagnostics, and finally developer/app metadata at the bottom.
     var body: some View {
         Form {
+            identitySection
             connectionSection
             audioSection
             transcriptionMasterSection
@@ -48,7 +49,37 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Connection (top of the screen — first thing the user sees)
+    // MARK: - Identity (your name, top of the screen)
+
+    private var identitySection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle")
+                    .foregroundStyle(SonarTheme.accent)
+                TextField("z.B. Martin's iPhone", text: $appState.localDisplayName)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled(true)
+                    .submitLabel(.done)
+                if !appState.localDisplayName.isEmpty {
+                    Button {
+                        appState.localDisplayName = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } header: {
+            Text("Mein Name")
+        } footer: {
+            Text("Wird in QR-Codes, im Kontaktbuch und für die lokale Suche (AWDL) verwendet. Leer = Geräte-Name (\"\(appState.testIdentity.deviceName)\"). Eine Änderung greift bei MPC erst beim nächsten Sessionstart.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Connection (right after identity)
 
     private var connectionSection: some View {
         Section {
@@ -165,6 +196,10 @@ struct SettingsView: View {
             Toggle("Vorwärtsfehlerkorrektur (FEC)", isOn: $fecEnabled)
 
             Toggle("Ungefiltertes Audio", isOn: $appState.rawAudioMode)
+                .onChange(of: appState.rawAudioMode) { _, _ in
+                    // SessionCoordinator restarts the engine reactively;
+                    // nothing to do here. Hint text below is kept honest.
+                }
 
             Picker("Aufbewahrung", selection: $retentionDays) {
                 Text("7 Tage").tag(7)
@@ -175,7 +210,7 @@ struct SettingsView: View {
         } header: {
             Text("Audio")
         } footer: {
-            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. **Ungefiltertes Audio** umgeht Apples AGC + Echo-Unterdrückung — empfohlen, wenn die Gegenseite \"verpackt\" klingt; eine laufende Session muss neu gestartet werden, damit die Änderung greift.")
+            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. **Ungefiltertes Audio** umgeht Apples AGC + Echo-Unterdrückung — empfohlen, wenn die Gegenseite \"verpackt\" klingt. Die Änderung greift sofort (Engine wird live neu gestartet).")
         }
     }
 

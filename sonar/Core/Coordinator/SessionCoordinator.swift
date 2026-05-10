@@ -189,6 +189,10 @@ final class SessionCoordinator: ObservableObject {
 
         // MARK: Transport setup
 
+        // Push the user's editable display name into MPC's advertiser before
+        // starting — NearTransport rebuilds its MCPeerID stack if the name
+        // changed since the last start so peers see the latest label.
+        near.advertisedDisplayName = appState?.effectiveDisplayName
         try? await near.start()
         try? tailscalePath.start()
         // stop() may have run during the await above. Bail out instead of
@@ -210,20 +214,9 @@ final class SessionCoordinator: ObservableObject {
         tailscale.refresh()
         guard !Task.isCancelled else { return }
 
-        // MARK: Replay contact book — every peer we've ever paired with gets
+        // MARK: Replay contact book → all transports.
 
-        // pushed into the transports' allow-lists so MPC/BLE/Tailscale auto-
-        // reconnect without the user needing to re-scan the QR. Done before
-        // PairingService.bind so the contact book is live by the time any
-        // pendingPairing event fires.
-        if let appState {
-            for peer in appState.peerStore.peers {
-                let token = peer.asReplayToken()
-                near.addPairingToken(token)
-                bluetooth.addPairingToken(token)
-                tailscalePath.addPairingToken(token)
-            }
-        }
+        replayContactBook(from: appState)
 
         // MARK: Live discovery → AppState.peerDirectory.
 
@@ -268,6 +261,24 @@ final class SessionCoordinator: ObservableObject {
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] gain in
                     self?.audioEngine.inputGain = gain
+                }
+                .store(in: &cancellables)
+
+            // Toggling "Ungefiltertes Audio" in Settings now restarts the
+            // engine immediately so the user hears the difference without
+            // having to manually stop+start the session.
+            appState.$rawAudioMode
+                .dropFirst()
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] newMode in
+                    guard let self else { return }
+                    audioEngine.rawAudioMode = newMode
+                    do {
+                        try audioEngine.reapplyConfig()
+                    } catch {
+                        Log.app.error("AudioEngine reapplyConfig failed after rawAudioMode toggle: \(error.localizedDescription, privacy: .public)")
+                    }
                 }
                 .store(in: &cancellables)
         }
@@ -532,6 +543,20 @@ final class SessionCoordinator: ObservableObject {
         return SessionProfile.builtIn.first { $0.id == id }
     }
 
+    /// Push every persisted contact into the transports' allow-lists so
+    /// MPC/BLE/Tailscale auto-reconnect without the user needing to re-scan
+    /// the QR. Extracted from `startAudioPipeline` to keep that function under
+    /// the cyclomatic-complexity ceiling.
+    private func replayContactBook(from appState: AppState?) {
+        guard let appState else { return }
+        for peer in appState.peerStore.peers {
+            let token = peer.asReplayToken()
+            near.addPairingToken(token)
+            bluetooth.addPairingToken(token)
+            tailscalePath.addPairingToken(token)
+        }
+    }
+
     /// Pipe NearTransport + BluetoothMeshTransport live-peer publishers into
     /// `AppState.peerDirectory` so `DevicesView` reflects MPC/BLE sightings
     /// within seconds of session start. Extracted from `startAudioPipeline`
@@ -548,6 +573,33 @@ final class SessionCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { peers in
                 appState.peerDirectory.blePeers = peers
+            }
+            .store(in: &cancellables)
+
+        // Mirror "Vergessen"-gestures into the transport allow-lists. Pre-fix,
+        // removing a contact in the UI left the transport hint in place so
+        // the deleted peer would silently re-connect on next discovery.
+        var previousPeerIDs = Set(appState.peerStore.peers.map(\.id))
+        var previousByID = Dictionary(uniqueKeysWithValues: appState.peerStore.peers.map { ($0.id, $0) })
+        appState.peerStore.$peers
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] current in
+                guard let self else { return }
+                let currentIDs = Set(current.map(\.id))
+                let removedIDs = previousPeerIDs.subtracting(currentIDs)
+                for id in removedIDs {
+                    near.removePairingToken(forPeerID: id)
+                    let removed = previousByID[id]
+                    if let ble = removed?.ble, !ble.isEmpty {
+                        bluetooth.removePairingToken(forBLEIdentifier: ble)
+                    }
+                    if let ip = removed?.tsIP, !ip.isEmpty {
+                        tailscalePath.removePairingToken(forTSIP: ip, port: removed?.tsPort ?? TailscaleTransport.defaultPort)
+                    }
+                }
+                previousPeerIDs = currentIDs
+                previousByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
             }
             .store(in: &cancellables)
     }

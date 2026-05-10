@@ -26,6 +26,15 @@ struct SonarApp: App {
             .environmentObject(appState.peerDirectory)
             .environmentObject(permissions)
             .preferredColorScheme(.dark)
+            .task {
+                // Pre-fix the IP only became visible at first session start —
+                // scanning the QR before that left `tsIP` empty in the token
+                // and Tailscale stayed permanently dark. Start the detector
+                // at app launch so the QR-show screen always carries an IP
+                // when one is reachable.
+                TailscaleDetector.shared.startMonitoring()
+                TailscaleDetector.shared.refresh()
+            }
             #if DEBUG
                 .onAppear {
                     guard !didSeedUITestRecording else { return }

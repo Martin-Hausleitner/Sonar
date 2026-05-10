@@ -93,6 +93,31 @@ final class AudioEngine {
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
+    /// Tear down + re-prepare in one shot. Used by SessionCoordinator when
+    /// the user toggles "Ungefiltertes Audio" mid-session — Apple requires
+    /// the AVAudioSession to be inactive to flip voice processing, so a
+    /// full restart is the only way the change can take effect.
+    var isRunning: Bool {
+        engine.isRunning
+    }
+
+    func reapplyConfig() throws {
+        guard isRunning else {
+            try prepare()
+            return
+        }
+        stop()
+        try prepare()
+    }
+
+    deinit {
+        // Defensive: if the owner forgets to call stop(), the NotificationCenter
+        // observers would keep this instance alive via their token closures.
+        let center = NotificationCenter.default
+        if let token = interruptionObserver { center.removeObserver(token) }
+        if let token = routeChangeObserver { center.removeObserver(token) }
+    }
+
     // MARK: - Interruption handling
 
     private var interruptionObserver: NSObjectProtocol?

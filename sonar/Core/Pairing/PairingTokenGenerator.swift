@@ -19,7 +19,10 @@ import Foundation
 enum PairingTokenGenerator {
     static let defaultTailscalePort: UInt16 = TailscaleTransport.defaultPort
 
-    /// Generate a fresh token from the current `AppState`.
+    /// Generate a fresh token from the current `AppState`. The user-edited
+    /// `localDisplayName` takes precedence over `testIdentity.deviceName` so
+    /// peers see "Martin's iPhone" instead of the often-generic "iPhone"
+    /// that iOS 16+ returns from `UIDevice.current.name`.
     @MainActor
     static func makeToken(
         appState: AppState,
@@ -28,7 +31,7 @@ enum PairingTokenGenerator {
     ) -> PairingToken {
         PairingToken(
             id: appState.testIdentity.deviceID,
-            name: appState.testIdentity.deviceName,
+            name: appState.effectiveDisplayName,
             host: localHost(),
             tsIP: tailscaleIP(),
             tsPort: defaultTailscalePort,

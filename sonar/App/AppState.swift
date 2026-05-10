@@ -94,6 +94,32 @@ final class AppState: ObservableObject {
         return UserDefaults.standard.bool(forKey: rawAudioModeKey)
     }
 
+    /// User-editable display name shown in QR tokens, the contact book, and
+    /// (on next session start) the MPC advertiser. Defaults to
+    /// `testIdentity.deviceName` so first-launch behaviour is unchanged.
+    /// Empty string falls back to the device name at read time so the user
+    /// can never end up nameless.
+    @Published var localDisplayName: String = AppState.loadLocalDisplayName() {
+        didSet {
+            UserDefaults.standard.set(localDisplayName, forKey: AppState.localDisplayNameKey)
+            // Mirror into localPeerName so existing UI bindings update.
+            localPeerName = effectiveDisplayName
+        }
+    }
+
+    /// Resolves to the user-edited name when non-empty, falling back to the
+    /// device name. Use this in any place that previously read
+    /// `testIdentity.deviceName` for UI-facing identification.
+    var effectiveDisplayName: String {
+        let trimmed = localDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? testIdentity.deviceName : trimmed
+    }
+
+    private static let localDisplayNameKey = "sonar.identity.localDisplayName"
+    private static func loadLocalDisplayName() -> String {
+        UserDefaults.standard.string(forKey: localDisplayNameKey) ?? ""
+    }
+
     // Peer discovery (passive — updated by SessionCoordinator even before session starts)
     @Published var localPeerName: String
     @Published var localPeerID: String
@@ -155,7 +181,8 @@ final class AppState: ObservableObject {
         let store = peerStore ?? KnownPeerStore()
         self.peerStore = store
         peerDirectory = LivePeerDirectory(known: store)
-        localPeerName = testIdentity.deviceName
+        let storedName = AppState.loadLocalDisplayName().trimmingCharacters(in: .whitespacesAndNewlines)
+        localPeerName = storedName.isEmpty ? testIdentity.deviceName : storedName
         localPeerID = testIdentity.deviceID
         connectionIsSimulated = testIdentity.isSimulatorRelayEnabled
     }

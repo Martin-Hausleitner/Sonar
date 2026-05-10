@@ -108,7 +108,19 @@ final class NearTransport: NSObject, Transport, BondedPath {
     private let serviceType = "sonar-mpc"
     private let identity: SonarTestIdentity
     private let localHost: () -> String
-    private let peerID: MCPeerID
+    private var peerID: MCPeerID
+    /// User-editable display name advertised on MPC. When changed, the next
+    /// `start()` rebuilds the MPC stack so the new name is visible to peers
+    /// (MCPeerID is immutable once an MCSession is constructed). `nil` falls
+    /// back to `identity.deviceName` for back-compat.
+    var advertisedDisplayName: String? {
+        didSet {
+            if oldValue != advertisedDisplayName { needsRebuildOnStart = true }
+        }
+    }
+
+    private var needsRebuildOnStart = false
+
     private struct DiscoveredPeer {
         let peerID: MCPeerID
         let discoveryInfo: [String: String]?
@@ -124,12 +136,9 @@ final class NearTransport: NSObject, Transport, BondedPath {
     private var discoveredPeers: [MCPeerID: DiscoveredPeer] = [:]
     private var invitedPeerIDs = Set<MCPeerID>()
 
-    private lazy var session: MCSession = .init(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
-
-    private lazy var advertiser = MCNearbyServiceAdvertiser(
-        peer: peerID, discoveryInfo: advertisedDiscoveryInfo, serviceType: serviceType
-    )
-    private lazy var browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
+    private var session: MCSession
+    private var advertiser: MCNearbyServiceAdvertiser
+    private var browser: MCNearbyServiceBrowser
 
     init(
         identity: SonarTestIdentity = .current(),
@@ -137,14 +146,47 @@ final class NearTransport: NSObject, Transport, BondedPath {
     ) {
         self.identity = identity
         self.localHost = localHost
-        peerID = MCPeerID(displayName: identity.deviceName)
+        let pid = MCPeerID(displayName: identity.deviceName)
+        peerID = pid
+        session = MCSession(peer: pid, securityIdentity: nil, encryptionPreference: .required)
+        // discoveryInfo references `identity.deviceName` directly here because
+        // `advertisedDiscoveryInfo` is an instance computed property and
+        // `self` isn't fully initialised yet — same content though.
+        var info = ["peerID": identity.deviceID, "peerName": identity.deviceName, "bonjour": "sonar-mpc"]
+        let host = localHost()
+        if !host.isEmpty { info["host"] = host }
+        advertiser = MCNearbyServiceAdvertiser(peer: pid, discoveryInfo: info, serviceType: "sonar-mpc")
+        browser = MCNearbyServiceBrowser(peer: pid, serviceType: "sonar-mpc")
         super.init()
+    }
+
+    /// Rebuild peerID + session + advertiser + browser when the user changes
+    /// their display name. Called from `start()` if `needsRebuildOnStart`.
+    private func rebuildMPCStack() {
+        let name = (advertisedDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? identity.deviceName
+        guard peerID.displayName != name else { return }
+        // Tear down — safe to call on already-stopped instances.
+        advertiser.stopAdvertisingPeer()
+        browser.stopBrowsingForPeers()
+        session.disconnect()
+        let pid = MCPeerID(displayName: name)
+        peerID = pid
+        session = MCSession(peer: pid, securityIdentity: nil, encryptionPreference: .required)
+        session.delegate = self
+        advertiser = MCNearbyServiceAdvertiser(peer: pid, discoveryInfo: advertisedDiscoveryInfo, serviceType: serviceType)
+        advertiser.delegate = self
+        browser = MCNearbyServiceBrowser(peer: pid, serviceType: serviceType)
+        browser.delegate = self
+        stateQueue.sync {
+            discoveredPeers.removeAll()
+            invitedPeerIDs.removeAll()
+        }
     }
 
     var advertisedDiscoveryInfo: [String: String] {
         var info = [
             "peerID": identity.deviceID,
-            "peerName": identity.deviceName,
+            "peerName": peerID.displayName,
             "bonjour": serviceType
         ]
         let host = localHost()
@@ -155,6 +197,10 @@ final class NearTransport: NSObject, Transport, BondedPath {
     // MARK: - Lifecycle
 
     func start() async throws {
+        if needsRebuildOnStart {
+            rebuildMPCStack()
+            needsRebuildOnStart = false
+        }
         session.delegate = self
         advertiser.delegate = self
         browser.delegate = self

@@ -96,6 +96,23 @@ final class TailscaleTransport: BondedPath {
         }
     }
 
+    /// Forget a single peer's endpoint and tear down its connection if any.
+    /// Mirrors NearTransport's `removePairingToken` so the contact-book
+    /// "Vergessen" gesture clears every transport symmetrically.
+    func removePairingToken(forTSIP ip: String, port: UInt16 = defaultPort) {
+        let key = "\(ip):\(port)"
+        queue.async { [weak self] in
+            guard let self else { return }
+            dialedEndpoints.remove(key)
+            // Cancel any active connection that was dialled to this endpoint.
+            for (objID, endpointKey) in connectionEndpoint where endpointKey == key {
+                if let connection = connections.first(where: { ObjectIdentifier($0) == objID }) {
+                    connection.cancel()
+                }
+            }
+        }
+    }
+
     /// Back-compat alias.
     func applyPairingToken(_ token: PairingToken) {
         addPairingToken(token)

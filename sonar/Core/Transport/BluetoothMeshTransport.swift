@@ -118,6 +118,13 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
         allowedBLEIdentifiers.removeAll()
     }
 
+    /// Forget a single peer's BLE identifier. Mirrors NearTransport so the
+    /// SessionCoordinator can wire `KnownPeerStore.remove` into all three
+    /// transports symmetrically.
+    func removePairingToken(forBLEIdentifier ble: String) {
+        allowedBLEIdentifiers.remove(ble)
+    }
+
     /// Back-compat alias. New callers should use `addPairingToken`.
     func applyPairingToken(_ token: PairingToken) {
         addPairingToken(token)

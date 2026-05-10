@@ -186,12 +186,21 @@ struct SessionView: View {
     }
 
     private var peerBadge: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             SonarStatusDot(color: .green, size: 7)
+            if let name = appState.peerName, !name.isEmpty {
+                Text(name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 130)
+            }
         }
-        .frame(width: 28, height: 28)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(.thinMaterial, in: Capsule())
-        .accessibilityLabel("Peer verbunden")
+        .overlay(Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 0.8))
+        .accessibilityLabel("Verbunden mit \(appState.peerName ?? "Peer")")
     }
 
     private var heroSection: some View {
@@ -297,11 +306,15 @@ struct SessionView: View {
         if appState.connectionType == .simulatorRelay, sessionActive {
             return appState.peerOnline ? "Simulator · verbunden" : "Simulator · wartet"
         }
+        let peerSuffix: String = {
+            guard appState.peerOnline, let name = appState.peerName, !name.isEmpty else { return "" }
+            return " · \(name)"
+        }()
         switch appState.phase {
         case .idle: return sessionActive ? "Verbinde…" : "Bereit"
         case .connecting: return "Verbinde…"
-        case let .near(d): return String(format: "Nah · %.1f m", d)
-        case .far: return "Fern · Internet"
+        case let .near(d): return String(format: "Nah%@ · %.1f m", peerSuffix, d)
+        case .far: return "Verbunden\(peerSuffix) · Internet"
         case .degrading: return "Verbindung schwach"
         case .recovering: return "Verbindung stellt sich wieder her"
         }
