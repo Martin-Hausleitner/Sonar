@@ -69,6 +69,35 @@ final class PairingTokenTests: XCTestCase {
         XCTAssertEqual(token.bonjour, "_sonar-mpc._tcp")
     }
 
+    func testQRCodeHostRejectsLocalhostAndLoopbackValues() {
+        XCTAssertNil(PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "localhost"))
+        XCTAssertNil(PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "localhost.local"))
+        XCTAssertNil(PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "127.0.0.1"))
+        XCTAssertNil(PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "::1"))
+    }
+
+    func testQRCodeHostKeepsReachableBonjourAndLANValues() {
+        XCTAssertEqual(
+            PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "Martins-iPhone"),
+            "Martins-iPhone.local"
+        )
+        XCTAssertEqual(
+            PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "Martins-iPhone.local"),
+            "Martins-iPhone.local"
+        )
+        XCTAssertEqual(
+            PairingTokenGenerator.qrReachableHost(fromBonjourHostname: "192.168.1.42"),
+            "192.168.1.42"
+        )
+    }
+
+    func testQRTailscaleIPKeepsOnlyTailscaleCGNATAddresses() {
+        XCTAssertEqual(PairingTokenGenerator.qrReachableTailscaleIP("100.96.1.42"), "100.96.1.42")
+        XCTAssertNil(PairingTokenGenerator.qrReachableTailscaleIP("127.0.0.1"))
+        XCTAssertNil(PairingTokenGenerator.qrReachableTailscaleIP("localhost"))
+        XCTAssertNil(PairingTokenGenerator.qrReachableTailscaleIP("192.168.1.42"))
+    }
+
     func testDecodeRejectsUnsupportedVersion() {
         // Construct a v=99 token by hand and base64url-encode it, then try
         // to decode through the public API — should be rejected.
