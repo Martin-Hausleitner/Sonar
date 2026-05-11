@@ -23,9 +23,11 @@ final class LiveTranscriptionEngine: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var parakeet: ParakeetTranscriber?
-    private var openAIRealtime: OpenAIRealtimeTranscriber?
+    private var parakeet: CloudTranscribing?
+    private var openAIRealtime: OpenAIRealtimeTranscribing?
     private var localWhisper: LocalTranscribing?
+    private var privacyCancellable: AnyCancellable?
+    private var cloudCallbackGeneration = 0
 
     typealias LocalTranscriberFactory = @MainActor (
         _ modelID: String,
@@ -33,16 +35,67 @@ final class LiveTranscriptionEngine: ObservableObject {
         _ onSegment: @escaping (String) -> Void
     ) -> LocalTranscribing?
 
-    private let localTranscriberFactory: LocalTranscriberFactory
+    typealias ParakeetFactory = @MainActor (
+        _ apiKey: String,
+        _ onSegment: @escaping (String) -> Void
+    ) -> CloudTranscribing
 
-    init(localTranscriberFactory: @escaping LocalTranscriberFactory = LiveTranscriptionEngine.makeLocalTranscriber) {
+    typealias OpenAIRealtimeFactory = @MainActor (
+        _ apiKey: String,
+        _ endpoint: String,
+        _ onSegment: @escaping (String, Bool) -> Void
+    ) -> OpenAIRealtimeTranscribing
+
+    typealias ParakeetChunkSender = @Sendable (
+        _ apiKey: String,
+        _ pcm16LE: Data,
+        _ sampleRate: Int,
+        _ languageCode: String
+    ) async throws -> String
+
+    private let localTranscriberFactory: LocalTranscriberFactory
+    private let parakeetFactory: ParakeetFactory
+    private let openAIRealtimeFactory: OpenAIRealtimeFactory
+
+    init(
+        localTranscriberFactory: @escaping LocalTranscriberFactory = LiveTranscriptionEngine.makeLocalTranscriber,
+        parakeetChunkSender: @escaping ParakeetChunkSender = { apiKey, pcm16LE, sampleRate, languageCode in
+            try await LiveTranscriptionEngine.transcribeParakeetChunk(
+                apiKey: apiKey,
+                pcm16LE: pcm16LE,
+                sampleRate: sampleRate,
+                languageCode: languageCode
+            )
+        },
+        parakeetQueueWorkGate: (@Sendable () -> Void)? = nil,
+        parakeetFactory: ParakeetFactory? = nil,
+        openAIRealtimeFactory: @escaping OpenAIRealtimeFactory = { apiKey, endpoint, onSegment in
+            OpenAIRealtimeTranscriber(apiKey: apiKey, endpoint: endpoint, onSegment: onSegment)
+        }
+    ) {
         self.localTranscriberFactory = localTranscriberFactory
+        self.parakeetFactory = parakeetFactory ?? { apiKey, onSegment in
+            ParakeetTranscriber(
+                apiKey: apiKey,
+                onSegment: onSegment,
+                transcribeChunk: parakeetChunkSender,
+                queueWorkGate: parakeetQueueWorkGate
+            )
+        }
+        self.openAIRealtimeFactory = openAIRealtimeFactory
+        privacyCancellable = NotificationCenter.default
+            .publisher(for: .sonarPrivacyModeActivated)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.abortCloudTranscribers()
+                }
+            }
     }
 
     func start(language: Locale = .current) async throws {
         guard !SonarTestIdentity.current().isSimulatorRelayEnabled else { return }
 
-        currentEngine = pickEngine(language: language)
+        currentEngine = pickEngine(language: language, allowCloud: !PrivacyMode.shared.isActive)
         switch currentEngine {
         case .appleSpeech:
             let authorized = await requestAuthorization()
@@ -67,8 +120,10 @@ final class LiveTranscriptionEngine: ObservableObject {
 
         case .parakeet:
             let key = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
-            parakeet = ParakeetTranscriber(apiKey: key) { [weak self] text in
+            let generation = cloudCallbackGeneration
+            parakeet = parakeetFactory(key) { [weak self] text in
                 guard let self else { return }
+                guard isCurrentCloudCallback(generation) else { return }
                 let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: true)
                 transcript.append(seg)
             }
@@ -76,10 +131,10 @@ final class LiveTranscriptionEngine: ObservableObject {
         case .openAIRealtime:
             let key = UserDefaults.standard.string(forKey: "sonar.openai.apiKey") ?? ""
             let endpoint = UserDefaults.standard.string(forKey: "sonar.openai.endpoint") ?? ""
-            openAIRealtime = OpenAIRealtimeTranscriber(
-                apiKey: key, endpoint: endpoint
-            ) { [weak self] text, isFinal in
+            let generation = cloudCallbackGeneration
+            openAIRealtime = openAIRealtimeFactory(key, endpoint) { [weak self] text, isFinal in
                 guard let self else { return }
+                guard isCurrentCloudCallback(generation) else { return }
                 let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: isFinal)
                 if isFinal {
                     transcript.append(seg)
@@ -94,6 +149,12 @@ final class LiveTranscriptionEngine: ObservableObject {
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
+        if PrivacyMode.shared.isActive,
+           currentEngine == .parakeet || currentEngine == .openAIRealtime
+        {
+            abortCloudTranscribers()
+            return
+        }
         switch currentEngine {
         case .appleSpeech: request?.append(buffer)
         case .local: localWhisper?.append(buffer)
@@ -106,22 +167,33 @@ final class LiveTranscriptionEngine: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
         request = nil
-        parakeet?.flush()
+        parakeet?.finish()
         parakeet = nil
         localWhisper?.stop()
         localWhisper = nil
-        openAIRealtime?.disconnect()
+        openAIRealtime?.finish()
         openAIRealtime = nil
+        clearTranscript()
+    }
+
+    func clearTranscript() {
+        transcript.removeAll()
+    }
+
+    func abortCloudTranscriptionForPrivacy() {
+        abortCloudTranscribers()
     }
 
     // MARK: - Engine selection (priority order)
 
-    private func pickEngine(language: Locale) -> Engine {
-        let openAIKey = UserDefaults.standard.string(forKey: "sonar.openai.apiKey") ?? ""
-        if !openAIKey.isEmpty { return .openAIRealtime }
+    private func pickEngine(language: Locale, allowCloud: Bool = true) -> Engine {
+        if allowCloud {
+            let openAIKey = UserDefaults.standard.string(forKey: "sonar.openai.apiKey") ?? ""
+            if !openAIKey.isEmpty { return .openAIRealtime }
 
-        let parakeetKey = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
-        if !parakeetKey.isEmpty { return .parakeet }
+            let parakeetKey = UserDefaults.standard.string(forKey: "sonar.parakeet.apiKey") ?? ""
+            if !parakeetKey.isEmpty { return .parakeet }
+        }
 
         let localID = LocalModelManager.shared.selectedModelID
         if !localID.isEmpty,
@@ -132,6 +204,36 @@ final class LiveTranscriptionEngine: ObservableObject {
         }
 
         return .appleSpeech
+    }
+
+    private func abortCloudTranscribers() {
+        cloudCallbackGeneration += 1
+        parakeet?.abort()
+        parakeet = nil
+        openAIRealtime?.abort()
+        openAIRealtime = nil
+        if currentEngine == .parakeet || currentEngine == .openAIRealtime {
+            currentEngine = .appleSpeech
+        }
+        clearTranscript()
+    }
+
+    private func isCurrentCloudCallback(_ generation: Int) -> Bool {
+        generation == cloudCallbackGeneration && !PrivacyMode.shared.isActive
+    }
+
+    private static func transcribeParakeetChunk(
+        apiKey: String,
+        pcm16LE: Data,
+        sampleRate: Int,
+        languageCode: String
+    ) async throws -> String {
+        try await NvidiaRivaASRClient.transcribeHosted(
+            apiKey: apiKey,
+            pcm16LE: pcm16LE,
+            sampleRate: sampleRate,
+            languageCode: languageCode
+        )
     }
 
     private static func makeLocalTranscriber(
@@ -174,12 +276,22 @@ final class LiveTranscriptionEngine: ObservableObject {
     }
 }
 
+protocol CloudTranscribing: AnyObject {
+    func append(_ buffer: AVAudioPCMBuffer)
+    func finish()
+    func abort()
+}
+
+protocol OpenAIRealtimeTranscribing: CloudTranscribing {
+    func connect()
+}
+
 // MARK: - OpenAIRealtimeTranscriber
 
 /// Streams PCM audio to the OpenAI Realtime API (wss) and returns incremental
 /// transcription via the server-VAD turn-detection model (whisper-1).
 /// Audio is resampled from the capture rate (16 kHz) to 24 kHz in-process.
-private final class OpenAIRealtimeTranscriber {
+private final class OpenAIRealtimeTranscriber: OpenAIRealtimeTranscribing {
     private let apiKey: String
     private let wsURL: URL
     private var wsTask: URLSessionWebSocketTask?
@@ -215,6 +327,17 @@ private final class OpenAIRealtimeTranscriber {
     func disconnect() {
         wsTask?.cancel(with: .goingAway, reason: nil)
         wsTask = nil
+    }
+
+    func finish() {
+        disconnect()
+    }
+
+    func abort() {
+        disconnect()
+        queue.async { [weak self] in
+            self?.floatBuffer.removeAll(keepingCapacity: false)
+        }
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
@@ -331,18 +454,31 @@ private final class OpenAIRealtimeTranscriber {
 
 /// Buffers PCM audio in 5-second chunks and sends each chunk to NVIDIA's
 /// hosted Riva/gRPC Parakeet endpoint.
-private final class ParakeetTranscriber {
+final class ParakeetTranscriber: CloudTranscribing, @unchecked Sendable {
     private let apiKey: String
     private let sampleRate: Double = 16000
     private let chunkDuration: Double = 5.0
 
     private var samples: [Float] = []
+    private let abortLock = NSLock()
+    private var aborted = false
+    private var inFlightChunkTasks: [UUID: Task<Void, Never>] = [:]
+    private var completedChunkTaskIDs = Set<UUID>()
     private let queue = DispatchQueue(label: "sonar.parakeet", qos: .userInitiated)
     private let onSegment: (String) -> Void // always called on main queue
+    private let transcribeChunk: LiveTranscriptionEngine.ParakeetChunkSender
+    private let queueWorkGate: (@Sendable () -> Void)?
 
-    init(apiKey: String, onSegment: @escaping (String) -> Void) {
+    init(
+        apiKey: String,
+        onSegment: @escaping (String) -> Void,
+        transcribeChunk: @escaping LiveTranscriptionEngine.ParakeetChunkSender,
+        queueWorkGate: (@Sendable () -> Void)? = nil
+    ) {
         self.apiKey = apiKey
         self.onSegment = onSegment
+        self.transcribeChunk = transcribeChunk
+        self.queueWorkGate = queueWorkGate
     }
 
     func append(_ pcmBuffer: AVAudioPCMBuffer) {
@@ -351,9 +487,15 @@ private final class ParakeetTranscriber {
         let incoming = Array(UnsafeBufferPointer(start: ch, count: count))
         queue.async { [weak self] in
             guard let self else { return }
+            queueWorkGate?()
+            guard !isAborted else { return }
             samples.append(contentsOf: incoming)
             let chunkSize = Int(sampleRate * chunkDuration)
             while samples.count >= chunkSize {
+                guard !isAborted else {
+                    samples.removeAll(keepingCapacity: false)
+                    return
+                }
                 let chunk = Array(samples.prefix(chunkSize))
                 samples.removeFirst(chunkSize)
                 sendChunk(chunk)
@@ -364,24 +506,82 @@ private final class ParakeetTranscriber {
     func flush() {
         queue.async { [weak self] in
             guard let self, !self.samples.isEmpty else { return }
+            guard !isAborted else {
+                samples.removeAll(keepingCapacity: false)
+                return
+            }
             let chunk = samples
             samples = []
             sendChunk(chunk)
         }
     }
 
-    private func sendChunk(_ pcm: [Float]) {
-        let pcm16 = buildPCM16LE(pcm: pcm)
-        Task.detached { [weak self] in
-            guard let self else { return }
-            guard let text = try? await NvidiaRivaASRClient.transcribeHosted(
-                apiKey: apiKey,
-                pcm16LE: pcm16,
-                sampleRate: Int(sampleRate),
-                languageCode: "en-US"
-            ) else { return }
-            DispatchQueue.main.async { self.onSegment(text) }
+    func finish() {
+        flush()
+    }
+
+    func abort() {
+        let tasksToCancel = markAbortedAndCollectTasks()
+        tasksToCancel.forEach { $0.cancel() }
+        queue.async { [weak self] in
+            self?.samples.removeAll(keepingCapacity: false)
         }
+    }
+
+    private func sendChunk(_ pcm: [Float]) {
+        guard !isAborted else { return }
+        let pcm16 = buildPCM16LE(pcm: pcm)
+        let taskID = UUID()
+        let task = Task.detached { [weak self] in
+            guard let self else { return }
+            defer { removeInFlightTask(id: taskID) }
+            guard !Task.isCancelled, !isAborted else { return }
+            guard let text = try? await transcribeChunk(apiKey, pcm16, Int(sampleRate), "en-US") else { return }
+            guard !Task.isCancelled, !isAborted else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !isAborted else { return }
+                onSegment(text)
+            }
+        }
+        trackInFlightTask(task, id: taskID)
+        if isAborted {
+            task.cancel()
+            removeInFlightTask(id: taskID)
+        }
+    }
+
+    private var isAborted: Bool {
+        abortLock.lock()
+        defer { abortLock.unlock() }
+        return aborted
+    }
+
+    private func trackInFlightTask(_ task: Task<Void, Never>, id: UUID) {
+        abortLock.lock()
+        if completedChunkTaskIDs.remove(id) != nil {
+            abortLock.unlock()
+            return
+        }
+        inFlightChunkTasks[id] = task
+        abortLock.unlock()
+    }
+
+    private func removeInFlightTask(id: UUID) {
+        abortLock.lock()
+        if inFlightChunkTasks.removeValue(forKey: id) == nil, !aborted {
+            completedChunkTaskIDs.insert(id)
+        }
+        abortLock.unlock()
+    }
+
+    private func markAbortedAndCollectTasks() -> [Task<Void, Never>] {
+        abortLock.lock()
+        aborted = true
+        let tasks = Array(inFlightChunkTasks.values)
+        inFlightChunkTasks.removeAll()
+        completedChunkTaskIDs.removeAll()
+        abortLock.unlock()
+        return tasks
     }
 
     /// Encodes Float32 PCM as raw little-endian LINEAR_PCM for Riva Recognize.

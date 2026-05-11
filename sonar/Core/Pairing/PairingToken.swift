@@ -13,6 +13,8 @@ struct PairingToken: Codable, Equatable {
     /// Schema version. Bump when fields change in an incompatible way.
     /// MVP only accepts `v == 1`.
     static let currentVersion: Int = 1
+    static let mpcServiceType = "sonar-mpc"
+    static let mpcBonjourServiceName = "_sonar-mpc._tcp"
 
     let v: Int
     let id: String
@@ -28,7 +30,7 @@ struct PairingToken: Codable, Equatable {
         v: Int = PairingToken.currentVersion,
         id: String,
         name: String,
-        bonjour: String = "_sonar._tcp",
+        bonjour: String = PairingToken.mpcBonjourServiceName,
         host: String,
         tsIP: String? = nil,
         tsPort: UInt16? = nil,

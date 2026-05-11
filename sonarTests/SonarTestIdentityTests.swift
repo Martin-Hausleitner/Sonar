@@ -2,6 +2,16 @@
 import XCTest
 
 final class SonarTestIdentityTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: "sonar.identity.localDisplayName")
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: "sonar.identity.localDisplayName")
+        super.tearDown()
+    }
+
     func testEnvironmentConfiguresStableDeviceAndRelay() {
         let identity = SonarTestIdentity(
             environment: [

@@ -16,7 +16,9 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     /// because we want the user to see candidates even before a GATT
     /// connection has been established.
     struct LiveBLEPeer: Identifiable, Equatable {
-        /// `peripheral.identifier.uuidString` — same form `PairingToken.ble` uses.
+        /// `peripheral.identifier.uuidString` from local CoreBluetooth
+        /// discovery. iOS only reveals this after seeing the peer over BLE, so
+        /// QR pairing cannot depend on it for first contact.
         let id: String
         let name: String
         /// Last received signal strength in dBm. `nil` after the system stops
@@ -30,6 +32,18 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     }
 
     private var discoveredPeripheralCache: [String: LiveBLEPeer] = [:]
+    private var discoveredPeripherals: [String: CBPeripheral] = [:]
+    private var livePeerExpiryWorkItem: DispatchWorkItem?
+
+    /// User-visible BLE advertisement name. SessionCoordinator sets this from
+    /// AppState's editable display name before the audio pipeline starts.
+    var advertisedDisplayName: String? {
+        didSet {
+            Self.bleQueue.async { [weak self] in
+                self?.restartAdvertisingIfPossible()
+            }
+        }
+    }
 
     var isConnected: AnyPublisher<Bool, Never> {
         connectedSubject.eraseToAnyPublisher()
@@ -54,9 +68,9 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     private var connectedPeripherals: [CBPeripheral] = []
     private var writableCharacteristics: [UUID: CBCharacteristic] = [:]
     private var audioCharacteristic: CBMutableCharacteristic?
-    /// Allow-list of BLE peripheral identifiers (one per known peer). Empty
-    /// = "accept any Sonar peer in range" (matches the previous single-id
-    /// behaviour when the field was nil).
+    /// Allow-list of locally discovered BLE peripheral identifiers. Empty
+    /// means "do not auto-connect"; discovery still publishes live candidates
+    /// so the user can explicitly pair by tapping a nearby BLE peer.
     private var allowedBLEIdentifiers: Set<String> = []
 
     /// CoreBluetooth delegate callbacks need a serial queue, otherwise concurrent
@@ -79,6 +93,62 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
         AudioFrame(wireData: data)
     }
 
+    struct RemovalPlan: Equatable {
+        let peripheralIdentifiersToDisconnect: [UUID]
+        let writableCharacteristicIdentifiersToRemove: Set<UUID>
+    }
+
+    enum CallbackDecision: Equatable {
+        case accept
+        case ignore
+    }
+
+    static func removalPlan(
+        forBLEIdentifier ble: String,
+        connectedPeripheralIdentifiers: [UUID],
+        writableCharacteristicIdentifiers: Set<UUID>
+    ) -> RemovalPlan {
+        guard let removedID = UUID(uuidString: ble) else {
+            return RemovalPlan(
+                peripheralIdentifiersToDisconnect: [],
+                writableCharacteristicIdentifiersToRemove: []
+            )
+        }
+
+        let disconnectIDs = connectedPeripheralIdentifiers.filter { $0 == removedID }
+        let writableIDs = writableCharacteristicIdentifiers.contains(removedID) ? Set([removedID]) : []
+        return RemovalPlan(
+            peripheralIdentifiersToDisconnect: disconnectIDs,
+            writableCharacteristicIdentifiersToRemove: writableIDs
+        )
+    }
+
+    static func peerCallbackDecision(
+        peripheralIdentifier: UUID,
+        allowedBLEIdentifiers: Set<String>,
+        expectedPeripheralIdentifiers: Set<UUID>
+    ) -> CallbackDecision {
+        guard allowedBLEIdentifiers.contains(peripheralIdentifier.uuidString),
+              expectedPeripheralIdentifiers.contains(peripheralIdentifier)
+        else {
+            return .ignore
+        }
+        return .accept
+    }
+
+    static func disconnectMutationDecision(
+        peripheralIdentifier: UUID,
+        connectedPeripheralIdentifiers: Set<UUID>,
+        writableCharacteristicIdentifiers: Set<UUID>
+    ) -> CallbackDecision {
+        if connectedPeripheralIdentifiers.contains(peripheralIdentifier) ||
+            writableCharacteristicIdentifiers.contains(peripheralIdentifier)
+        {
+            return .accept
+        }
+        return .ignore
+    }
+
     func send(_ frame: AudioFrame) async {
         let data = Self.encodeBLEFrame(frame)
         await withCheckedContinuation { continuation in
@@ -93,6 +163,7 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
                 }
 
                 for peripheral in connectedPeripherals {
+                    guard acceptsPeerCallback(from: peripheral) else { continue }
                     guard let characteristic = writableCharacteristics[peripheral.identifier] else { continue }
                     // CB silently drops writes once its outbound buffer fills
                     // (typical for sustained audio at 50 fps over BLE). Skip
@@ -109,25 +180,118 @@ final class BluetoothMeshTransport: NSObject, BondedPath {
     }
 
     func addPairingToken(_ token: PairingToken) {
-        if let ble = token.ble, !ble.isEmpty {
+        guard let ble = token.ble, !ble.isEmpty else { return }
+        Self.bleQueue.async { [weak self] in
+            guard let self else { return }
             allowedBLEIdentifiers.insert(ble)
+            connectDiscoveredPeripheralIfAllowed(ble)
         }
     }
 
     func clearPairingTokens() {
-        allowedBLEIdentifiers.removeAll()
+        Self.bleQueue.async { [weak self] in
+            self?.allowedBLEIdentifiers.removeAll()
+        }
     }
 
     /// Forget a single peer's BLE identifier. Mirrors NearTransport so the
     /// SessionCoordinator can wire `KnownPeerStore.remove` into all three
     /// transports symmetrically.
     func removePairingToken(forBLEIdentifier ble: String) {
-        allowedBLEIdentifiers.remove(ble)
+        Self.bleQueue.async { [weak self] in
+            guard let self else { return }
+            allowedBLEIdentifiers.remove(ble)
+
+            let plan = Self.removalPlan(
+                forBLEIdentifier: ble,
+                connectedPeripheralIdentifiers: connectedPeripherals.map(\.identifier),
+                writableCharacteristicIdentifiers: Set(writableCharacteristics.keys)
+            )
+
+            guard !plan.peripheralIdentifiersToDisconnect.isEmpty ||
+                !plan.writableCharacteristicIdentifiersToRemove.isEmpty
+            else { return }
+
+            let disconnectIDs = Set(plan.peripheralIdentifiersToDisconnect)
+            let peripheralsToDisconnect = connectedPeripherals.filter { disconnectIDs.contains($0.identifier) }
+            connectedPeripherals.removeAll { disconnectIDs.contains($0.identifier) }
+            for id in plan.writableCharacteristicIdentifiersToRemove {
+                writableCharacteristics.removeValue(forKey: id)
+            }
+            for peripheral in peripheralsToDisconnect {
+                centralManager.cancelPeripheralConnection(peripheral)
+            }
+            if connectedPeripherals.isEmpty { connectedSubject.send(false) }
+        }
     }
 
     /// Back-compat alias. New callers should use `addPairingToken`.
     func applyPairingToken(_ token: PairingToken) {
         addPairingToken(token)
+    }
+
+    private func connectDiscoveredPeripheralIfAllowed(_ ble: String) {
+        guard let peripheral = discoveredPeripherals[ble],
+              !connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier })
+        else { return }
+        connectedPeripherals.append(peripheral)
+        centralManager.connect(peripheral)
+    }
+
+    private func publishLivePeers(now: Date = Date()) {
+        let cutoff = now.addingTimeInterval(-12)
+        discoveredPeripheralCache = discoveredPeripheralCache.filter { _, peer in
+            peer.lastSeen >= cutoff
+        }
+        discoveredPeripherals = discoveredPeripherals.filter { key, _ in
+            discoveredPeripheralCache[key] != nil
+        }
+        liveSubject.send(Array(discoveredPeripheralCache.values))
+    }
+
+    private func scheduleLivePeerPrune() {
+        livePeerExpiryWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            publishLivePeers()
+            if !discoveredPeripheralCache.isEmpty {
+                scheduleLivePeerPrune()
+            }
+        }
+        livePeerExpiryWorkItem = workItem
+        Self.bleQueue.asyncAfter(deadline: .now() + 12, execute: workItem)
+    }
+
+    private var localAdvertisementName: String {
+        let trimmed = advertisedDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "Sonar" : trimmed
+    }
+
+    private func restartAdvertisingIfPossible() {
+        guard peripheralManager.state == .poweredOn else { return }
+        if peripheralManager.isAdvertising {
+            peripheralManager.stopAdvertising()
+        }
+        peripheralManager.startAdvertising([
+            CBAdvertisementDataServiceUUIDsKey: [Self.serviceUUID],
+            CBAdvertisementDataLocalNameKey: localAdvertisementName
+        ])
+    }
+
+    private func acceptsPeerCallback(from peripheral: CBPeripheral) -> Bool {
+        Self.peerCallbackDecision(
+            peripheralIdentifier: peripheral.identifier,
+            allowedBLEIdentifiers: allowedBLEIdentifiers,
+            expectedPeripheralIdentifiers: Set(connectedPeripherals.map(\.identifier))
+        ) == .accept
+    }
+
+    private func shouldMutateDisconnectState(for peripheral: CBPeripheral) -> Bool {
+        Self.disconnectMutationDecision(
+            peripheralIdentifier: peripheral.identifier,
+            connectedPeripheralIdentifiers: Set(connectedPeripherals.map(\.identifier)),
+            writableCharacteristicIdentifiers: Set(writableCharacteristics.keys)
+        ) == .accept
     }
 }
 
@@ -139,6 +303,9 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
             connectedPeripherals.removeAll()
             writableCharacteristics.removeAll()
             discoveredPeripheralCache.removeAll()
+            discoveredPeripherals.removeAll()
+            livePeerExpiryWorkItem?.cancel()
+            livePeerExpiryWorkItem = nil
             liveSubject.send([])
             connectedSubject.send(false)
             return
@@ -160,20 +327,20 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
         let advertisedName = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? peripheral.name
             ?? "Unbekanntes Sonar"
+        discoveredPeripherals[key] = peripheral
         discoveredPeripheralCache[key] = LiveBLEPeer(
             id: key,
             name: advertisedName,
             rssi: RSSI.intValue,
             lastSeen: Date()
         )
-        liveSubject.send(Array(discoveredPeripheralCache.values))
+        publishLivePeers()
+        scheduleLivePeerPrune()
 
         guard !connectedPeripherals.contains(where: { $0.identifier == peripheral.identifier }) else { return }
-        // Empty allow-list = open auto-discovery; otherwise require a match
-        // against one of the remembered peers' BLE identifiers.
-        if !allowedBLEIdentifiers.isEmpty,
-           !allowedBLEIdentifiers.contains(peripheral.identifier.uuidString)
-        {
+        // Require an explicit QR/contact-book match before auto-connecting.
+        // This keeps "forget contact" from degrading into open discovery.
+        if !allowedBLEIdentifiers.contains(peripheral.identifier.uuidString) {
             return
         }
         connectedPeripherals.append(peripheral)
@@ -181,12 +348,17 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard acceptsPeerCallback(from: peripheral) else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
         peripheral.delegate = self
         peripheral.discoverServices([Self.serviceUUID])
         connectedSubject.send(true)
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
+        guard shouldMutateDisconnectState(for: peripheral) else { return }
         let key = peripheral.identifier.uuidString
         connectedPeripherals.removeAll { $0.identifier == peripheral.identifier }
         writableCharacteristics.removeValue(forKey: peripheral.identifier)
@@ -194,6 +366,7 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
         // online dot") stops claiming the peer is reachable. A subsequent
         // didDiscover on reconnect will repopulate it.
         if discoveredPeripheralCache.removeValue(forKey: key) != nil {
+            discoveredPeripherals.removeValue(forKey: key)
             liveSubject.send(Array(discoveredPeripheralCache.values))
         }
         if connectedPeripherals.isEmpty { connectedSubject.send(false) }
@@ -202,6 +375,7 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
 
 extension BluetoothMeshTransport: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
+        guard acceptsPeerCallback(from: peripheral) else { return }
         guard let services = peripheral.services else { return }
         for service in services where service.uuid == Self.serviceUUID {
             peripheral.discoverCharacteristics([Self.audioCharUUID], for: service)
@@ -209,6 +383,7 @@ extension BluetoothMeshTransport: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
+        guard acceptsPeerCallback(from: peripheral) else { return }
         guard let chars = service.characteristics else { return }
         for char in chars where char.uuid == Self.audioCharUUID {
             if char.properties.contains(.notify) {
@@ -221,6 +396,7 @@ extension BluetoothMeshTransport: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {
+        guard acceptsPeerCallback(from: peripheral) else { return }
         guard let data = characteristic.value, let frame = Self.decodeBLEFrame(data) else { return }
         inboundSubject.send(frame)
     }
@@ -239,10 +415,7 @@ extension BluetoothMeshTransport: CBPeripheralManagerDelegate {
         let service = CBMutableService(type: Self.serviceUUID, primary: true)
         service.characteristics = [char]
         peripheral.add(service)
-        peripheral.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [Self.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "Sonar"
-        ])
+        restartAdvertisingIfPossible()
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {

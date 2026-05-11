@@ -17,7 +17,7 @@ final class LivePeerDirectoryTests: XCTestCase {
             id: id,
             name: name,
             host: host,
-            bonjour: "_sonar._tcp",
+            bonjour: PairingToken.mpcBonjourServiceName,
             tsIP: tsIP,
             tsPort: tsIP != nil ? 49377 : nil,
             ble: ble,

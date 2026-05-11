@@ -1,4 +1,3 @@
-import AVFoundation
 import Combine
 import Foundation
 import MediaPlayer
@@ -9,11 +8,12 @@ import MediaPlayer
 
 /// Apple Music background mix-in for Club mode. Plan §7.2 / §10/13.
 ///
-/// Uses `AVAudioSession` category options to duck other apps (including Music):
-///  - When `duck()` is called → set `.duckOthers` option; the system lowers
-///    Music automatically.
-///  - When `unduck()` is called → remove `.duckOthers`; Music resumes full
-///    volume on its own.
+/// AudioEngine applies AVAudioSession category options to duck other apps
+/// (including Music):
+///  - When a music profile is active → set `.duckOthers` option; the system
+///    lowers Music automatically.
+///  - When the profile disables music → remove `.duckOthers`; Music resumes
+///    full volume on its own.
 ///
 /// A software ramp timer drives the `@Published duckLevel` property so UI and
 /// audio consumers can observe the current state without needing an
@@ -38,21 +38,15 @@ final class MusicDucker {
 
     // MARK: - Enable / Disable
 
-    /// Request MusicKit authorisation and activate the audio session so
-    /// subsequent `duck()` / `duckOnVoice(active:)` calls work.
+    /// Request MusicKit authorisation and mark the ducker enabled. AudioEngine
+    /// owns the shared AVAudioSession category/options so profile helpers do
+    /// not clobber one another during reasserts and restarts.
     func enable(targetGain: Double = 0.16) async throws {
         self.targetGain = Float(targetGain)
 
         #if canImport(MusicKit)
             _ = await MusicAuthorization.request()
         #endif
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playAndRecord,
-            mode: .voiceChat,
-            options: [.mixWithOthers, .allowBluetoothHFP]
-        )
-        try session.setActive(true, options: [.notifyOthersOnDeactivation])
         isEnabled = true
 
         // Reflect the initial target in the published level.
@@ -66,9 +60,6 @@ final class MusicDucker {
         isEnabled = false
         // Remove duck; the system will restore Music volume automatically.
         unduck()
-        try? AVAudioSession.sharedInstance().setActive(
-            false, options: [.notifyOthersOnDeactivation]
-        )
     }
 
     // MARK: - Duck / Unduck
@@ -76,13 +67,11 @@ final class MusicDucker {
     /// Activate `.duckOthers` so the system lowers Music (and other apps).
     func duck() {
         rampTo(targetGain, duration: 0.3)
-        applySessionDucking(enabled: true)
     }
 
     /// Deactivate `.duckOthers`; Music resumes full volume.
     func unduck() {
         rampTo(1.0, duration: 0.8)
-        applySessionDucking(enabled: false)
     }
 
     // MARK: - Per-utterance ducking
@@ -92,24 +81,12 @@ final class MusicDucker {
         isVoiceDucked = active
         if active {
             rampTo(targetGain * 0.5, duration: 0.3) // 0.5 ≈ -6 dB
-            applySessionDucking(enabled: true)
         } else {
             rampTo(targetGain, duration: 0.8)
-            applySessionDucking(enabled: isEnabled)
         }
     }
 
     // MARK: - Private helpers
-
-    /// Switch the AVAudioSession between `.duckOthers` and `.mixWithOthers`.
-    private func applySessionDucking(enabled: Bool) {
-        let session = AVAudioSession.sharedInstance()
-        let options: AVAudioSession.CategoryOptions = enabled
-            ? [.duckOthers, .allowBluetoothHFP]
-            : [.mixWithOthers, .allowBluetoothHFP]
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
-        try? session.setActive(true, options: [.notifyOthersOnDeactivation])
-    }
 
     /// Linearly ramp the published `duckLevel` from its current value to
     /// `target` over `duration` seconds.  Pure UI / observer signal — does not

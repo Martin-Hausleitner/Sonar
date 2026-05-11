@@ -1,10 +1,9 @@
 import AVFoundation
 import Combine
-import CryptoKit
 import Foundation
 
-/// Records raw PCM from AVAudioEngine tap to an encrypted .sonsess file. §4.2, §8.
-/// Uses AVAudioFile (CAF/AIFF internally) as the container; FLAC export happens post-session.
+/// Records raw PCM from AVAudioEngine tap to a local .sonsess file. §4.2, §8.
+/// Uses AVAudioFile (CAF/AIFF internally) as the container; stored audio is plain local media.
 ///
 /// Privacy hardening (V30 "Big Red Button"):
 ///   * `startSession()` refuses to open a file when privacy mode is active.
@@ -14,10 +13,11 @@ import Foundation
 ///     AND the half-written file in Documents/Library is deleted.
 @MainActor
 final class LocalRecorder {
+    nonisolated static let retentionDaysDefaultsKey = "sonar.settings.retentionDays"
+
     private(set) var isRecording = false
     private var file: AVAudioFile?
     private var sessionURL: URL?
-    private let encryptionKey: SymmetricKey
     private var privacyCancellable: AnyCancellable?
 
     /// Optional override for the directory new sessions are written to.
@@ -26,9 +26,6 @@ final class LocalRecorder {
     var directoryOverride: URL?
 
     init() {
-        // Derive a per-device key from Keychain (stub: random for now, §8.2 Secure Enclave).
-        encryptionKey = SymmetricKey(size: .bits256)
-
         // React to privacy mode being toggled mid-session: close the file and
         // wipe the in-progress recording so a half-session can't sit on disk.
         privacyCancellable = NotificationCenter.default
@@ -38,10 +35,11 @@ final class LocalRecorder {
             }
     }
 
-    func startSession(sessionID: UUID = UUID()) throws {
+    @discardableResult
+    func startSession(sessionID: UUID = UUID()) throws -> Bool {
         guard !PrivacyMode.shared.isActive else {
             Log.app.info("Privacy mode active — recording suppressed")
-            return
+            return false
         }
 
         let dir = try recordingsDirectory()
@@ -52,6 +50,7 @@ final class LocalRecorder {
         let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
         file = try AVAudioFile(forWriting: url, settings: format.settings)
         isRecording = true
+        return true
     }
 
     /// Call this from AudioEngine's tap on every captured buffer.
@@ -125,5 +124,11 @@ extension LocalRecorder {
                   created < cutoff else { continue }
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    static func applyStoredRetentionPolicy() {
+        let stored = UserDefaults.standard.object(forKey: retentionDaysDefaultsKey) as? Int ?? 30
+        guard stored != Int.max else { return }
+        deleteOlderThan(days: stored)
     }
 }

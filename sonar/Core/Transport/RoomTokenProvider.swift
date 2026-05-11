@@ -1,6 +1,7 @@
 import Foundation
 
-/// Fetches a short-lived LiveKit JWT from sonar-server. Plan §10/14.
+/// Fetches a LiveKit JWT from sonar-server. Plan §10/14.
+/// The bundled development server does not enforce app-level auth or a Sonar TTL policy yet.
 protocol RoomTokenProviding {
     func fetchToken(roomName: String, participantIdentity: String) async throws -> String
 }

@@ -1,7 +1,7 @@
 """sonar-server — token issuer + LiveKit Agent launcher.
 
 Endpoints:
-  POST /token          → issue a short-lived LiveKit JWT
+  POST /token          → issue a LiveKit JWT for trusted development
   POST /agent/spawn    → attach the AI participant to a room
   POST /agent/utterance → forward a transcribed hint to the running agent
 
@@ -10,6 +10,11 @@ Env vars:
   LIVEKIT_API_KEY
   LIVEKIT_API_SECRET
   OPENAI_API_KEY   (for gpt-realtime agent)
+
+Security note:
+  /token currently has no app-level authentication, no room allow-list, and no
+  explicit Sonar TTL policy. Do not expose it as-is outside trusted dev
+  environments.
 """
 
 import asyncio

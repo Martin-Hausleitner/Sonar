@@ -1,4 +1,3 @@
-import simd
 import SwiftUI
 
 struct SessionView: View {
@@ -37,8 +36,8 @@ struct SessionView: View {
                         .padding(.horizontal, SonarTheme.horizontalPadding)
 
                     // In-session profile switcher — works pre- and during session.
-                    // SessionCoordinator listens to appState.$profileID via dropFirst()
-                    // and re-applies ANC / music / FEC live, so a tap here is enough.
+                    // SessionCoordinator observes appState.$profileID and applies
+                    // supported profile audio/session settings live.
                     profileSwitcher
                         .padding(.horizontal, SonarTheme.horizontalPadding)
 
@@ -109,6 +108,17 @@ struct SessionView: View {
             guard appState.testIdentity.autoStartSession, !sessionActive else { return }
             sessionActive = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .sonarStartSession)) { note in
+            if let profileID = note.object as? String, !profileID.isEmpty {
+                appState.profileID = profileID
+            }
+            if !sessionActive {
+                sessionActive = true
+            } else {
+                coordinator.appState = appState
+                coordinator.start()
+            }
+        }
         .onReceive(statsTimer) { _ in
             guard sessionActive else { return }
             // Elapsed time
@@ -168,13 +178,13 @@ struct SessionView: View {
                 compactMuteButton
             }
 
-            // Connect / Pairing-Guide — always reachable, even mid-session.
+            // Connect / device sheet — always reachable, even mid-session.
             SonarIconButton(
                 systemName: "link.badge.plus",
-                accessibilityLabel: "Verbinden — Pairing-Guide öffnen",
+                accessibilityLabel: "Verbinden — Geräte öffnen",
                 tint: SonarTheme.accent,
                 isProminent: true
-            ) { showGuide = true }
+            ) { showPairing = true }
 
             // Settings
             SonarIconButton(
@@ -186,28 +196,30 @@ struct SessionView: View {
     }
 
     private var peerBadge: some View {
-        HStack(spacing: 6) {
+        let visibleName = {
+            let trimmed = appState.peerName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? "Peer" : trimmed
+        }()
+        return HStack(spacing: 6) {
             SonarStatusDot(color: .green, size: 7)
-            if let name = appState.peerName, !name.isEmpty {
-                Text(name)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 130)
-            }
+            Text(visibleName)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 130)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.thinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 0.8))
-        .accessibilityLabel("Verbunden mit \(appState.peerName ?? "Peer")")
+        .accessibilityLabel("Verbunden mit \(visibleName)")
     }
 
     private var heroSection: some View {
         VStack(spacing: 14) {
             DistanceRingView(
-                distance: previewDistance,
-                direction: previewDistance != nil ? simd_float3(0.4, 0, -0.9) : nil
+                distance: displayedDistance,
+                direction: displayedDistance != nil ? appState.peerDirection : nil
             )
             .frame(width: 224, height: 224)
             .frame(maxWidth: .infinity)
@@ -221,8 +233,8 @@ struct SessionView: View {
     // MARK: - Profile Switcher (in-session, compact)
 
     /// Horizontal pill row of all built-in profiles. Tapping a pill writes
-    /// the new id to `appState.profileID`; SessionCoordinator listens via
-    /// `dropFirst()` and re-applies ANC / music / FEC settings live.
+    /// the new id to `appState.profileID`; SessionCoordinator applies
+    /// supported profile audio/session settings live.
     private var profileSwitcher: some View {
         HStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -314,7 +326,9 @@ struct SessionView: View {
         case .idle: return sessionActive ? "Verbinde…" : "Bereit"
         case .connecting: return "Verbinde…"
         case let .near(d): return String(format: "Nah%@ · %.1f m", peerSuffix, d)
-        case .far: return "Verbunden\(peerSuffix) · Internet"
+        case .far:
+            guard appState.peerOnline else { return "Verbinde…" }
+            return "Verbunden\(peerSuffix) · \(appState.connectionType.label)"
         case .degrading: return "Verbindung schwach"
         case .recovering: return "Verbindung stellt sich wieder her"
         }
@@ -328,7 +342,7 @@ struct SessionView: View {
         case .idle: return sessionActive ? "antenna.radiowaves.left.and.right" : "circle"
         case .connecting: return "antenna.radiowaves.left.and.right"
         case .near: return "dot.radiowaves.left.and.right"
-        case .far: return "globe"
+        case .far: return appState.connectionType.icon
         case .degrading: return "exclamationmark.triangle"
         case .recovering: return "arrow.triangle.2.circlepath"
         }
@@ -337,7 +351,7 @@ struct SessionView: View {
     private var statusColor: Color {
         switch appState.phase {
         case .near: .cyan
-        case .far: .white
+        case .far: appState.peerOnline ? .white : .secondary
         case .degrading: .yellow
         default: .secondary
         }
@@ -614,9 +628,13 @@ struct SessionView: View {
     }
 
     private var distanceLabel: String {
-        if let d = previewDistance { return String(format: "%.1f m", d) }
-        if case let .near(d) = appState.phase { return String(format: "%.1f m", d) }
+        if let d = displayedDistance { return String(format: "%.1f m", d) }
         return "—"
+    }
+
+    private var displayedDistance: Double? {
+        if case let .near(distance) = appState.phase { return distance }
+        return previewDistance
     }
 
     private var latencyColor: Color {
@@ -677,7 +695,7 @@ struct SessionView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Verbinden")
                         .font(.headline)
-                    Text("QR-Code scannen oder beide Geräte mit Sonar öffnen.")
+                    Text("Geräteliste öffnen, Peer antippen oder QR-Fallback nutzen.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

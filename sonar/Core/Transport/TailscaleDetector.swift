@@ -77,6 +77,17 @@ final class TailscaleDetector: ObservableObject {
         return a == 100 && (64 ... 127).contains(b)
     }
 
+    nonisolated static func isLikelyTailscaleInterface(
+        name: String,
+        isUp: Bool,
+        isLoopback: Bool,
+        ipv4: String
+    ) -> Bool {
+        guard isUp, !isLoopback, isInCGNATRange(ipv4) else { return false }
+        let lowercasedName = name.lowercased()
+        return lowercasedName.hasPrefix("utun") || lowercasedName.contains("tailscale")
+    }
+
     // MARK: - getifaddrs walk
 
     /// Returns the first IPv4 address (in dotted-quad form) found on any
@@ -101,7 +112,14 @@ final class TailscaleDetector: ObservableObject {
                     )
                     if result == 0 {
                         let ip = String(cString: hostbuf)
-                        if isInCGNATRange(ip) {
+                        let flags = Int32(cur.pointee.ifa_flags)
+                        let name = String(cString: cur.pointee.ifa_name)
+                        if isLikelyTailscaleInterface(
+                            name: name,
+                            isUp: flags & IFF_UP != 0,
+                            isLoopback: flags & IFF_LOOPBACK != 0,
+                            ipv4: ip
+                        ) {
                             return ip
                         }
                     }

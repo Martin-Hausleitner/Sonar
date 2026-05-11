@@ -14,11 +14,23 @@ final class DistancePublisher: ObservableObject {
     enum Source: String { case uwb, rssi, none }
 
     private var bag = Set<AnyCancellable>()
+    private weak var boundUWB: NIRangingEngine?
+    private var isBound = false
 
-    func bind(uwb: NIRangingEngine, rssi: RSSIFallback) {
+    func bind(uwb: NIRangingEngine, rssi: RSSIFallback, uwbAvailable: Bool = true) {
+        unbind()
+        isBound = true
+        boundUWB = uwb
+
         // §14.1: start RSSI fallback when UWB session is invalidated.
-        uwb.onInvalidated = { [weak rssi] in
+        uwb.onInvalidated = { [weak self, weak rssi] in
+            guard let self else { return }
+            guard Self.shouldStartRSSIFallbackAfterInvalidation(isBound: isBound) else { return }
             rssi?.start()
+        }
+
+        if Self.shouldStartRSSIFallbackOnBind(uwbAvailable: uwbAvailable) {
+            rssi.start()
         }
 
         // UWB stream — highest priority.
@@ -47,5 +59,22 @@ final class DistancePublisher: ObservableObject {
                 source = d == nil ? .none : .rssi
             }
             .store(in: &bag)
+    }
+
+    func unbind() {
+        isBound = false
+        boundUWB?.onInvalidated = nil
+        boundUWB = nil
+        bag.removeAll()
+        distance = nil
+        source = .none
+    }
+
+    static func shouldStartRSSIFallbackOnBind(uwbAvailable: Bool) -> Bool {
+        !uwbAvailable
+    }
+
+    static func shouldStartRSSIFallbackAfterInvalidation(isBound: Bool) -> Bool {
+        isBound
     }
 }

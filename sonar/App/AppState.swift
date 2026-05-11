@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import simd
 
 @MainActor
 final class AppState: ObservableObject {
@@ -15,7 +16,13 @@ final class AppState: ObservableObject {
     let testIdentity: SonarTestIdentity
 
     @Published var phase: Phase = .idle
-    @Published var profileID: String = "zimmer"
+    @Published var peerDirection: simd_float3? = nil
+    @Published var profileID: String = AppState.loadProfileID() {
+        didSet {
+            UserDefaults.standard.set(profileID, forKey: AppState.profileIDKey)
+        }
+    }
+
     @Published var aiActive: Bool = false
 
     /// §6 — battery tier
@@ -43,6 +50,7 @@ final class AppState: ObservableObject {
 
     /// V30 — privacy mode
     @Published var privacyModeActive: Bool = false
+    private var privacyModeCancellable: AnyCancellable?
 
     // Session microphone controls. `inputLevelRMS` continues updating while
     // muted so the user can see that the microphone is alive before unmuting.
@@ -92,6 +100,11 @@ final class AppState: ObservableObject {
     private static func loadRawAudioMode() -> Bool {
         if UserDefaults.standard.object(forKey: rawAudioModeKey) == nil { return true }
         return UserDefaults.standard.bool(forKey: rawAudioModeKey)
+    }
+
+    static let profileIDKey = "sonar.settings.profileID"
+    private static func loadProfileID() -> String {
+        UserDefaults.standard.string(forKey: profileIDKey) ?? "zimmer"
     }
 
     /// User-editable display name shown in QR tokens, the contact book, and
@@ -185,6 +198,11 @@ final class AppState: ObservableObject {
         localPeerName = storedName.isEmpty ? testIdentity.deviceName : storedName
         localPeerID = testIdentity.deviceID
         connectionIsSimulated = testIdentity.isSimulatorRelayEnabled
+        privacyModeActive = PrivacyMode.shared.isActive
+        privacyModeCancellable = PrivacyMode.shared.$isActive
+            .sink { [weak self] active in
+                self?.privacyModeActive = active
+            }
     }
 
     func applyActiveTransportPaths(_ paths: [MultipathBonder.PathID], now: Date = Date()) {

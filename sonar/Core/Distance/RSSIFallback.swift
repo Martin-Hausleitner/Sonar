@@ -40,18 +40,40 @@ final class RSSIFallback: NSObject {
     // MARK: - Lifecycle
 
     func start() {
-        guard central == nil else { return }
+        lock.lock()
+        guard central == nil else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+
         // The delegate callbacks will trigger scanning once the manager is powered on.
-        central = CBCentralManager(delegate: self, queue: .global(qos: .utility))
+        let manager = CBCentralManager(delegate: self, queue: .global(qos: .utility))
+
+        lock.lock()
+        if central == nil {
+            central = manager
+            lock.unlock()
+        } else {
+            lock.unlock()
+            manager.stopScan()
+        }
     }
 
     func stop() {
-        central?.stopScan()
-        central = nil
         lock.lock()
+        let stoppedCentral = central
+        central = nil
         smoothedRSSI = nil
         lock.unlock()
+
+        stoppedCentral?.stopScan()
         distance.send(nil)
+    }
+
+    static func shouldHandleCallback(from callbackCentral: AnyObject, activeCentral: AnyObject?) -> Bool {
+        guard let activeCentral else { return false }
+        return callbackCentral === activeCentral
     }
 
     // MARK: - Distance math
@@ -72,12 +94,22 @@ final class RSSIFallback: NSObject {
         lock.unlock()
         distance.send(metres)
     }
+
+    private func shouldHandleCallback(from callbackCentral: CBCentralManager) -> Bool {
+        lock.lock()
+        let activeCentral = central
+        lock.unlock()
+
+        return Self.shouldHandleCallback(from: callbackCentral, activeCentral: activeCentral)
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
 
 extension RSSIFallback: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard shouldHandleCallback(from: central) else { return }
+
         guard central.state == .poweredOn else {
             distance.send(nil)
             return
@@ -98,6 +130,8 @@ extension RSSIFallback: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
+        guard shouldHandleCallback(from: central) else { return }
+
         let rssiValue = RSSI.doubleValue
         // Ignore readings that are clearly out of range or invalid (CoreBluetooth
         // returns 127 when RSSI cannot be read).

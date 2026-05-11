@@ -101,7 +101,9 @@ final class PairingService {
 
         near?.addPairingToken(token)
         bluetooth?.addPairingToken(token)
-        tailscale?.addPairingToken(token)
+        if !PrivacyMode.shared.isActive {
+            tailscale?.addPairingToken(token)
+        }
 
         // Persist the peer to the contact book so future sessions auto-target
         // it without forcing the user to re-scan the QR code.

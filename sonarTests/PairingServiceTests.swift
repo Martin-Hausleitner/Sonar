@@ -16,7 +16,7 @@ final class PairingServiceTests: XCTestCase {
         id: String = "peer-A",
         name: String = "Alex iPhone",
         host: String = "alex.local",
-        bonjour: String = "_sonar._tcp",
+        bonjour: String = PairingToken.mpcBonjourServiceName,
         ageSeconds: TimeInterval = 0
     ) -> PairingToken {
         PairingToken(

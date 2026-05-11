@@ -8,6 +8,11 @@ import Network
 final class TailscaleTransport: BondedPath {
     static let defaultPort: UInt16 = 49377
 
+    private struct PairingHint {
+        let peerID: String
+        let peerName: String
+    }
+
     let id: MultipathBonder.PathID = .tailscale
     var estimatedCostPerByte: Double {
         0.0005
@@ -40,6 +45,11 @@ final class TailscaleTransport: BondedPath {
     /// the next replay re-dial. Pre-fix, a single network blip permanently
     /// blacklisted the peer until session restart.
     private var connectionEndpoint: [ObjectIdentifier: String] = [:]
+    /// Remote IP by connection identity. Accepted inbound connections use the
+    /// peer's ephemeral source port, so forget by PairingToken `tsPort` must
+    /// match on the stable Tailscale IP instead.
+    private var connectionRemoteIP: [ObjectIdentifier: String] = [:]
+    private var pairingHintsByTSIP: [String: PairingHint] = [:]
 
     init(listenPort: UInt16 = defaultPort) {
         self.listenPort = listenPort
@@ -51,7 +61,7 @@ final class TailscaleTransport: BondedPath {
 
         let listener = try NWListener(using: .tcp, on: port)
         listener.newConnectionHandler = { [weak self] connection in
-            self?.configure(connection)
+            self?.configure(connection, requiresInboundPairingHint: true)
         }
         listener.stateUpdateHandler = { state in
             if case let .failed(error) = state {
@@ -73,16 +83,24 @@ final class TailscaleTransport: BondedPath {
             receiveBuffers.removeAll()
             dialedEndpoints.removeAll()
             connectionEndpoint.removeAll()
+            connectionRemoteIP.removeAll()
+            pairingHintsByTSIP.removeAll()
             connectedSubject.send(false)
         }
     }
 
+    @MainActor
     func addPairingToken(_ token: PairingToken) {
+        guard !PrivacyMode.shared.isActive else { return }
         guard let ip = token.tsIP, !ip.isEmpty else { return }
+        let hintKeys = Self.pairingHintKeys(for: ip)
         let port = token.tsPort ?? Self.defaultPort
         let key = "\(ip):\(port)"
         var alreadyDialed = false
         queue.sync {
+            for hintKey in hintKeys {
+                pairingHintsByTSIP[hintKey] = PairingHint(peerID: token.id, peerName: token.name)
+            }
             alreadyDialed = dialedEndpoints.contains(key)
             if !alreadyDialed { dialedEndpoints.insert(key) }
         }
@@ -93,6 +111,7 @@ final class TailscaleTransport: BondedPath {
     func clearPairingTokens() {
         queue.async { [weak self] in
             self?.dialedEndpoints.removeAll()
+            self?.pairingHintsByTSIP.removeAll()
         }
     }
 
@@ -101,11 +120,20 @@ final class TailscaleTransport: BondedPath {
     /// "Vergessen" gesture clears every transport symmetrically.
     func removePairingToken(forTSIP ip: String, port: UInt16 = defaultPort) {
         let key = "\(ip):\(port)"
+        let hintKeys = Self.pairingHintKeys(for: ip)
         queue.async { [weak self] in
             guard let self else { return }
             dialedEndpoints.remove(key)
-            // Cancel any active connection that was dialled to this endpoint.
-            for (objID, endpointKey) in connectionEndpoint where endpointKey == key {
+            for hintKey in hintKeys {
+                pairingHintsByTSIP.removeValue(forKey: hintKey)
+            }
+            // Cancel outbound dials by endpoint and inbound accepted sockets by
+            // remote IP; inbound source ports are ephemeral.
+            let matchingIDs = Set(
+                connectionEndpoint.compactMap { $0.value == key ? $0.key : nil } +
+                    connectionRemoteIP.compactMap { hintKeys.contains($0.value) ? $0.key : nil }
+            )
+            for objID in matchingIDs {
                 if let connection = connections.first(where: { ObjectIdentifier($0) == objID }) {
                     connection.cancel()
                 }
@@ -114,6 +142,7 @@ final class TailscaleTransport: BondedPath {
     }
 
     /// Back-compat alias.
+    @MainActor
     func applyPairingToken(_ token: PairingToken) {
         addPairingToken(token)
     }
@@ -125,10 +154,7 @@ final class TailscaleTransport: BondedPath {
     private func connect(host: String, port: UInt16, key: String) {
         guard let endpointPort = NWEndpoint.Port(rawValue: port) else { return }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: endpointPort, using: .tcp)
-        queue.async { [weak self] in
-            self?.connectionEndpoint[ObjectIdentifier(connection)] = key
-        }
-        configure(connection)
+        configure(connection, endpointKey: key, remoteIP: Self.normalizedRemoteIP(from: host))
     }
 
     func send(_ frame: AudioFrame) async {
@@ -147,10 +173,33 @@ final class TailscaleTransport: BondedPath {
         }
     }
 
-    private func configure(_ connection: NWConnection) {
+    private func configure(
+        _ connection: NWConnection,
+        endpointKey: String? = nil,
+        remoteIP: String? = nil,
+        requiresInboundPairingHint: Bool = false
+    ) {
         queue.async { [weak self] in
             guard let self else { return }
             guard !connections.contains(where: { $0 === connection }) else { return }
+
+            let id = ObjectIdentifier(connection)
+            let normalizedRemoteIP = remoteIP ?? Self.remoteIP(from: connection.endpoint)
+            if requiresInboundPairingHint {
+                guard
+                    let normalizedRemoteIP,
+                    pairingHintsByTSIP[normalizedRemoteIP] != nil
+                else {
+                    connection.cancel()
+                    return
+                }
+            }
+            if let endpointKey {
+                connectionEndpoint[id] = endpointKey
+            }
+            if let normalizedRemoteIP {
+                connectionRemoteIP[id] = normalizedRemoteIP
+            }
 
             connections.append(connection)
             connection.stateUpdateHandler = { [weak self, weak connection] state in
@@ -217,6 +266,7 @@ final class TailscaleTransport: BondedPath {
         connections.removeAll { $0 === connection }
         readyConnections.removeAll { $0 === connection }
         receiveBuffers.removeValue(forKey: key)
+        connectionRemoteIP.removeValue(forKey: key)
         // Free the dialed-endpoint slot so a future replay can re-dial after
         // a network blip — pre-fix, a single failure permanently blacklisted
         // the peer until the user restarted the session.
@@ -224,5 +274,48 @@ final class TailscaleTransport: BondedPath {
             dialedEndpoints.remove(endpointKey)
         }
         connectedSubject.send(!readyConnections.isEmpty)
+    }
+
+    private static func remoteIP(from endpoint: NWEndpoint) -> String? {
+        guard case let .hostPort(host, _) = endpoint else { return nil }
+        return normalizedRemoteIP(from: host)
+    }
+
+    private static func normalizedRemoteIP(from host: NWEndpoint.Host) -> String? {
+        switch host {
+        case let .ipv4(address):
+            "\(address)"
+        case let .ipv6(address):
+            "\(address)"
+        case let .name(name, _):
+            normalizedRemoteIP(from: name)
+        default:
+            nil
+        }
+    }
+
+    private static func normalizedRemoteIP(from host: String) -> String? {
+        if let ipv4 = IPv4Address(host) {
+            return "\(ipv4)"
+        }
+        if let ipv6 = IPv6Address(host) {
+            return "\(ipv6)"
+        }
+        return nil
+    }
+
+    private static func pairingHintKey(for ip: String) -> String {
+        normalizedRemoteIP(from: ip) ?? ip
+    }
+
+    private static func pairingHintKeys(for ip: String) -> Set<String> {
+        let key = pairingHintKey(for: ip)
+        var keys: Set<String> = [key]
+        if key == "127.0.0.1" {
+            keys.formUnion(["::1", "::ffff:127.0.0.1"])
+        } else if key == "::1" || key == "::ffff:127.0.0.1" {
+            keys.insert("127.0.0.1")
+        }
+        return keys
     }
 }

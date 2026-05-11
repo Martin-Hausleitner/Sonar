@@ -62,8 +62,9 @@ final class PrivacyHardeningTests: XCTestCase {
 
         // startSession should short-circuit. The implementation does not throw —
         // it logs and returns. Either way no file should land on disk.
-        do { try recorder.startSession() } catch { /* fine — no-op expected */ }
+        let didStart = (try? recorder.startSession()) ?? false
 
+        XCTAssertFalse(didStart, "Recorder must report that no session started when privacy is active")
         XCTAssertFalse(recorder.isRecording, "Recorder must not enter recording state when privacy is active")
 
         // Even if a buffer is fed, nothing must be written.
@@ -79,7 +80,8 @@ final class PrivacyHardeningTests: XCTestCase {
     /// in-progress file so a half-recording is never left in storage.
     func testActivatingPrivacyMidSessionDeletesInProgressFile() throws {
         // Start cleanly with privacy off.
-        try recorder.startSession()
+        let didStart = try recorder.startSession()
+        XCTAssertTrue(didStart)
         XCTAssertTrue(recorder.isRecording)
         recorder.append(makeBuffer())
 
@@ -121,5 +123,72 @@ final class PrivacyHardeningTests: XCTestCase {
         XCTAssertFalse(recorder.isRecording, "Recorder must remain idle after privacy toggles post-session")
         // No assertion on file presence — the file from the completed session may
         // remain. The contract here is "no crash, no spurious recording".
+    }
+
+    func testSettingsActiveEngineLabelMentionsPrivacyModeBeforeCloudKeys() throws {
+        let source = try readSourceFile("sonar/UI/SettingsView.swift")
+        let label = try extractComputedProperty("activeEngineLabel", from: source)
+
+        XCTAssertLessThan(
+            try XCTUnwrap(label.range(of: "privacyMode.isActive")?.lowerBound),
+            try XCTUnwrap(label.range(of: "openAIKey")?.lowerBound),
+            "Privacy mode must be reflected before cloud API keys are considered"
+        )
+        XCTAssertTrue(label.contains("Privacy Mode"))
+    }
+
+    func testLocalRecorderDoesNotClaimOrCarryUnusedSonsessEncryption() throws {
+        let source = try readSourceFile("sonar/Core/Storage/LocalRecorder.swift")
+
+        XCTAssertFalse(source.contains("CryptoKit"))
+        XCTAssertFalse(source.contains("SymmetricKey"))
+        XCTAssertFalse(source.localizedCaseInsensitiveContains("encrypted .sonsess"))
+        XCTAssertFalse(source.localizedCaseInsensitiveContains("encrypted"))
+    }
+
+    func testReadmeDoesNotClaimSonsessEncryption() throws {
+        let readme = try readSourceFile("README.md")
+
+        XCTAssertFalse(readme.localizedCaseInsensitiveContains(".sonsess encryption"))
+        XCTAssertFalse(readme.localizedCaseInsensitiveContains("encrypted .sonsess"))
+    }
+
+    private func extractComputedProperty(_ name: String, from source: String) throws -> String {
+        guard let start = source.range(of: "private var \(name):")?.lowerBound else {
+            throw NSError(
+                domain: "PrivacyHardeningTests",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Could not find \(name)"]
+            )
+        }
+
+        let suffix = source[start...]
+        guard let end = suffix.range(of: "\n    private var", options: [], range: suffix.index(after: start) ..< suffix.endIndex)?.lowerBound
+            ?? suffix.range(of: "\n    private func", options: [], range: suffix.index(after: start) ..< suffix.endIndex)?.lowerBound
+        else {
+            throw NSError(
+                domain: "PrivacyHardeningTests",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Could not find end of \(name)"]
+            )
+        }
+
+        return String(source[start ..< end])
+    }
+
+    private func readSourceFile(_ relativePath: String) throws -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            let candidate = url.appendingPathComponent(relativePath)
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return try String(contentsOf: candidate, encoding: .utf8)
+            }
+        }
+        throw NSError(
+            domain: "PrivacyHardeningTests",
+            code: 3,
+            userInfo: [NSLocalizedDescriptionKey: "Could not locate \(relativePath) from \(#filePath)"]
+        )
     }
 }

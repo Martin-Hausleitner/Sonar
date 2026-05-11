@@ -110,6 +110,61 @@ final class MultipathBonderTests: XCTestCase {
         XCTAssertFalse(bonder.activePaths.contains(.multipeer))
     }
 
+    func testRemovedPathCannotReAddItselfAfterLaterConnectionEvent() async throws {
+        let bonder = MultipathBonder()
+        let path = MockBondedPath(id: .mpquic, connected: false)
+        bonder.addPath(path)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        bonder.removePath(.mpquic)
+        path.setConnected(true)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(
+            bonder.activePaths.contains(.mpquic),
+            "A removed path's old isConnected subscription must not re-add it."
+        )
+    }
+
+    func testRemovedPathCannotDeliverInboundFrames() async throws {
+        let bonder = MultipathBonder()
+        var receivedFrames: [AudioFrame] = []
+        var cancellables = Set<AnyCancellable>()
+
+        bonder.inboundFrames
+            .sink { receivedFrames.append($0) }
+            .store(in: &cancellables)
+
+        let path = MockBondedPath(id: .bluetooth, connected: true)
+        bonder.addPath(path)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        bonder.removePath(.bluetooth)
+        path.receiveInbound(AudioFrame(seq: 99, payload: Data([0x99])))
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(
+            receivedFrames.isEmpty,
+            "A removed path's old inbound subscription must not deliver frames."
+        )
+    }
+
+    func testRemoveAllPathsCancelsSubscriptionsAndClearsActivePaths() async throws {
+        let bonder = MultipathBonder()
+        let pathA = MockBondedPath(id: .multipeer, connected: true)
+        let pathB = MockBondedPath(id: .mpquic, connected: false)
+        bonder.addPath(pathA)
+        bonder.addPath(pathB)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        bonder.removeAllPaths()
+        pathA.setConnected(false)
+        pathB.setConnected(true)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(bonder.activePaths.isEmpty)
+    }
+
     // MARK: - Mode .redundant
 
     func testRedundantModeSendsOnAllConnectedPaths() async throws {
@@ -152,22 +207,99 @@ final class MultipathBonderTests: XCTestCase {
 
     // MARK: - Mode .primaryStandby
 
-    func testPrimaryStandbyModeSendsOnlyOnFirstPath() async throws {
+    func testPrimaryStandbyModeSendsOnlyOnHighestPriorityConnectedPath() async throws {
         let bonder = MultipathBonder()
         bonder.mode = .primaryStandby
 
-        let pathA = MockBondedPath(id: .multipeer, connected: true)
-        let pathB = MockBondedPath(id: .bluetooth, connected: true)
-        bonder.addPath(pathA)
-        bonder.addPath(pathB)
+        let internet = MockBondedPath(id: .mpquic, connected: true)
+        let tailscale = MockBondedPath(id: .tailscale, connected: true)
+        let bluetooth = MockBondedPath(id: .bluetooth, connected: true)
+        let multipeer = MockBondedPath(id: .multipeer, connected: true)
+        bonder.addPath(internet)
+        bonder.addPath(tailscale)
+        bonder.addPath(bluetooth)
+        bonder.addPath(multipeer)
         try await Task.sleep(nanoseconds: 50_000_000)
 
         await bonder.send(opusData: Data([0xFF]))
         try await Task.sleep(nanoseconds: 30_000_000)
 
-        // Total frames sent across both paths must be exactly 1
-        let total = pathA.sentFrames.count + pathB.sentFrames.count
+        XCTAssertEqual(multipeer.sentFrames.count, 1, "multipeer should be the deterministic primary")
+        XCTAssertEqual(bluetooth.sentFrames.count, 0)
+        XCTAssertEqual(tailscale.sentFrames.count, 0)
+        XCTAssertEqual(internet.sentFrames.count, 0)
+
+        // Total frames sent across all paths must be exactly 1
+        let total = multipeer.sentFrames.count
+            + bluetooth.sentFrames.count
+            + tailscale.sentFrames.count
+            + internet.sentFrames.count
         XCTAssertEqual(total, 1, "primaryStandby should only send on one path")
+    }
+
+    func testPrimaryStandbyModeFailsOverToNextPriorityPath() async throws {
+        let bonder = MultipathBonder()
+        bonder.mode = .primaryStandby
+
+        let internet = MockBondedPath(id: .mpquic, connected: true)
+        let tailscale = MockBondedPath(id: .tailscale, connected: true)
+        let bluetooth = MockBondedPath(id: .bluetooth, connected: true)
+        let multipeer = MockBondedPath(id: .multipeer, connected: true)
+        bonder.addPath(internet)
+        bonder.addPath(tailscale)
+        bonder.addPath(bluetooth)
+        bonder.addPath(multipeer)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        multipeer.setConnected(false)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        await bonder.send(opusData: Data([0xFE]))
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(multipeer.sentFrames.count, 0)
+        XCTAssertEqual(bluetooth.sentFrames.count, 1, "bluetooth should take over after multipeer disconnects")
+        XCTAssertEqual(tailscale.sentFrames.count, 0)
+        XCTAssertEqual(internet.sentFrames.count, 0)
+    }
+
+    func testPrimaryStandbyModeUsesSimulatorRelayWhenItIsTheOnlyConnectedPath() async throws {
+        let bonder = MultipathBonder()
+        bonder.mode = .primaryStandby
+
+        let simulatorRelay = MockBondedPath(id: .simulatorRelay, connected: true)
+        bonder.addPath(simulatorRelay)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        await bonder.send(opusData: Data([0xFD]))
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(simulatorRelay.sentFrames.count, 1)
+    }
+
+    // MARK: - Mode .eco
+
+    func testEcoModeSendsOnTwoCheapestConnectedPaths() async throws {
+        let bonder = MultipathBonder()
+        bonder.mode = .eco
+
+        let bluetooth = MockBondedPath(id: .bluetooth, connected: true, cost: 0.20)
+        let multipeer = MockBondedPath(id: .multipeer, connected: true, cost: 0.10)
+        let tailscale = MockBondedPath(id: .tailscale, connected: true, cost: 0.15)
+        let internet = MockBondedPath(id: .mpquic, connected: true, cost: 0.80)
+        bonder.addPath(bluetooth)
+        bonder.addPath(multipeer)
+        bonder.addPath(tailscale)
+        bonder.addPath(internet)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        await bonder.send(opusData: Data([0xEC]))
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(multipeer.sentFrames.count, 1, "eco should use the cheapest connected path")
+        XCTAssertEqual(tailscale.sentFrames.count, 1, "eco should keep a second connected path active")
+        XCTAssertEqual(bluetooth.sentFrames.count, 0)
+        XCTAssertEqual(internet.sentFrames.count, 0)
     }
 
     // MARK: - Deduplication of inbound frames

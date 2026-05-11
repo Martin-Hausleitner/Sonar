@@ -170,10 +170,10 @@ struct ProfileDetailView: View {
                 detailRow(
                     icon: "music.note",
                     title: "Musik-Mix",
-                    value: profile.musicMix > 0 ? "\(Int(profile.musicMix * 100)) % beibehalten" : "Aus",
+                    value: profile.musicMix > 0 ? "System-Ducking angefragt" : "Aus",
                     explain: profile.musicMix > 0
-                        ? "Apple Music läuft im Hintergrund weiter, gedimmt auf diesen Pegel. Beim Sprechen wird kurz weiter gedimmt."
-                        : "Kein paralleler Musik-Mix — die App pausiert keine Musik, dimmt sie aber auch nicht aktiv."
+                        ? "Sonar bittet iOS, andere Audio-Apps parallel laufen zu lassen und bei Sprache zu ducken. Die tatsächliche Absenkung steuert das System."
+                        : "Kein paralleler Musik-Mix — die App pausiert keine Musik und fragt kein aktives Ducking an."
                 )
                 detailRow(
                     icon: "ruler",
@@ -185,7 +185,7 @@ struct ProfileDetailView: View {
                     icon: "arrow.left.and.right.righttriangle.left.righttriangle.right",
                     title: "Near → Far ab",
                     value: String(format: "%.0f m", profile.nearFarThreshold),
-                    explain: "Ab dieser Entfernung wechselt Sonar von lokaler Direktverbindung auf das Internet-Relay."
+                    explain: "Ab dieser Entfernung verlässt Sonar den Near-Pfad und nutzt den besten aktuell verfügbaren Verbindungspfad als Fallback."
                 )
                 detailRow(
                     icon: ProfileVisuals.aiIcon(profile.aiTrigger),
@@ -294,11 +294,11 @@ enum ProfileVisuals {
     static func listeningExplain(_ mode: String) -> String {
         switch mode {
         case "transparency":
-            "AirPods lassen Umgebung durch — du hörst Realität + Peer gemischt."
+            "Sonar fragt Transparenz best-effort als Hörpräferenz an; iOS bestätigt Drittanbieter-Apps den aktiven Modus nicht."
         case "noiseCancellation":
-            "AirPods blocken Umgebungslärm — nur der Peer dringt klar durch."
+            "Sonar fragt Geräuschunterdrückung best-effort als Hörpräferenz an; die tatsächliche Wirkung liegt bei iOS und den AirPods."
         case "adaptive":
-            "AirPods entscheiden je nach Lärmpegel automatisch."
+            "Sonar fragt Adaptiv best-effort als Hörpräferenz an; iOS und AirPods entscheiden, was tatsächlich aktiv wird."
         default:
             "AirPods-Modus bleibt unverändert."
         }

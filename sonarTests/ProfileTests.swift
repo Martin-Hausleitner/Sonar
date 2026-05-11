@@ -1,3 +1,4 @@
+import AVFoundation
 @testable import Sonar
 import XCTest
 
@@ -58,5 +59,45 @@ final class ProfileTests: XCTestCase {
         let before = mgr.selected.id
         mgr.select("does-not-exist")
         XCTAssertEqual(mgr.selected.id, before)
+    }
+
+    func testSpatialMixerAppliesProfileVoiceGainBeforeGlobalOutputVolume() {
+        SpatialMixer.applyOutputVolume(1.0)
+        let mixer = SpatialMixer()
+
+        mixer.applyProfileVoiceGain(0.4)
+
+        XCTAssertEqual(mixer.remotePlayerNode.volume, 0.4, accuracy: 0.0001)
+
+        SpatialMixer.applyOutputVolume(0.5)
+
+        let exp = expectation(description: "global output volume propagated")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+
+        XCTAssertEqual(mixer.remotePlayerNode.volume, 0.2, accuracy: 0.0001)
+    }
+
+    func testAudioSessionPolicyPreservesDuckingWhenRawAudioIsReasserted() {
+        var policy = AudioSessionPolicy(rawAudioMode: true)
+        policy.musicDuckingEnabled = true
+
+        XCTAssertEqual(policy.sessionMode, .default)
+        XCTAssertFalse(policy.voiceProcessingEnabled)
+        XCTAssertTrue(policy.categoryOptions.contains(.duckOthers))
+        XCTAssertTrue(policy.categoryOptions.contains(.mixWithOthers))
+        XCTAssertTrue(policy.categoryOptions.contains(.allowAirPlay))
+    }
+
+    func testAudioSessionPolicyPreservesAirPodsVoiceChatNudgeDuringRawAudioMode() {
+        var policy = AudioSessionPolicy(rawAudioMode: true)
+        policy.listeningModeNudge = .voiceChat
+        policy.musicDuckingEnabled = true
+
+        XCTAssertEqual(policy.sessionMode, .voiceChat)
+        XCTAssertFalse(policy.voiceProcessingEnabled)
+        XCTAssertTrue(policy.categoryOptions.contains(.duckOthers))
+        XCTAssertTrue(policy.categoryOptions.contains(.mixWithOthers))
+        XCTAssertTrue(policy.categoryOptions.contains(.allowAirPlay))
     }
 }

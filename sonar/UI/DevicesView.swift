@@ -2,9 +2,9 @@ import SwiftUI
 
 /// "Geräte" — the new connect surface. Replaces the old QR-first pairing
 /// flow with a unified list: known contacts at the top, live nearby
-/// candidates below. A single tap connects; QR is reachable as a footer
-/// secondary action for the rare case of a brand-new device that doesn't
-/// show up in the live list.
+/// candidates below. A single tap uses a local hint to send an invite; QR is
+/// reachable as a footer secondary action for the rare case of a brand-new
+/// device that doesn't show up in the live list.
 ///
 /// Real-device feedback on v0.2.8: forcing the user through QR to find
 /// peers was the friction killing the product. This view exists so the
@@ -18,6 +18,7 @@ struct DevicesView: View {
     /// Toggles the embedded `PairingView` sheet for the rare case the user
     /// wants to scan a fresh device by QR.
     @State private var showPairing = false
+    @State private var pairingInitialMode: PairingView.Mode = .show
 
     var body: some View {
         List {
@@ -33,7 +34,7 @@ struct DevicesView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showPairing) {
             NavigationStack {
-                PairingView()
+                PairingView(initialMode: pairingInitialMode)
                     .environmentObject(appState)
                     .environmentObject(peerStore)
                     .toolbar {
@@ -104,7 +105,7 @@ struct DevicesView: View {
                 }
             }
         } footer: {
-            Text("Sonar-Geräte im selben WLAN oder über Bluetooth in Reichweite. Tippen verbindet automatisch und merkt sich das Gerät.")
+            Text("Sonar-Geräte im selben WLAN oder über Bluetooth in Reichweite. Tippen speichert oder nutzt den Hinweis und sendet eine gezielte Einladung.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -112,11 +113,17 @@ struct DevicesView: View {
 
     private var footerSection: some View {
         Section {
-            Button { showPairing = true } label: {
+            Button {
+                pairingInitialMode = .scan
+                showPairing = true
+            } label: {
                 Label("Neues Gerät per QR scannen…", systemImage: "qrcode.viewfinder")
                     .foregroundStyle(SonarTheme.accent)
             }
-            Button { showPairing = true } label: {
+            Button {
+                pairingInitialMode = .show
+                showPairing = true
+            } label: {
                 Label("Eigenen QR-Code anzeigen…", systemImage: "qrcode")
                     .foregroundStyle(.secondary)
             }
@@ -202,10 +209,10 @@ struct DevicesView: View {
 
     private func subtitle(for entry: LivePeerDirectory.Entry) -> String {
         if entry.source == .nearby {
-            return "Neu in der Nähe — tippen zum Verbinden"
+            return "Neu in der Nähe - tippen für Einladung"
         }
         if entry.isOnline {
-            return "Online · tippen zum Verbinden"
+            return "Online - tippen für Einladung"
         }
         guard let last = entry.lastSeenAt else {
             return "Noch nie verbunden"

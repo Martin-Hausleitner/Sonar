@@ -34,9 +34,9 @@ enum LatencyBudget {
     /// within the latency budget.
     static let opusBitrateBps: Int32 = 32000
 
-    /// Forward Error Correction. On for Far, off for Near (FEC adds 2–4 ms).
-    static let opusFECEnabledNear: Bool = false
-    static let opusFECEnabledFar: Bool = true
+    /// Apple's AVAudioConverter Opus path does not expose controllable in-band
+    /// forward error correction.
+    static let opusForwardErrorCorrectionSupported: Bool = false
 
     /// Discontinuous Transmission — saves bandwidth during silence.
     static let opusDTXEnabled: Bool = true

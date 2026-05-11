@@ -65,7 +65,7 @@ TOTAL Far          150–230 ms (Ziel: < 250 ms)
 | `audioSampleRate` | 48000 | AudioEngine, OpusCoder |
 | `preferredIOBufferDuration` | **0.005** s | AVAudioSession |
 | `opusComplexity` | 5 (was 10) | OpusCoder — 5 = balanced enc-speed/quality |
-| `opusBitrate` | 24_000 | OpusCoder |
+| `opusBitrate` | 32_000 | OpusCoder |
 | `jitterBufferMs` | **10** (Near) / **50** (Far) | Decoder side |
 | `crossfadeMs` | **100** (was 200) | TransportMultiplexer |
 | `duplicateSuppressorWindowMs` | **100** (was 200) | DuplicateVoiceSuppressor |
@@ -77,9 +77,10 @@ TOTAL Far          150–230 ms (Ziel: < 250 ms)
 
 - **Echo cancellation custom** — Apple's VPIO macht's gut genug, eigenes wäre
   +5–10 ms ohne Quality-Win.
-- **Forward Error Correction (FEC) im Opus** — kostet 2–4 ms encode-Latency
-  zugunsten Loss-Resilience. Aktivieren wir nur im Far-Mode, nicht Near.
-- **Adaptive bitrate** — fix 24 kbps, simpler, kein Mid-Stream-Renegotiate-Lag.
+- **Forward Error Correction (FEC) im Opus** — Apple AVAudioConverter Opus
+  bietet hier keine kontrollierbare FEC. Far mode verlaesst sich fuer
+  Loss-Resilience auf Jitter/Transport/Packet-Loss-Handling statt FEC.
+- **Adaptive bitrate** — fix 32 kbps, simpler, kein Mid-Stream-Renegotiate-Lag.
 - **Multi-Frame-Bundling** — würde Overhead pro Send senken aber Latenz +N×Frame.
 
 ## Alarm-Schwellen (in Metrics)

@@ -4,11 +4,10 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var modelManager = LocalModelManager.shared
     @StateObject private var tailscale = TailscaleDetector.shared
+    @ObservedObject private var privacyMode = PrivacyMode.shared
 
     @AppStorage("sonar.settings.audioFormat") private var audioFormat: AudioFormat = .opus
-    @AppStorage("sonar.settings.retentionDays") private var retentionDays: Int = 30
-    @AppStorage("sonar.settings.fecEnabled") private var fecEnabled: Bool = false
-    @AppStorage("sonar.settings.profileID") private var profileID: String = "zimmer"
+    @AppStorage(LocalRecorder.retentionDaysDefaultsKey) private var retentionDays: Int = 30
     @AppStorage("sonar.parakeet.apiKey") private var parakeetAPIKey: String = ""
     @AppStorage("sonar.openai.apiKey") private var openAIKey: String = ""
     @AppStorage("sonar.openai.endpoint") private var openAIEndpoint: String = ""
@@ -17,7 +16,6 @@ struct SettingsView: View {
     /// the user can keep music loud and turn the peer's voice down (or vice-versa).
     @AppStorage("sonar.audio.outputVolume") private var outputVolume: Double = 1.0
 
-    @State private var privacyActive: Bool = PrivacyMode.shared.isActive
     @State private var latency: (p50: Double, p95: Double, p99: Double)? = nil
 
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -115,7 +113,7 @@ struct SettingsView: View {
         } header: {
             Text("Verbindung")
         } footer: {
-            Text("Sonar wählt automatisch zwischen AWDL (lokal), Bluetooth, Tailscale und Internet. Die Verbindung startet, sobald beide Geräte die App öffnen. Tailscale wird automatisch erkannt, wenn dein Gerät eine 100.x-Adresse aus dem CGNAT-Bereich hat.")
+            Text("Sonar wählt automatisch zwischen AWDL (lokal), Bluetooth, Tailscale und Internet. Die Suche kann starten, sobald beide Geräte die App öffnen; zum gezielten Verbinden braucht Sonar einen bekannten Kontakt, ein sichtbares Gerät zum Antippen oder einen QR-Hinweis. Tailscale wird automatisch erkannt, wenn dein Gerät eine 100.x-Adresse aus dem CGNAT-Bereich hat.")
         }
     }
 
@@ -193,8 +191,6 @@ struct SettingsView: View {
                 }
             }
 
-            Toggle("Vorwärtsfehlerkorrektur (FEC)", isOn: $fecEnabled)
-
             Toggle("Ungefiltertes Audio", isOn: $appState.rawAudioMode)
                 .onChange(of: appState.rawAudioMode) { _, _ in
                     // SessionCoordinator restarts the engine reactively;
@@ -207,10 +203,13 @@ struct SettingsView: View {
                 Text("90 Tage").tag(90)
                 Text("Unbegrenzt").tag(Int.max)
             }
+            .onChange(of: retentionDays) { _, _ in
+                LocalRecorder.applyStoredRetentionPolicy()
+            }
         } header: {
             Text("Audio")
         } footer: {
-            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. **FEC** verbessert die Qualität bei Paketverlust, erhöht jedoch die Bandbreite um ca. 20 %. **Ungefiltertes Audio** umgeht Apples AGC + Echo-Unterdrückung — empfohlen, wenn die Gegenseite \"verpackt\" klingt. Die Änderung greift sofort (Engine wird live neu gestartet).")
+            Text("**Opus** ist für Sprache optimiert (niedrige Latenz, ~32 kBit/s). **FLAC** speichert verlustfrei, ist aber deutlich größer. Apples Opus-Encoder stellt keine steuerbare Fehlerkorrektur bereit. **Ungefiltertes Audio** umgeht Apples AGC + Echo-Unterdrückung — empfohlen, wenn die Gegenseite \"verpackt\" klingt. Die Änderung greift sofort (Engine wird live neu gestartet).")
         }
     }
 
@@ -272,11 +271,12 @@ struct SettingsView: View {
         } header: {
             Text("Transkription")
         } footer: {
-            Text("Sonar wählt die Engine automatisch nach Priorität: **OpenAI Realtime → Parakeet → Lokales Whisper-Modell → Apple Speech**. Lokale Whisper-Modelle (~75–466 MB) laufen vollständig auf dem Gerät — kein API Key nötig. Cloud-Engines sind präziser, brauchen aber Internet.")
+            Text("Sonar wählt die Engine automatisch nach Priorität: **OpenAI Realtime → Parakeet → Lokales Whisper-Modell → Apple Speech**. Im Privacy Mode sind Cloud-Engines blockiert. Lokale Whisper-Modelle (~75–466 MB) laufen vollständig auf dem Gerät — kein API Key nötig. Cloud-Engines sind präziser, brauchen aber Internet.")
         }
     }
 
     private var activeEngineLabel: String {
+        if privacyMode.isActive { return "Privacy Mode · lokal" }
         if !openAIKey.isEmpty { return "OpenAI Realtime" }
         if !parakeetAPIKey.isEmpty { return "Parakeet (NVIDIA)" }
         let lid = modelManager.selectedModelID
@@ -287,6 +287,7 @@ struct SettingsView: View {
     }
 
     private var activeEngineColor: Color {
+        if privacyMode.isActive { return Color.secondary }
         if !openAIKey.isEmpty { return .green }
         if !parakeetAPIKey.isEmpty { return SonarTheme.accent }
         let lid = modelManager.selectedModelID
@@ -389,7 +390,7 @@ struct SettingsView: View {
         } header: {
             Text("Profil")
         } footer: {
-            Text("Das Profil passt Rauschunterdrückung, AirPods-Modus und Musiklautstärke automatisch an die Umgebung an. **Zimmer** ist der Standard für Innenräume.")
+            Text("Das Profil fragt AirPods-Hörpräferenzen best-effort an und setzt Sonars Sprachpegel sowie iOS-Systemducking für andere Audio-Apps. **Zimmer** ist der Standard für Innenräume.")
         }
     }
 
@@ -409,19 +410,28 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("", isOn: $privacyActive)
+                Toggle("", isOn: privacyModeBinding)
                     .labelsHidden()
                     .accessibilityLabel("Privacy Mode")
-                    .onChange(of: privacyActive) { _, v in
-                        if v { PrivacyMode.shared.activate() } else { PrivacyMode.shared.deactivate() }
-                        appState.privacyModeActive = v
-                    }
             }
         } header: {
             Text("Datenschutz")
         } footer: {
             Text("Im Privacy Mode werden ausschließlich lokale Pfade (AWDL, BT) genutzt. Internet-Pfade werden sofort getrennt und nicht neu aufgebaut, bis du den Modus deaktivierst.")
         }
+    }
+
+    private var privacyModeBinding: Binding<Bool> {
+        Binding(
+            get: { privacyMode.isActive },
+            set: { active in
+                if active {
+                    PrivacyMode.shared.activate()
+                } else {
+                    PrivacyMode.shared.deactivate()
+                }
+            }
+        )
     }
 
     // MARK: - Diagnostics

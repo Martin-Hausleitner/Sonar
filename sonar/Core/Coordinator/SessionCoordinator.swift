@@ -4,13 +4,22 @@ import Foundation
 import NearbyInteraction
 import simd
 
+@MainActor
+protocol FarTransporting: BondedPath {
+    func configure(_ configuration: FarTransport.Configuration)
+    func start() async throws
+    func stop() async
+}
+
+extension FarTransport: FarTransporting {}
+
 /// Central state machine. Wires the full audio pipeline:
 ///   mic → VoiceProcessing → OpusCoder → MultipathBonder → NearTransport / FarTransport
 ///   NearTransport / FarTransport → MultipathBonder → JitterBuffer → OpusCoder → SpatialMixer
 ///
 /// Distance pipeline (§10/16):
 ///   NIRangingEngine (UWB) + RSSIFallback (BLE) → DistancePublisher
-///   → AppState.phase + SpatialMixer.updateSpatialPosition()
+///   → AppState.phase + AppState.peerDirection + SpatialMixer.updateSpatialPosition()
 ///
 /// §14 Phase 1–4.
 @MainActor
@@ -24,13 +33,13 @@ final class SessionCoordinator: ObservableObject {
     private let battery = BatteryManager.shared
     private let signalCalc = SignalScoreCalculator()
     private let recorder = LocalRecorder()
-    private let transcription = LiveTranscriptionEngine()
+    private let transcription: LiveTranscriptionEngine
     private let privacy = PrivacyMode.shared
     private let spatialMixer = SpatialMixer()
     private let near = NearTransport()
     private let bluetooth = BluetoothMeshTransport()
     private let tailscalePath = TailscaleTransport()
-    private let far = FarTransport()
+    private let far: any FarTransporting
     private var simulatorRelay: SimulatorRelayTransport?
     private let jitterBuffer = JitterBuffer()
     private let encoder = OpusCoder()
@@ -63,6 +72,8 @@ final class SessionCoordinator: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var audioTask: Task<Void, Never>?
+    private var farStartupTask: Task<Void, Never>?
+    private var privacyModeCancellable: AnyCancellable?
     private var simulatorRelayFrameTask: Task<Void, Never>?
     private var playbackTimer: Timer?
 
@@ -72,6 +83,23 @@ final class SessionCoordinator: ObservableObject {
 
     weak var appState: AppState?
 
+    init() {
+        far = FarTransport()
+        transcription = LiveTranscriptionEngine()
+    }
+
+    init(
+        far: any FarTransporting,
+        transcription: LiveTranscriptionEngine? = nil
+    ) {
+        self.far = far
+        if let transcription {
+            self.transcription = transcription
+        } else {
+            self.transcription = LiveTranscriptionEngine()
+        }
+    }
+
     // MARK: - Lifecycle
 
     func start() {
@@ -80,6 +108,7 @@ final class SessionCoordinator: ObservableObject {
         // startAudioPipeline tasks that fought over `bonder.addPath` and
         // could leave duplicate sinks behind on the next stop()/start().
         guard audioTask == nil else { return }
+        registerPrivacyModeHandling()
         phase = .connecting
         appState?.phase = .connecting
         audioTask = Task { [weak self] in
@@ -92,6 +121,10 @@ final class SessionCoordinator: ObservableObject {
         playbackTimer = nil
         audioTask?.cancel()
         audioTask = nil
+        farStartupTask?.cancel()
+        farStartupTask = nil
+        privacyModeCancellable?.cancel()
+        privacyModeCancellable = nil
         simulatorRelayFrameTask?.cancel()
         simulatorRelayFrameTask = nil
         // Drop Combine subscriptions BEFORE stopping the engine — otherwise
@@ -103,11 +136,15 @@ final class SessionCoordinator: ObservableObject {
         transcription.stop()
         _ = recorder.stopSession()
         spatialMixer.stopRemotePlayer()
+        distancePublisher.unbind()
+        near.onReceivedNIToken = nil
+        near.localNIToken = nil
         rangingEngine.stop()
         rssiFallback.stop()
         musicDucker.disable()
         wakeWord.stop()
         let relay = simulatorRelay
+        bonder.removeAllPaths()
         tailscalePath.stop()
         Task {
             await near.stop()
@@ -128,6 +165,7 @@ final class SessionCoordinator: ObservableObject {
         appState?.activePathIDs = []
         appState?.activePathCount = 0
         appState?.inputLevelRMS = 0
+        appState?.peerDirection = nil
     }
 
     // MARK: - Internal async setup
@@ -158,12 +196,15 @@ final class SessionCoordinator: ObservableObject {
 
         // MARK: Distance pipeline (§10/16)
 
-        distancePublisher.bind(uwb: rangingEngine, rssi: rssiFallback)
+        let capabilities = DeviceCapabilities.detect()
+        let localNIToken = capabilities.hasUWB ? rangingEngine.prepareLocalToken() : nil
+        distancePublisher.bind(uwb: rangingEngine, rssi: rssiFallback, uwbAvailable: localNIToken != nil)
 
         // When NearTransport gets a peer's NIDiscoveryToken, start UWB ranging.
-        near.localNIToken = rangingEngine.prepareLocalToken()
+        near.localNIToken = localNIToken
         near.onReceivedNIToken = { [weak self] token in
             guard let self else { return }
+            guard near.localNIToken != nil else { return }
             rangingEngine.start(with: token)
             // Publish our local token back so the peer can start ranging too.
             near.localNIToken = rangingEngine.localToken
@@ -182,8 +223,7 @@ final class SessionCoordinator: ObservableObject {
         rangingEngine.direction
             .receive(on: DispatchQueue.main)
             .sink { [weak self] direction in
-                guard let direction else { return }
-                self?.spatialMixer.updateSpatialPosition(direction: direction)
+                self?.handlePeerDirectionUpdate(direction)
             }
             .store(in: &cancellables)
 
@@ -193,19 +233,22 @@ final class SessionCoordinator: ObservableObject {
         // starting — NearTransport rebuilds its MCPeerID stack if the name
         // changed since the last start so peers see the latest label.
         near.advertisedDisplayName = appState?.effectiveDisplayName
+        bluetooth.advertisedDisplayName = appState?.effectiveDisplayName
         try? await near.start()
-        try? tailscalePath.start()
+        if shouldStartTailscaleTransport() {
+            try? tailscalePath.start()
+        }
         // stop() may have run during the await above. Bail out instead of
         // re-arming subsystems the user has just torn down.
         guard !Task.isCancelled else { return }
         bonder.addPath(near)
         bonder.addPath(bluetooth)
-        bonder.addPath(tailscalePath)
+        if shouldStartTailscaleTransport() {
+            bonder.addPath(tailscalePath)
+        }
         let farConfig = farConfiguration()
-        far.configure(farConfig)
-        if farConfig.isStartable {
-            Task { try? await far.start() }
-            bonder.addPath(far)
+        if shouldStartFarTransport(configuration: farConfig) {
+            startFarTransportIfAllowed(configuration: farConfig)
         }
 
         // Tailscale presence is advertised in the QR token. The UI only flips
@@ -224,8 +267,9 @@ final class SessionCoordinator: ObservableObject {
 
         // MARK: QR pairing — observe AppState.pendingPairing and translate
 
-        // a successful scan into peerOnline + a targeted NearTransport invite,
-        // and into a new contact-book entry via the KnownPeerStore.
+        // a successful scan into a targeted NearTransport invite and a new
+        // contact-book entry via the KnownPeerStore. Transport state still
+        // owns peerOnline.
         if let appState {
             pairingService.bind(
                 appState: appState,
@@ -276,6 +320,7 @@ final class SessionCoordinator: ObservableObject {
                     audioEngine.rawAudioMode = newMode
                     do {
                         try audioEngine.reapplyConfig()
+                        spatialMixer.startRemotePlayer()
                     } catch {
                         Log.app.error("AudioEngine reapplyConfig failed after rawAudioMode toggle: \(error.localizedDescription, privacy: .public)")
                     }
@@ -380,7 +425,7 @@ final class SessionCoordinator: ObservableObject {
         bonder.$activePaths
             .receive(on: DispatchQueue.main)
             .sink { [weak self] paths in
-                self?.appState?.applyActiveTransportPaths(paths)
+                self?.handleActivePathUpdate(paths)
             }
             .store(in: &cancellables)
 
@@ -396,29 +441,8 @@ final class SessionCoordinator: ObservableObject {
             .sink { [weak self] g in self?.appState?.signalGrade = g }
             .store(in: &cancellables)
 
-        // MARK: Privacy mode → remove cellular path AND tear down cloud
-
-        // transcription engines. Without this the comment "kills all cloud
-        // connections" was a lie: OpenAI Realtime / Parakeet would keep
-        // streaming PCM upstream even with privacy enabled.
-        NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                bonder.removePath(.mpquic)
-                switch transcription.currentEngine {
-                case .openAIRealtime, .parakeet:
-                    transcription.stop()
-                case .appleSpeech, .local:
-                    break
-                }
-                // Clear any cloud-sourced live transcript so stale text doesn't
-                // linger in the UI after the user pulls the kill switch.
-                appState?.transcriptSegments = []
-            }
-            .store(in: &cancellables)
-
-        try? recorder.startSession()
-        appState?.isRecording = true
+        LocalRecorder.applyStoredRetentionPolicy()
+        appState?.isRecording = (try? recorder.startSession()) ?? false
 
         // Live transcript → AppState (drives UI)
         transcription.$transcript
@@ -433,10 +457,9 @@ final class SessionCoordinator: ObservableObject {
         }
 
         // If stop() interleaved during one of the awaits above, don't flip the
-        // phase back to .far over the .idle that stop() just set.
+        // phase back over the .idle that stop() just set.
         guard !Task.isCancelled else { return }
-        phase = .far
-        appState?.phase = .far
+        setFallbackPhaseForCurrentConnection()
     }
 
     private func startSimulatorRelayPipeline() async {
@@ -502,10 +525,11 @@ final class SessionCoordinator: ObservableObject {
 
     // MARK: - Distance → Phase
 
-    private func handleDistanceUpdate(_ distance: Double?) {
+    func handleDistanceUpdate(_ distance: Double?) {
         guard let distance else {
-            // No reading — stay in current phase or fall back to far.
-            if case .near = phase { phase = .far }
+            // No reading — leave near mode so the UI stops showing stale metres.
+            if case .near = phase { setFallbackPhaseForCurrentConnection() }
+            if case .near = appState?.phase ?? .idle { setFallbackPhaseForCurrentConnection() }
             return
         }
 
@@ -515,9 +539,27 @@ final class SessionCoordinator: ObservableObject {
             phase = .near(distance: distance)
             appState?.phase = .near(distance: distance)
         } else {
-            if case .near = phase { phase = .far }
-            if case .near = appState?.phase ?? .idle { appState?.phase = .far }
+            if case .near = phase { setFallbackPhaseForCurrentConnection() }
+            if case .near = appState?.phase ?? .idle { setFallbackPhaseForCurrentConnection() }
         }
+    }
+
+    func handlePeerDirectionUpdate(_ direction: simd_float3?) {
+        appState?.peerDirection = direction
+        guard let direction else { return }
+        spatialMixer.updateSpatialPosition(direction: direction)
+    }
+
+    private func registerPrivacyModeHandling() {
+        guard privacyModeCancellable == nil else { return }
+        // Privacy has to be observed before async startup reaches cloud paths,
+        // otherwise a token fetch/connect already in flight can survive the kill switch.
+        privacyModeCancellable = NotificationCenter.default.publisher(for: .sonarPrivacyModeActivated)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.handlePrivacyModeActivated()
+                }
+            }
     }
 
     private func farConfiguration() -> FarTransport.Configuration {
@@ -538,6 +580,101 @@ final class SessionCoordinator: ObservableObject {
         )
     }
 
+    func startFarTransportIfAllowed(configuration: FarTransport.Configuration) {
+        guard shouldStartFarTransport(configuration: configuration) else { return }
+
+        farStartupTask?.cancel()
+        far.configure(configuration)
+        farStartupTask = Task { [weak self] in
+            guard let self else { return }
+            guard shouldStartFarTransport(configuration: configuration), !Task.isCancelled else { return }
+
+            do {
+                try await far.start()
+            } catch {
+                return
+            }
+
+            guard Self.shouldKeepStartedFarTransport(
+                privacyActive: privacy.isActive,
+                startupTaskCancelled: Task.isCancelled,
+                configuration: configuration
+            ) else {
+                await far.stop()
+                return
+            }
+
+            bonder.addPath(far)
+            farStartupTask = nil
+        }
+    }
+
+    func handlePrivacyModeActivated() async {
+        farStartupTask?.cancel()
+        farStartupTask = nil
+        bonder.removePath(.tailscale)
+        bonder.removePath(.mpquic)
+        tailscalePath.stop()
+        await far.stop()
+        switch transcription.currentEngine {
+        case .openAIRealtime, .parakeet:
+            transcription.abortCloudTranscriptionForPrivacy()
+        case .appleSpeech, .local:
+            break
+        }
+        // Clear any cloud-sourced live transcript so stale text doesn't
+        // linger in the UI after the user pulls the kill switch.
+        transcription.clearTranscript()
+        appState?.transcriptSegments = []
+        appState?.isRecording = false
+    }
+
+    static func shouldStartFarTransport(
+        privacyActive: Bool,
+        configuration: FarTransport.Configuration
+    ) -> Bool {
+        !privacyActive && configuration.isStartable
+    }
+
+    static func shouldKeepStartedFarTransport(
+        privacyActive: Bool,
+        startupTaskCancelled: Bool,
+        configuration: FarTransport.Configuration
+    ) -> Bool {
+        shouldStartFarTransport(privacyActive: privacyActive, configuration: configuration) && !startupTaskCancelled
+    }
+
+    private func shouldStartFarTransport(configuration: FarTransport.Configuration) -> Bool {
+        Self.shouldStartFarTransport(privacyActive: privacy.isActive, configuration: configuration)
+    }
+
+    static func shouldStartTailscaleTransport(privacyActive: Bool) -> Bool {
+        !privacyActive
+    }
+
+    private func shouldStartTailscaleTransport() -> Bool {
+        Self.shouldStartTailscaleTransport(privacyActive: privacy.isActive)
+    }
+
+    private func handleActivePathUpdate(_ paths: [MultipathBonder.PathID]) {
+        appState?.applyActiveTransportPaths(paths)
+        guard phase != .idle else { return }
+        guard !paths.isEmpty else {
+            phase = .connecting
+            appState?.phase = .connecting
+            return
+        }
+        if case .near = phase { return }
+        phase = .far
+        appState?.phase = .far
+    }
+
+    private func setFallbackPhaseForCurrentConnection() {
+        let nextPhase: AppState.Phase = bonder.activePaths.isEmpty ? .connecting : .far
+        phase = nextPhase
+        appState?.phase = nextPhase
+    }
+
     private var activeProfile: SessionProfile? {
         guard let id = appState?.profileID else { return nil }
         return SessionProfile.builtIn.first { $0.id == id }
@@ -553,7 +690,9 @@ final class SessionCoordinator: ObservableObject {
             let token = peer.asReplayToken()
             near.addPairingToken(token)
             bluetooth.addPairingToken(token)
-            tailscalePath.addPairingToken(token)
+            if shouldStartTailscaleTransport() {
+                tailscalePath.addPairingToken(token)
+            }
         }
     }
 
@@ -670,12 +809,19 @@ final class SessionCoordinator: ObservableObject {
     private func applyProfile(_ profile: SessionProfile?) {
         guard let profile else { return }
 
-        // ANC / transparency mode for AirPods.
-        Task { await airPods.apply(profile: profile) }
+        // AirPods listening preferences and Music ducking are AVAudioSession
+        // best-effort requests. Merge them into AudioEngine's policy so a later
+        // raw-audio reassert/restart preserves the requested mode/options.
+        audioEngine.updateSessionPolicy { policy in
+            policy.listeningModeNudge = airPods.listeningModeNudge(for: profile.listeningMode)
+            policy.musicDuckingEnabled = profile.musicMix > 0
+        }
 
-        // Music ducking: enable with the profile's mix level, or disable.
+        // Music ducking: request system mixing/ducking. iOS decides the actual
+        // attenuation applied to other audio.
         if profile.musicMix > 0 {
-            Task {
+            Task { [weak self] in
+                guard let self else { return }
                 try? await musicDucker.enable(targetGain: profile.musicMix)
                 musicDucker.duck()
             }
@@ -683,16 +829,17 @@ final class SessionCoordinator: ObservableObject {
             musicDucker.disable()
         }
 
-        // Encoder FEC: on for outdoor/noisy profiles, off for quiet ones.
-        let fecProfiles: Set = ["roller", "festival", "club"]
-        encoder.fecEnabled = fecProfiles.contains(profile.id)
+        // Remote voice gain from the profile, multiplied by the global Sonar
+        // output volume inside SpatialMixer.
+        spatialMixer.applyProfileVoiceGain(Float(profile.gain))
     }
 
     // MARK: - Battery adaptation
 
     private func applyBatteryTier(_ tier: BatteryManager.Tier) {
         switch tier {
-        case .normal, .eco: bonder.mode = .redundant
+        case .normal: bonder.mode = .redundant
+        case .eco: bonder.mode = .eco
         case .saver, .critical: bonder.mode = .primaryStandby
         }
         if !tier.transcriptionEnabled { transcription.stop() }

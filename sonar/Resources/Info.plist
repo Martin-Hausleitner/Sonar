@@ -28,13 +28,12 @@
 		<true/>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund.</string>
+	<string>Sonar bittet iOS, andere Audio-Apps im Club-Modus parallel laufen zu lassen und bei Sprache zu ducken.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_sonar._tcp</string>
-		<string>_sonar._udp</string>
+		<string>_sonar-mpc._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Sonar nutzt die Kamera, um den QR-Code des Pairing-Partners zu scannen.</string>
@@ -46,8 +45,6 @@
 	<string>Sonar nutzt Ultra-Wideband, um die Entfernung zu deinem Gesprächspartner zentimetergenau zu messen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Sonar transkribiert dein Gespräch in Echtzeit, damit du Inhalte später nachlesen kannst.</string>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

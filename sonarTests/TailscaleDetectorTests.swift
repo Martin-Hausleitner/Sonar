@@ -70,4 +70,48 @@ final class TailscaleDetectorTests: XCTestCase {
         XCTAssertFalse(TailscaleDetector.isInCGNATRange("fd7a:115c:a1e0::1"))
         XCTAssertFalse(TailscaleDetector.isInCGNATRange("::1"))
     }
+
+    // MARK: - Interface selection
+
+    func testAcceptsUpUtunInterfaceWithCGNATAddress() {
+        XCTAssertTrue(TailscaleDetector.isLikelyTailscaleInterface(
+            name: "utun4",
+            isUp: true,
+            isLoopback: false,
+            ipv4: "100.96.1.1"
+        ))
+    }
+
+    func testAcceptsNamedTailscaleInterfaceWithCGNATAddress() {
+        XCTAssertTrue(TailscaleDetector.isLikelyTailscaleInterface(
+            name: "tailscale0",
+            isUp: true,
+            isLoopback: false,
+            ipv4: "100.100.42.17"
+        ))
+    }
+
+    func testRejectsCarrierCGNATOnCellularInterface() {
+        XCTAssertFalse(TailscaleDetector.isLikelyTailscaleInterface(
+            name: "pdp_ip0",
+            isUp: true,
+            isLoopback: false,
+            ipv4: "100.96.1.1"
+        ))
+    }
+
+    func testRejectsDownOrLoopbackTailscaleLikeInterfaces() {
+        XCTAssertFalse(TailscaleDetector.isLikelyTailscaleInterface(
+            name: "utun4",
+            isUp: false,
+            isLoopback: false,
+            ipv4: "100.96.1.1"
+        ))
+        XCTAssertFalse(TailscaleDetector.isLikelyTailscaleInterface(
+            name: "utun4",
+            isUp: true,
+            isLoopback: true,
+            ipv4: "100.96.1.1"
+        ))
+    }
 }

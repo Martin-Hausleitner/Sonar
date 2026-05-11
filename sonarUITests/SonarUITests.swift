@@ -8,7 +8,11 @@ final class SonarUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = [
             "-sonar.onboarded", "YES",
-            "-sonar.seedRecording", "YES"
+            "-sonar.seedRecording", "YES",
+            "-sonar.settings.profileID", "zimmer",
+            "-sonar.devmode.fakeDemo", "NO",
+            "-sonar.openai.apiKey", "",
+            "-sonar.parakeet.apiKey", ""
         ]
     }
 
@@ -21,9 +25,9 @@ final class SonarUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["Session beenden"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["Mikrofon stummschalten"].waitForExistence(timeout: 4))
-        app.buttons["Mikrofon stummschalten"].firstMatch.tap()
+        tapHittableButton("Mikrofon stummschalten")
         XCTAssertTrue(app.buttons["Mikrofon einschalten"].waitForExistence(timeout: 4))
-        app.buttons["Mikrofon einschalten"].firstMatch.tap()
+        tapHittableButton("Mikrofon einschalten")
 
         XCTAssertTrue(app.buttons["Profil Zimmer (aktiv)"].waitForExistence(timeout: 4))
         app.buttons["Profil Roller"].tap()
@@ -58,7 +62,7 @@ final class SonarUITests: XCTestCase {
         app.buttons["Einstellungen öffnen"].tap()
         XCTAssertTrue(app.navigationBars["Einstellungen"].waitForExistence(timeout: 4))
 
-        tapHittableButton("QR-Pairing")
+        tapHittableButton("QR-Pairing", scrollDirection: .down)
         XCTAssertTrue(app.navigationBars["QR-Pairing"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.buttons["Code regenerieren"].waitForExistence(timeout: 4))
         app.buttons["Code regenerieren"].tap()
@@ -67,9 +71,9 @@ final class SonarUITests: XCTestCase {
         tapHittableButton("Verbindung einrichten")
         XCTAssertTrue(app.navigationBars["Verbindung einrichten"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.buttons["QR-Pairing starten"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["AWDL / AirDrop-Kanal"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["WLAN eingeschaltet"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["Bluetooth"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["Lokales Netzwerk"].waitForExistence(timeout: 4))
+        XCTAssertTrue(waitForVisibleStaticText("Lokales Netzwerk", timeout: 6))
         attachScreenshot(named: "connection-guide")
         app.buttons["QR-Pairing starten"].tap()
         XCTAssertTrue(app.navigationBars["QR-Pairing"].waitForExistence(timeout: 4))
@@ -79,16 +83,15 @@ final class SonarUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Verbindung einrichten"].waitForExistence(timeout: 4))
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        setSwitch("Vorwärtsfehlerkorrektur (FEC)", to: true)
         setSwitch("Privacy Mode", to: true)
         setSwitch("Demo-Modus", to: true)
         XCTAssertTrue(isSwitchOn(app.switches["Demo-Modus"]))
         setSwitch("Demo-Modus", to: false)
 
         app.buttons["Fertig"].tap()
-        XCTAssertTrue(app.buttons["Verbinden — Pairing-Guide öffnen"].waitForExistence(timeout: 4))
-        app.buttons["Verbinden — Pairing-Guide öffnen"].tap()
-        XCTAssertTrue(app.navigationBars["Verbindung einrichten"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.buttons["Verbinden — Geräte öffnen"].waitForExistence(timeout: 4))
+        app.buttons["Verbinden — Geräte öffnen"].tap()
+        XCTAssertTrue(app.navigationBars["Geräte"].waitForExistence(timeout: 4))
         app.buttons["Fertig"].tap()
     }
 
@@ -100,7 +103,7 @@ final class SonarUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Profil-Details"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["AirPods-Modus"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["Stimmen-Verstärkung"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["KI-Auslöser"].waitForExistence(timeout: 4))
+        XCTAssertTrue(waitForVisibleStaticText("KI-Auslöser", timeout: 6))
         attachScreenshot(named: "profile-details")
         app.buttons["Fertig"].tap()
 
@@ -112,7 +115,7 @@ final class SonarUITests: XCTestCase {
         volumeSlider.adjust(toNormalizedSliderPosition: 0.62)
         attachScreenshot(named: "settings-audio-volume")
 
-        tapHittableButton("QR-Pairing")
+        tapHittableButton("QR-Pairing", scrollDirection: .down)
         XCTAssertTrue(app.navigationBars["QR-Pairing"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.descendants(matching: .any)["Pairing-QR-Code"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.buttons["Code regenerieren"].waitForExistence(timeout: 4))
@@ -141,7 +144,18 @@ final class SonarUITests: XCTestCase {
         app.launch()
     }
 
-    private func tapHittableButton(_ label: String, timeout: TimeInterval = 4, file: StaticString = #filePath, line: UInt = #line) {
+    private enum ScrollDirection {
+        case up
+        case down
+    }
+
+    private func tapHittableButton(
+        _ label: String,
+        timeout: TimeInterval = 4,
+        scrollDirection: ScrollDirection? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         let buttons = app.buttons.matching(NSPredicate(format: "label == %@", label))
         let deadline = Date().addingTimeInterval(timeout)
 
@@ -153,10 +167,22 @@ final class SonarUITests: XCTestCase {
                     return
                 }
             }
+            scroll(scrollDirection)
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
 
         XCTFail("No hittable button named \(label)", file: file, line: line)
+    }
+
+    private func scroll(_ direction: ScrollDirection?) {
+        switch direction {
+        case .up:
+            app.swipeUp()
+        case .down:
+            app.swipeDown()
+        case nil:
+            break
+        }
     }
 
     private func tapSwitch(_ label: String, timeout: TimeInterval = 8, file: StaticString = #filePath, line: UInt = #line) {
@@ -201,6 +227,26 @@ final class SonarUITests: XCTestCase {
 
         XCTFail("No hittable slider named \(label)", file: file, line: line)
         return slider
+    }
+
+    private func waitForVisibleStaticText(_ label: String, timeout: TimeInterval = 8) -> Bool {
+        let text = app.staticTexts[label]
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if isVisible(text) {
+                return true
+            }
+            app.swipeUp()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+
+        return isVisible(text)
+    }
+
+    private func isVisible(_ element: XCUIElement) -> Bool {
+        guard element.exists, !element.frame.isEmpty else { return false }
+        return app.windows.firstMatch.frame.intersects(element.frame)
     }
 
     private func waitForAnyElement(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {

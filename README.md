@@ -13,7 +13,7 @@ Spatial audio · Ultra-Wideband ranging · Multipath mesh · AI transcription
 
 ---
 
-*Öffne Sonar auf zwei iPhones — die Verbindung baut sich automatisch auf.*
+*Öffne Sonar auf zwei iPhones, tippe den Peer in der Geräteliste an — und sprich.*
 
 </div>
 
@@ -22,16 +22,16 @@ Spatial audio · Ultra-Wideband ranging · Multipath mesh · AI transcription
 ## Quick Start
 
 ```
-Drop the IPA into SideStore  →  scan QR-Code from the other phone  →  talk.
+Drop the IPA into SideStore  →  open Verbinden on both phones  →  each side has a hint  →  talk.
 ```
 
 1. `Sonar-unsigned-iOS26.ipa` (im Repo-Root) auf beide iPhones via SideStore sideloaden.
 2. Sonar auf beiden Geräten öffnen.
-3. Auf Gerät A: TopBar → **Verbinden** → **Anzeigen** (QR wird gerendert).
-4. Auf Gerät B: TopBar → **Verbinden** → **Scannen** → QR von Gerät A scannen.
+3. Auf beiden Geräten: TopBar → **Verbinden** öffnen. Wenn beide sich in **In der Nähe** sehen, tippen beide den jeweils anderen Peer an.
+4. Falls ein Gerät nicht auftaucht: Gerät A → **Eigenen QR-Code anzeigen**, Gerät B → **Neues Gerät per QR scannen**. Der Scan erzeugt nur auf Gerät B den lokalen Hint; Gerät A muss Gerät B ebenfalls kennen, live antippen oder über einen expliziten Annahmepfad akzeptieren.
 5. Reden.
 
-Bonjour/AWDL findet Peers in den meisten Fällen automatisch — QR ist nur für Spezialfälle nötig (laute Umgebung mit vielen Sonar-Geräten, Tailscale-Setup, BLE-Erstkontakt). Details: [`docs/pairing.md`](docs/pairing.md).
+Bonjour/AWDL und BLE füllen die Geräteliste automatisch; verbunden wird erst, wenn lokal ein Pairing-Hint existiert: bekannter Kontakt, Live-Peer-Tap oder QR-Scan. Ein einseitiger Tap oder QR-Scan sendet einen gezielten Invite, aber die Gegenseite akzeptiert ihn nur mit passendem bekannten/live Hint oder einem expliziten Annahmepfad. QR ist nur für Spezialfälle nötig (laute Umgebung mit vielen Sonar-Geräten, Tailscale-Setup, Peer nicht in der Live-Liste). Details: [`docs/pairing.md`](docs/pairing.md).
 
 ---
 
@@ -49,7 +49,7 @@ Sonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:
 | LiveKit WebRTC | Internet-Pfad via `FarTransport` data channel | global |
 | SFSpeechRecognizer | Live-Transkription, on-device | lokal |
 | AVAudioEngine + VoiceProcessing | Spatial Mixer, AEC, Rauschunterdrückung | lokal |
-| Opus | Audio-Codec (32 kBit/s, ±20 ms Frames) | — |
+| Opus | Audio-Codec (32 kBit/s, 10-ms Frames) | — |
 
 ---
 
@@ -70,7 +70,7 @@ Sonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:
   │      ├──► SmartMuteDetector  [Auto-Stummschaltung]             │
   │      ├──► LiveTranscription  [SFSpeechRecognizer on-device]    │
   │      ├──► LocalRecorder      [.sonsess Dateien]                │
-  │      └──► OpusCoder.encode() [~32 kBit/s, FEC optional]       │
+  │      └──► OpusCoder.encode() [~32 kBit/s, keine steuerbare FEC]│
   │                  │                                              │
   │                  ▼                                              │
   │          MultipathBonder                                        │
@@ -161,12 +161,12 @@ Sonar baut keinen einzelnen Kanal auf, sondern **vier parallele Pfade**, die nac
 
 ```mermaid
 flowchart LR
-    Mic[["🎙 Mikrofon"]] --> Opus["OpusCoder.encode<br/>20 ms · ~32 kBit/s"]
+    Mic[["🎙 Mikrofon"]] --> Opus["OpusCoder.encode<br/>10 ms · ~32 kBit/s"]
     Opus --> Bonder{{"MultipathBonder<br/>mode: redundant /<br/>primaryStandby"}}
 
     Bonder -.->|"~3 ms"| Near["NearTransport<br/><i>MPC / AWDL</i>"]
     Bonder -.->|"~30 ms"| BLE["BluetoothMesh<br/><i>GATT 512 B Notify</i>"]
-    Bonder -.->|"~50 ms"| TS["FarTransport<br/><i>Tailscale 100.x</i>"]
+    Bonder -.->|"~50 ms"| TS["TailscaleTransport<br/><i>100.x TCP</i>"]
     Bonder -.->|"~80 ms"| Far["FarTransport<br/><i>LiveKit data channel</i>"]
 
     Near & BLE & TS & Far --> Peer(("Peer"))
@@ -202,11 +202,11 @@ sequenceDiagram
     end
 
     rect rgb(45,30,80)
-    Note over A,B: ② Pairing-Filter — optional, via QR
-    A->>A: PairingService.handle(token)<br/>TTL ≤ 5 min · applyPairingToken()
+    Note over A,B: ② Pairing-Hint — QR, Kontaktbuch oder Live-Peer-Tap
+    A->>A: PairingService.handle(hint)<br/>TTL ≤ 5 min · applyPairingToken()
     A->>A: pairing intent recorded<br/>peerOnline waits for transport
     A->>B: invitePeer(...)  ← nur wenn hint matches
-    B->>B: didReceiveInvitationFromPeer<br/>invitationHandler(true, session)
+    B->>B: didReceiveInvitationFromPeer<br/>accept only with reciprocal hint/accept path
     end
 
     rect rgb(20,60,40)
@@ -217,14 +217,14 @@ sequenceDiagram
 
     rect rgb(80,50,20)
     Note over A,B: ④ UWB-Bootstrap (piggybacked auf MPC)
-    A->>B: [0x02][len:2B][NIDiscoveryToken]  (.reliable)
-    B->>A: [0x02][len:2B][NIDiscoveryToken]  (.reliable)
+    A->>B: [0x02][NIDiscoveryToken]  (.reliable)
+    B->>A: [0x02][NIDiscoveryToken]  (.reliable)
     A->>A: NIRangingEngine.start(with: peerToken)
     B->>B: NIRangingEngine.start(with: peerToken)
     end
 
     rect rgb(60,20,60)
-    Note over A,B: ⑤ Audio-Pfad — alle 20 ms, alle aktiven Pfade
+    Note over A,B: ⑤ Audio-Pfad — alle 10 ms, alle aktiven Pfade
     loop redundant mode
         A-->>B: [0x01][seq][ts][codec][opus]  (.unreliable)
         B-->>A: [0x01][seq][ts][codec][opus]  (.unreliable)
@@ -234,7 +234,7 @@ sequenceDiagram
 
 ### Phasen-State-Machine
 
-`SessionCoordinator` und `AppState` halten den gleichen Phase-Wert. Übergang `.far ↔ .near` wird allein durch die Distanz-Pipeline (UWB > BLE-RSSI) getriggert.
+`SessionCoordinator` und `AppState` halten den gleichen Phase-Wert. `.far` bedeutet "verbunden, aber nicht nah" und wird erst gesetzt, wenn mindestens ein echter Transportpfad aktiv ist. Die UI-Beschriftung kommt aus den aktiven Pfaden (`AWDL`, `Bluetooth`, `Tailscale`, `Internet`) statt aus der Phase allein. Übergang `.far ↔ .near` wird durch die Distanz-Pipeline (UWB > BLE-RSSI) getriggert.
 
 ```mermaid
 stateDiagram-v2
@@ -253,7 +253,8 @@ stateDiagram-v2
     end note
 
     note right of far
-      Pfade aktiv: AWDL · BLE · Tailscale · Internet
+      Mindestens ein Pfad aktiv:
+      AWDL · BLE · Tailscale · Internet
       MultipathBonder verteilt Frames
     end note
 
@@ -266,16 +267,16 @@ stateDiagram-v2
 
 ### Pairing-Entscheidungspfad
 
-Der `PairingService` filtert die *ausgehende* Invite-Seite über `applyPairingToken`. Ohne QR-Token lädt der Browser alle gefundenen Peers automatisch ein.
+Der `PairingService` filtert die *ausgehende* Invite-Seite über `applyPairingToken`; `NearTransport` filtert eingehende Invites gegen dieselben lokalen Hints. Ohne Pairing-Hint werden gefundene Peers nur angezeigt. Ein QR-Scan, Kontaktbuch-Replay oder Live-Peer-Tap erzeugt lokal einen Hint und sendet einen gezielten Invite; die Gegenseite muss den Absender ebenfalls kennen, live angetippt haben oder explizit akzeptieren.
 
 ```mermaid
 flowchart TD
     Start([App offen]) --> Adv["NearTransport<br/>Advertise + Browse"]
     Adv --> Found{"Peer im<br/>AWDL-Mesh?"}
     Found -->|nein| Adv
-    Found -->|ja| QR{"PairingToken<br/>gesetzt?"}
+    Found -->|ja| QR{"Pairing-Hint<br/>gesetzt?"}
 
-    QR -->|nein| Auto["inviteIfAllowed:<br/>jeden Peer einladen"]
+    QR -->|nein| Auto["anzeigen,<br/>nicht automatisch einladen"]
     QR -->|ja| TTL{"TTL &lt; 5 min?"}
     TTL -->|nein| Reject["Token verworfen<br/>pendingPairing = nil"]
     TTL -->|ja| Match{"hint.matches<br/>peerID / host /<br/>displayName?"}
@@ -285,15 +286,17 @@ flowchart TD
 
     Skip --> Adv
     Reject --> Adv
-    Auto --> MCS
-    Targeted --> MCS["MCSession connect<br/>(TLS)"]
+    Auto --> Adv
+    Targeted --> Recip{"Empfänger hat<br/>reziproken Hint<br/>oder Accept?"}
+    Recip -->|nein| Skip
+    Recip -->|ja| MCS["MCSession connect<br/>(TLS)"]
     MCS --> NI["NIDiscoveryToken<br/>austauschen (0x02)"]
     NI --> Audio["Audio-Pfad offen<br/>0x01 frames, .unreliable"]
     Audio --> More["MultipathBonder nimmt<br/>BLE / Tailscale / Internet<br/>als weitere Pfade dazu"]
 
     classDef ok fill:#14532d,stroke:#22c55e,color:#fff
     classDef bad fill:#7f1d1d,stroke:#ef4444,color:#fff
-    class MCS,NI,Audio,More,Targeted,Auto ok
+    class MCS,NI,Audio,More,Targeted,Recip ok
     class Reject,Skip bad
 ```
 
@@ -308,7 +311,7 @@ Beide Nachrichten-Typen teilen sich denselben Datenkanal. Ein einziger Tag-Byte 
                     ┘
 
 0x02  NI-Token      ┐
-                    │ [0x02][len:2B][NSKeyedArchiver(NIDiscoveryToken)]
+                    │ [0x02][NSKeyedArchiver(NIDiscoveryToken)]
                     │ MCSession.send(..., with: .reliable)
                     ┘
 ```
@@ -346,7 +349,7 @@ flowchart LR
 
 | | Voraussetzung | Latenz | Anmerkung |
 |---|---|---|---|
-| ① Automatisch | WLAN auf beiden Geräten an | ~3–10 ms | Bonjour/AWDL findet den Partner ohne Router. Standard-Fall. |
+| ① Live-Liste | WLAN auf beiden Geräten an | ~3–10 ms | Bonjour/AWDL zeigt den Partner ohne Router; ein Tap erzeugt lokal den Pairing-Hint. Wenn der andere Peer noch unbekannt ist, muss er ebenfalls tippen oder explizit akzeptieren. Standard-Fall. |
 | ② Hotspot | A öffnet "Persönlicher Hotspot", B verbindet sich | ~10 ms | A teilt zwar Mobilfunk, aber Audio läuft lokal über AWDL — kein Datenvolumen. |
 | ③ Tailscale | Beide eingeloggt mit **demselben** Identity-Provider | ~50 ms | Häufigster Stolperstein: A mit Google, B mit GitHub → zwei getrennte Tailnets. |
 
@@ -355,7 +358,8 @@ flowchart LR
 ```mermaid
 flowchart LR
     Battery[["BatteryManager.tier"]] --> BMode{Modus?}
-    BMode -->|"normal · eco"| Red["Bonder.mode<br/>= .redundant<br/>(alle Pfade parallel)"]
+    BMode -->|"normal"| Red["Bonder.mode<br/>= .redundant<br/>(alle Pfade parallel)"]
+    BMode -->|"eco"| Eco["Bonder.mode<br/>= .eco<br/>(2 günstigste Pfade)"]
     BMode -->|"saver · critical"| PS["Bonder.mode<br/>= .primaryStandby<br/>(nur schnellster Pfad)"]
 
     Privacy[["PrivacyMode aktiviert"]] --> P1["bonder.removePath(.mpquic)"]
@@ -372,7 +376,7 @@ Tiefere Details zu Stolperfallen, Diagnose-Checkliste und Wire-Format-Edge-Cases
 
 - [`docs/connection-guide.md`](docs/connection-guide.md) — Pfad-Prioritäten, Bonjour/NIToken-Austausch, Tailscale-Walkthrough, WLAN-Hotspot, reines BLE, Diagnose-Checkliste.
 - [`docs/hardware-connection-verification.md`](docs/hardware-connection-verification.md) — physische iPhone-Checkliste für AWDL, QR-Targeting, BLE, Tailscale und LiveKit.
-- [`docs/pairing.md`](docs/pairing.md) — manuelles QR-Pairing über die TopBar, `PairingToken`-Schema und Sicherheits-Implikationen.
+- [`docs/pairing.md`](docs/pairing.md) — Geräte-Sheet über die TopBar, QR-Fallback, `PairingToken`-Schema und Sicherheits-Implikationen.
 
 ---
 
@@ -386,7 +390,7 @@ Tiefere Details zu Stolperfallen, Diagnose-Checkliste und Wire-Format-Edge-Cases
   │                                                         │
   │  Mikrofon-Tap                         ~0 ms             │
   │  VAD / PreCapture                     ~1 ms             │
-  │  Opus-Encode (20 ms Frame)            ~2 ms             │
+  │  Opus-Encode (10 ms Frame)            ~2 ms             │
   │  NearTransport.send()                 ~1 ms             │
   │                                       ─────             │
   │  AWDL (lokal, gleicher Raum)        ~10 ms             │
@@ -448,15 +452,17 @@ d = 10 ^ ((txPower − RSSI) / (10 × n))
 
 ## Profil-System
 
-| Profil | Umgebung | AirPods-Modus | Musik-Mix | Fehlerkorr. |
-|---|---|---|---|---|
-| Zimmer | Wohnung / Büro | Transparency | 0 % | Nein |
-| Spaziergang | Straße, Park | ANC | 30 % | Nein |
-| Fahrgeschäft | Jahrmarkt, laut | ANC | 60 % | **Ja** |
-| Festival | Open Air | ANC | 80 % | **Ja** |
-| Club | Laute Musik | ANC | 70 % | **Ja** |
+| Profil | Umgebung | AirPods-Präferenz | System-Audio |
+|---|---|---|---|
+| Zimmer | Wohnung / Büro | Transparency best-effort | Kein Ducking |
+| Spaziergang | Straße, Park | ANC best-effort | Kein Ducking |
+| Fahrgeschäft | Jahrmarkt, laut | ANC best-effort | Kein Ducking |
+| Festival | Open Air | ANC best-effort | Kein Ducking |
+| Club | Laute Musik | ANC best-effort | iOS-Ducking angefragt |
 
-**FEC (Forward Error Correction):** Sendet redundante Pakete mit. Bei Paketverlust rekonstruiert der Empfänger den Frame aus dem Folgepaket — hörbar besser bei schlechtem WLAN oder Mobilfunk. Kosten: +20 % Bandbreite.
+**Opus-FEC:** Apples Opus-Encoder stellt keine steuerbare Fehlerkorrektur bereit. Sonar nutzt stattdessen Jitterbuffer-Fehlerverdeckung und plant Paketverlust nicht als aktiv schaltbare FEC-Option ein.
+
+**AirPods und System-Audio:** Sonar kann AirPods-Hörpräferenzen nur best-effort über AVAudioSession anfragen; iOS bestätigt Drittanbieter-Apps den aktiven ANC-/Transparenzmodus nicht. Musik-Ducking ist ebenfalls eine Systemanfrage: iOS entscheidet, welche andere Audio-App wie stark abgesenkt wird.
 
 ---
 
@@ -473,14 +479,14 @@ d = 10 ^ ((txPower − RSSI) / (10 × n))
   WhisperDetectorTests               10   SPL-Formel, Window, Zero-Buffer
   AppStateConnectionTypeTests        10   Labels, Icons, @Published
   MultipathBonderTests               10   Pfade, Failover, Dedup
-  OpusCodingTests                    10   Encode/Decode, FEC, Latenz
+  OpusCodingTests                    10   Encode/Decode, FEC-Honesty, Latenz
   DistancePublisherTests             10   UWB/BLE Priorität, Mathe
   RSSIFallbackMathTests              15   Pfadverlust, EMA, Guard-Range
   WakeWordDetectorTests               7   Energie, Fenster, Reset
   SmartMuteDetectorTests              7   Adaptive Schwellwerte
   DeviceCapabilitiesTests             7   Tier A/B/C, detect()-Konsistenz
   MessageFramingTests                 6   Framing 0x01 / 0x02
-  ProfileTests                        6   FEC, ANC-Zuordnung
+  ProfileTests                        6   Profilwerte, Hörpräferenz-Zuordnung
   BatteryManagerTests                 5   Tier-Übergänge
   PreCaptureBufferTests               5   Ringpuffer, Overflow
   AppStateTests                       5   Phase-Übergänge
@@ -508,7 +514,7 @@ sonar/
 │   ├── Audio/
 │   │   ├── AudioEngine.swift           AVAudioEngine, VoiceProcessing
 │   │   ├── AudioFrame.swift            Wire-Format [seq][ts][codec][data]
-│   │   ├── OpusCoder.swift             Encode / Decode / FEC
+│   │   ├── OpusCoder.swift             Encode / Decode, FEC unsupported
 │   │   ├── JitterBuffer.swift          Adaptive Playout, Fehlerverdeckung
 │   │   ├── SpatialMixer.swift          AVAudioEnvironmentNode
 │   │   ├── PreCaptureBuffer.swift      500ms Ringpuffer
@@ -536,7 +542,7 @@ sonar/
 │   │
 │   └── Hardware/
 │       ├── BatteryManager.swift        Tier-Anpassung (normal→eco→saver→critical)
-│       ├── AirPodsController.swift     ANC / Transparency Mode
+│       ├── AirPodsController.swift     AirPods best-effort preference
 │       ├── MusicDucker.swift           Musik-Ducking bei Sprache
 │       └── DeviceCapabilities.swift   UWB, Neural Engine, Tier
 │
@@ -562,7 +568,7 @@ sonar/
 │  CI         GitHub Actions     Archit.   MVVM + Coordinator      │
 ├─────────────────────────────────────────────────────────────────┤
 │  AVFoundation    Audio-Engine, VoiceProcessing, SpatialAudio    │
-│  Opus            Sprach-Codec, FEC, 32 kBit/s / 20 ms           │
+│  Opus            Sprach-Codec, keine steuerbare FEC, 32 kBit/s  │
 │  MultipeerConn.  AWDL-Direktverbindung (wie AirDrop)            │
 │  Network.fw      Experimental raw QUIC code (not default path)  │
 │  LiveKit         WebRTC data-channel Internet path               │
@@ -572,6 +578,15 @@ sonar/
 │  Tailscale       WireGuard VPN (optional, für Remote-Nutzung)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+The production Internet path is the LiveKit data channel implemented by
+`FarTransport` and exposed inside `MultipathBonder` as path ID `.mpquic`.
+Raw `MPQUICTransport` is experimental code and is not wired into default
+session startup. The bundled `sonar-server` `/token` endpoint is a development
+issuer: it accepts caller-provided room and identity values without app-level
+authentication or allow-listing, and relies on the LiveKit SDK token expiry.
+Put authentication, explicit room policy, and a short TTL in front of it before
+exposing it beyond a trusted dev environment.
 
 ---
 
@@ -610,9 +625,13 @@ xcodebuild test -scheme Sonar \
 
 ## Releases
 
-Die jeweils neueste unsignierte Build liegt am Repo-Root als
-[`Sonar-unsigned-iOS26.ipa`](./Sonar-unsigned-iOS26.ipa) — dieser Pfad
-ist stabil und wird von SideStore-Direkt-Links referenziert.
+Die SideStore-Source verweist auf die versionierte IPA unter
+[`releases/`](./releases/). Der Repo-Root enthält zusätzlich
+[`Sonar-unsigned-iOS26.ipa`](./Sonar-unsigned-iOS26.ipa) als stabilen
+Legacy-Dateinamen für manuelle Sideloads. Vor einem neuen Release muss
+dieser Root-Pfad neu erzeugt oder mit der neuesten `releases/Sonar-v*.ipa`
+abgeglichen werden; lokal stimmt er derzeit nicht bytegleich mit
+`releases/Sonar-v0.2.11.ipa` überein.
 
 ```bash
 # Sideload via SideStore:

@@ -4,7 +4,7 @@
   "identifier": "app.sonar.ios.source",
   "sourceURL": "https://raw.githubusercontent.com/Martin-Hausleitner/Sonar/main/apps.json",
   "subtitle": "Räumliche Echtzeit-Audiokommunikation für iPhone",
-  "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Die Verbindung läuft direkt über WLAN, Bluetooth und Ultrabreitband (UWB), ohne Umweg über einen Server. Mit Live-Transkription, Mesh-Routing und einem Spatial Audio Mixer auf Basis von AVAudioEngine.",
+  "description": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Peers werden über lokale Pfade wie WLAN/AWDL und Bluetooth entdeckt; verbunden wird nach einem bekannten Kontakt, Live-Peer-Tap oder QR-Hint. Tailscale und Internet-Relay sind nur aktiv, wenn sie passend eingerichtet sind. Mit Live-Transkription und einem Spatial Audio Mixer auf Basis von AVAudioEngine.",
   "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
   "website": "https://github.com/Martin-Hausleitner/Sonar",
   "tintColor": "00E5FF",
@@ -14,7 +14,7 @@
       "bundleIdentifier": "app.sonar.ios",
       "developerName": "Martin Hausleitner",
       "subtitle": "Räumliches Audio · UWB · Mesh · Live-Transkription",
-      "localizedDescription": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Das Mikrofon des anderen klingt so, als käme es wirklich von dort, wo die Person steht.\n\nSonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:\n• MultipeerConnectivity / AWDL — lokale Direktverbindung (~30 m)\n• CoreBluetooth GATT — Bluetooth-Fallback (~10 m)\n• NearbyInteraction (UWB) — zentimetergenaue Entfernung + Richtung (~10 m)\n• Network.framework QUIC — Internet-Pfad (Multi-Path), global\n• LiveKit WebRTC — Cloud Audio Relay, global\n• SFSpeechRecognizer — Live-Transkription, on-device\n• AVAudioEngine + VoiceProcessing — Spatial Mixer, AEC, Rauschunterdrückung\n• Opus — Audio-Codec (32 kBit/s, ±20 ms Frames)\n\nÖffne Sonar auf zwei iPhones — die Verbindung baut sich automatisch auf.",
+      "localizedDescription": "Sonar überträgt Sprache in Echtzeit zwischen zwei iPhones — mit räumlichem Klang, der sich an den tatsächlichen Abstand und die Richtung deines Gegenübers anpasst. Das Mikrofon des anderen klingt so, als käme es wirklich von dort, wo die Person steht.\n\nSonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:\n• MultipeerConnectivity / AWDL — lokale Peer-Erkennung und Direktverbindung nach Hint\n• CoreBluetooth GATT — Bluetooth-Fallback nach Live-Peer-Erkennung\n• NearbyInteraction (UWB) — Entfernung + Richtung auf unterstützten Geräten\n• Tailscale — privater Fernpfad, wenn beide Geräte im selben Tailnet sind\n• FarTransport / LiveKit — Internet-Pfad nur mit konfiguriertem Relay\n• SFSpeechRecognizer — Live-Transkription, on-device\n• AVAudioEngine + VoiceProcessing — Spatial Mixer, AEC, Rauschunterdrückung\n• Opus — Audio-Codec (32 kBit/s, ±20 ms Frames)\n\nÖffne Sonar auf zwei iPhones, öffne Verbinden und tippe den Peer an oder nutze QR als Fallback.",
       "iconURL": "https://github.com/Martin-Hausleitner/Sonar/raw/main/sonar/Resources/Assets.xcassets/AppIcon.appiconset/Icon-1024.png",
       "tintColor": "00E5FF",
       "beta": false,
@@ -148,7 +148,7 @@
         },
         {
           "type": "music",
-          "usageDescription": "Sonar mischt Musik aus deiner Apple-Music-Bibliothek im Club-Modus dezent in den Hintergrund."
+          "usageDescription": "Sonar bittet iOS, andere Audio-Apps im Club-Modus parallel laufen zu lassen und bei Sprache zu ducken."
         },
         {
           "type": "background-audio",

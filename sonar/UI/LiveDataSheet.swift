@@ -82,24 +82,25 @@ struct LiveDataSheet: View {
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                 HStack(spacing: 8) {
-                    pathDot(label: "BT", id: 0)
-                    pathDot(label: "WLAN", id: 1)
-                    pathDot(label: "4G/5G", id: 2)
-                    pathDot(label: "TS", id: 3)
+                    pathDot(label: "BT", pathID: "bluetooth")
+                    pathDot(label: "WLAN", pathID: "multipeer")
+                    pathDot(label: "LiveKit", pathID: "mpquic")
+                    pathDot(label: "TS", pathID: "tailscale")
                 }
             }
         }
     }
 
-    private func pathDot(label: String, id: Int) -> some View {
-        VStack(spacing: 4) {
+    private func pathDot(label: String, pathID: String) -> some View {
+        let active = appState.activePathIDs.contains(pathID)
+        return VStack(spacing: 4) {
             Circle()
-                .fill(id < appState.activePathCount ? Color.green : Color.secondary.opacity(0.14))
+                .fill(active ? Color.green : Color.secondary.opacity(0.14))
                 .frame(width: 10, height: 10)
-                .shadow(color: id < appState.activePathCount ? .green.opacity(0.6) : .clear, radius: 4)
+                .shadow(color: active ? .green.opacity(0.6) : .clear, radius: 4)
             Text(label)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(id < appState.activePathCount ? .primary : .tertiary)
+                .foregroundStyle(active ? .primary : .tertiary)
         }
         .frame(maxWidth: .infinity)
     }

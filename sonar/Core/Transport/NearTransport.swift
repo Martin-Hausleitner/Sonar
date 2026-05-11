@@ -105,7 +105,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
 
     private enum Msg: UInt8 { case audio = 0x01, niToken = 0x02 }
 
-    private let serviceType = "sonar-mpc"
+    private let serviceType = PairingToken.mpcServiceType
     private let identity: SonarTestIdentity
     private let localHost: () -> String
     private var peerID: MCPeerID
@@ -152,11 +152,11 @@ final class NearTransport: NSObject, Transport, BondedPath {
         // discoveryInfo references `identity.deviceName` directly here because
         // `advertisedDiscoveryInfo` is an instance computed property and
         // `self` isn't fully initialised yet — same content though.
-        var info = ["peerID": identity.deviceID, "peerName": identity.deviceName, "bonjour": "sonar-mpc"]
+        var info = ["peerID": identity.deviceID, "peerName": identity.deviceName, "bonjour": PairingToken.mpcServiceType]
         let host = localHost()
         if !host.isEmpty { info["host"] = host }
-        advertiser = MCNearbyServiceAdvertiser(peer: pid, discoveryInfo: info, serviceType: "sonar-mpc")
-        browser = MCNearbyServiceBrowser(peer: pid, serviceType: "sonar-mpc")
+        advertiser = MCNearbyServiceAdvertiser(peer: pid, discoveryInfo: info, serviceType: PairingToken.mpcServiceType)
+        browser = MCNearbyServiceBrowser(peer: pid, serviceType: PairingToken.mpcServiceType)
         super.init()
     }
 
@@ -235,8 +235,8 @@ final class NearTransport: NSObject, Transport, BondedPath {
     }
 
     /// Drop the entire allow-list (used by Settings → "Alle Kontakte
-    /// vergessen"). Live MPC sessions are untouched; only future invitations
-    /// will fall back to "accept everything" mode.
+    /// vergessen"). Live MPC sessions are untouched; future invitations stay
+    /// closed until the user scans a QR code or the contact book replays peers.
     func clearPairingTokens() {
         stateQueue.sync { currentPairingHints.removeAll() }
     }
@@ -306,8 +306,22 @@ final class NearTransport: NSObject, Transport, BondedPath {
         displayName: String,
         discoveryInfo: [String: String]?
     ) -> Bool {
-        guard !currentPairingHints.isEmpty else { return true }
+        guard !currentPairingHints.isEmpty else { return false }
         return currentPairingHints.contains { $0.matches(displayName: displayName, discoveryInfo: discoveryInfo) }
+    }
+
+    static func shouldInvitePeer(
+        currentPairingHints: Set<PairingHint>,
+        invitedPeerIDs: Set<String>,
+        displayName: String,
+        discoveryInfo: [String: String]?
+    ) -> Bool {
+        guard !currentPairingHints.isEmpty else { return false }
+        guard currentPairingHints.contains(where: { $0.matches(displayName: displayName, discoveryInfo: discoveryInfo) }) else {
+            return false
+        }
+        let stableID = discoveryInfo?["peerID"] ?? displayName
+        return !invitedPeerIDs.contains(stableID)
     }
 
     /// Back-compat single-hint helper kept for tests that pre-date the
@@ -418,11 +432,13 @@ extension NearTransport: MCNearbyServiceBrowserDelegate {
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
         let shouldInvite: Bool = stateQueue.sync {
-            if !currentPairingHints.isEmpty,
-               !currentPairingHints.contains(where: { $0.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) })
-            {
-                return false
-            }
+            let invitedStableIDs = Set(invitedPeerIDs.map(\.displayName))
+            guard Self.shouldInvitePeer(
+                currentPairingHints: currentPairingHints,
+                invitedPeerIDs: invitedStableIDs,
+                displayName: peerID.displayName,
+                discoveryInfo: discoveryInfo
+            ) else { return false }
             guard !invitedPeerIDs.contains(peerID) else { return false }
             invitedPeerIDs.insert(peerID)
             return true

@@ -35,6 +35,21 @@ final class PermissionsManager: NSObject, ObservableObject {
         [microphone, bluetooth, localNetwork, nearbyInteraction, speechRecognition].contains(.denied)
     }
 
+    static func localNetworkPermissionState(for browserState: NWBrowser.State) -> State? {
+        switch browserState {
+        case .ready: .granted
+        case let .waiting(error), let .failed(error):
+            isLocalNetworkPolicyDenied(error) ? .denied : .unknown
+        case .cancelled: nil
+        default: nil
+        }
+    }
+
+    private static func isLocalNetworkPolicyDenied(_ error: NWError) -> Bool {
+        guard case let .dns(dnsError) = error else { return false }
+        return dnsError == DNSServiceErrorType(kDNSServiceErr_PolicyDenied)
+    }
+
     func requestAll() async {
         microphone = await requestMicrophone() ? .granted : .denied
         if SonarTestIdentity.current().isSimulatorRelayEnabled {
@@ -75,17 +90,18 @@ final class PermissionsManager: NSObject, ObservableObject {
         let params = NWParameters()
         params.includePeerToPeer = true
         let browser = NWBrowser(
-            for: .bonjour(type: "_sonar._tcp", domain: nil),
+            for: .bonjour(type: PairingToken.mpcBonjourServiceName, domain: nil),
             using: params
         )
         browser.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
-                guard let self else { return }
-                switch state {
-                case .ready: self.localNetwork = .granted
-                case .failed, .cancelled: self.localNetwork = .denied
-                default: break
+                guard
+                    let self,
+                    let permissionState = Self.localNetworkPermissionState(for: state)
+                else {
+                    return
                 }
+                self.localNetwork = permissionState
             }
         }
         browser.start(queue: .main)

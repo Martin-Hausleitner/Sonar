@@ -126,7 +126,7 @@ struct ConnectionGuideView: View {
                 icon: "iphone",
                 color: .cyan,
                 title: "Sonar auf beiden Geräten öffnen",
-                detail: "Starte Sonar auf Gerät A und Gerät B. Die App erkennt den Partner automatisch – kein manuelles Pairen nötig."
+                detail: "Starte Sonar auf Gerät A und Gerät B, öffne Verbinden und tippe den Peer in der Live-Liste an. QR bleibt der Fallback, wenn ein Peer nicht auftaucht."
             )
 
             step(
@@ -180,7 +180,7 @@ struct ConnectionGuideView: View {
                 icon: "waveform.circle.fill",
                 color: .cyan,
                 title: "Sonar starten",
-                detail: "Öffne Sonar auf beiden Geräten. Tailscale sorgt automatisch für die verschlüsselte Verbindung – Sonar erkennt den Partner über das lokale Tailscale-Netz."
+                detail: "Öffne Sonar auf beiden Geräten, dann Verbinden. Ein bekannter Kontakt, Live-Peer-Tap oder QR-Scan liefert den Hint für den Tailscale-Pfad."
             )
 
             infoBox(
@@ -199,7 +199,7 @@ struct ConnectionGuideView: View {
                 icon: "wifi.router",
                 color: .blue,
                 title: "Gleiches WLAN-Netzwerk",
-                detail: "Verbinde beide iPhones mit demselben WLAN-Router. Sonar findet den Partner automatisch über Bonjour (lokale Geräteerkennung)."
+                detail: "Verbinde beide iPhones mit demselben WLAN-Router. Bonjour zeigt den Peer in der Geräteliste; ein Tap startet den gezielten Verbindungsversuch."
             )
 
             step(
@@ -250,7 +250,7 @@ struct ConnectionGuideView: View {
                 icon: "waveform.circle.fill",
                 color: .cyan,
                 title: "Session starten",
-                detail: "Sonar verbindet sich automatisch per BLE, wenn kein anderer Pfad verfügbar ist. Für beste Qualität empfehlen wir WLAN oder Tailscale."
+                detail: "Tippe den Live-Peer an und starte die Session. Für beste Qualität empfehlen wir WLAN oder Tailscale als primären Pfad."
             )
 
             infoBox(
@@ -265,24 +265,30 @@ struct ConnectionGuideView: View {
     private var statusSection: some View {
         Section {
             HStack {
-                Label("AWDL / AirDrop-Kanal", systemImage: "dot.radiowaves.left.and.right")
+                Label("WLAN eingeschaltet", systemImage: "wifi")
                 Spacer()
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("in iOS prüfen")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             HStack {
                 Label("Bluetooth", systemImage: "wave.3.right.circle.fill")
                 Spacer()
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("in iOS prüfen")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             HStack {
                 Label("Lokales Netzwerk", systemImage: "network")
                 Spacer()
-                Image(systemName: "circle").foregroundStyle(.secondary)
+                Text("Einstellungen")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         } header: {
-            Label("Systemstatus", systemImage: "checkmark.shield")
+            Label("Setup-Checkliste", systemImage: "checkmark.shield")
         } footer: {
-            Text("Berechtigungen können in Einstellungen > Sonar angepasst werden.")
+            Text("Diese Liste ist eine Checkliste, kein Live-Status. Berechtigungen können in Einstellungen > Sonar angepasst werden.")
         }
     }
 

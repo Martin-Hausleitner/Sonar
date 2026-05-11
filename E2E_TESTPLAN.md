@@ -207,18 +207,21 @@ während die Audio-Verbindung läuft.
 
 ## §F. AirPods Listening Mode (Schritt 10)
 
-### TC-11 · Profilwechsel triggert ANC-Switch
+### TC-11 · Profilwechsel fragt AirPods-Hörpräferenz best-effort an
 
 **Pre.** User hat einmalig in Shortcuts der Sonar-Automatik zugestimmt.
 
 **Steps.** Bei laufender Session von Roller-Profil auf Zimmer-Profil
 wechseln.
 
-**Expected.** AirPods schalten von ANC auf Transparency, ohne dass User
-einen Stem drückt.
+**Expected.** Sonar fragt die Zimmer-Hörpräferenz best-effort bei iOS an.
+Die tatsächliche AirPods-Wirkung ist hardware-observable im Kontrollzentrum,
+über den AirPods-Hörtest oder akustisch zu beobachten; iOS bestätigt Drittanbieter-Apps
+keinen garantierten ANC-/Transparency-Wechsel.
 
-**Fail.** Wenn nichts passiert: Shortcut-Permission prüfen (in
-`Settings → Sonar → Shortcuts`).
+**Report-only.** Notieren, ob AirPods/iOS die gewünschte Hörpräferenz
+sichtbar oder hörbar übernommen haben. Wenn nichts passiert:
+Shortcut-Permission prüfen (in `Settings → Sonar → Shortcuts`).
 
 ---
 
@@ -233,11 +236,12 @@ AirPods Pro 3, Club-Profil aktiv.
 
 **Expected.**
 
-- Speakerlärm wird durch ANC stark gedämpft (subjektiv leise wie aus
-  Nachbarraum).
+- AirPods/iOS behandeln die angefragte Club-Hörpräferenz best-effort;
+  subjektive ANC-/Adaptive-Wirkung ist hardware-observable und report-only.
 - Person A hört Person B **klar**, als wäre B 30 cm entfernt.
-- Apple-Music-Track läuft im Hintergrund auf -18 dB.
-- Wenn jemand spricht, dipt Musik kurz auf -24 dB.
+- System-Audio-Ducking wird bei iOS angefragt. Ob, welche App und wie stark
+  Musik abgesenkt wird, ist report-only; Sonar garantiert keine exakten
+  dB-Pegel.
 
 **Pass.** Beide können sich problemlos unterhalten ohne zu schreien.
 

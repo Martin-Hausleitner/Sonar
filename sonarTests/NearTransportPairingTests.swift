@@ -17,6 +17,7 @@ final class NearTransportPairingTests: XCTestCase {
         XCTAssertEqual(near.advertisedDiscoveryInfo["peerID"], "local-device")
         XCTAssertEqual(near.advertisedDiscoveryInfo["peerName"], "Martin iPhone")
         XCTAssertEqual(near.advertisedDiscoveryInfo["host"], "martin.local")
+        XCTAssertEqual(near.advertisedDiscoveryInfo["bonjour"], "sonar-mpc")
     }
 
     func testPairingHintMatchesPeerIDFromDiscoveryInfo() {
@@ -35,8 +36,8 @@ final class NearTransportPairingTests: XCTestCase {
         XCTAssertTrue(hint.matches(displayName: "Different", discoveryInfo: ["host": "alex.local"]))
     }
 
-    func testInboundInvitationWithoutPairingHintIsAcceptedForAutoDiscovery() {
-        XCTAssertTrue(NearTransport.shouldAcceptInvitation(
+    func testInboundInvitationWithoutPairingHintIsRejectedUntilPairing() {
+        XCTAssertFalse(NearTransport.shouldAcceptInvitation(
             currentPairingHint: nil,
             displayName: "Alex iPhone",
             discoveryInfo: nil
@@ -65,6 +66,48 @@ final class NearTransportPairingTests: XCTestCase {
         ))
     }
 
+    func testInboundInvitationMatchesAnyPairingHint() {
+        let hints: Set<NearTransport.PairingHint> = [
+            NearTransport.PairingHint(token: makeToken(id: "peer-A", name: "Alex iPhone", host: "alex.local")),
+            NearTransport.PairingHint(token: makeToken(id: "peer-B", name: "Blair iPhone", host: "blair.local"))
+        ]
+
+        XCTAssertTrue(NearTransport.shouldAcceptInvitation(
+            currentPairingHints: hints,
+            displayName: "Blair iPhone",
+            discoveryInfo: ["peerID": "peer-B"]
+        ))
+    }
+
+    func testOutboundInviteRequiresMatchingPairingHintAndSkipsAlreadyInvitedPeers() {
+        let hint = NearTransport.PairingHint(token: makeToken(id: "peer-A", name: "Alex iPhone", host: "alex.local"))
+
+        XCTAssertTrue(NearTransport.shouldInvitePeer(
+            currentPairingHints: [hint],
+            invitedPeerIDs: [],
+            displayName: "Someone Else",
+            discoveryInfo: ["peerID": "peer-A"]
+        ))
+        XCTAssertFalse(NearTransport.shouldInvitePeer(
+            currentPairingHints: [],
+            invitedPeerIDs: [],
+            displayName: "Alex iPhone",
+            discoveryInfo: ["peerID": "peer-A"]
+        ))
+        XCTAssertFalse(NearTransport.shouldInvitePeer(
+            currentPairingHints: [hint],
+            invitedPeerIDs: ["peer-A"],
+            displayName: "Someone Else",
+            discoveryInfo: ["peerID": "peer-A"]
+        ))
+        XCTAssertFalse(NearTransport.shouldInvitePeer(
+            currentPairingHints: [hint],
+            invitedPeerIDs: [],
+            displayName: "Mallory iPhone",
+            discoveryInfo: ["peerID": "peer-X"]
+        ))
+    }
+
     func testPairingServiceAppliesAcceptedTokenToNearTransport() {
         let appState = AppState()
         let near = NearTransport()
@@ -77,6 +120,18 @@ final class NearTransportPairingTests: XCTestCase {
         XCTAssertEqual(near.currentPairingHint?.peerID, "peer-A")
         XCTAssertEqual(near.currentPairingHint?.displayName, "Alex iPhone")
         XCTAssertEqual(near.currentPairingHint?.host, "alex.local")
+    }
+
+    func testNearTransportAccumulatesAndRemovesPairingHints() {
+        let near = NearTransport()
+        near.addPairingToken(makeToken(id: "peer-A", name: "Alex iPhone", host: "alex.local"))
+        near.addPairingToken(makeToken(id: "peer-B", name: "Blair iPhone", host: "blair.local"))
+
+        XCTAssertEqual(near.currentPairingHints.map(\.peerID).sorted(), ["peer-A", "peer-B"])
+
+        near.removePairingToken(forPeerID: "peer-A")
+
+        XCTAssertEqual(near.currentPairingHints.map(\.peerID), ["peer-B"])
     }
 
     private func makeToken(

@@ -5,18 +5,21 @@ import Foundation
 /// Plan §10/3, RESEARCH.md §2, LATENCY.md.
 ///
 /// Settings from LatencyBudget:
-///   48 kHz / mono / 10 ms frames / 24 kbps VBR / complexity 5 / DTX on
+///   48 kHz / mono / 10 ms frames / 24 kbps VBR / complexity 5
 ///
 /// Converters are created lazily and reused; creating one per frame would add
 /// ~2 ms of setup overhead to every encode/decode call.
 final class OpusCoder {
     enum CodecError: Error { case notConfigured, encodeFailed, decodeFailed }
 
+    /// Apple's AVAudioConverter Opus encoder does not expose libopus'
+    /// OPUS_SET_INBAND_FEC / OPUS_SET_PACKET_LOSS_PERC controls.
+    static let supportsForwardErrorCorrection = false
+
     let sampleRate: Double
     let frameMs: Int
     let bitrate: Int32
     let complexity: Int32
-    var fecEnabled: Bool
 
     private let pcmFormat: AVAudioFormat
     private let opusFormat: AVAudioFormat
@@ -27,14 +30,12 @@ final class OpusCoder {
         sampleRate: Double = LatencyBudget.audioSampleRate,
         frameMs: Int = LatencyBudget.audioFrameMs,
         bitrate: Int32 = LatencyBudget.opusBitrateBps,
-        complexity: Int32 = LatencyBudget.opusComplexity,
-        fecEnabled: Bool = LatencyBudget.opusFECEnabledNear
+        complexity: Int32 = LatencyBudget.opusComplexity
     ) {
         self.sampleRate = sampleRate
         self.frameMs = frameMs
         self.bitrate = bitrate
         self.complexity = complexity
-        self.fecEnabled = fecEnabled
 
         pcmFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,

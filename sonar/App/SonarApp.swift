@@ -8,6 +8,7 @@ struct SonarApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var permissions = PermissionsManager()
     @State private var didSeedUITestRecording = false
+    @State private var queuedStartProfileID: String?
     @AppStorage("sonar.onboarded") private var onboarded = false
 
     var body: some Scene {
@@ -18,6 +19,7 @@ struct SonarApp: App {
                 } else {
                     OnboardingView(permissions: permissions) {
                         onboarded = true
+                        flushQueuedStartSession()
                     }
                 }
             }
@@ -35,13 +37,40 @@ struct SonarApp: App {
                 TailscaleDetector.shared.startMonitoring()
                 TailscaleDetector.shared.refresh()
             }
-            #if DEBUG
-                .onAppear {
+            .onAppear {
+                #if DEBUG
                     guard !didSeedUITestRecording else { return }
                     didSeedUITestRecording = true
                     SonarApp.seedUITestRecordingIfRequested()
+                #endif
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .sonarStartSessionRequested)) { note in
+                let decision = StartSessionIntentRouter.decision(
+                    onboarded: onboarded,
+                    profileID: note.object as? String ?? ""
+                )
+                switch decision.action {
+                case .dispatchToMountedSession:
+                    dispatchStartSession(profileID: decision.profileID)
+                case .queueUntilOnboarded:
+                    queuedStartProfileID = decision.profileID
                 }
-            #endif
+            }
+        }
+    }
+
+    private func flushQueuedStartSession() {
+        guard let profileID = queuedStartProfileID else { return }
+        queuedStartProfileID = nil
+        dispatchStartSession(profileID: profileID)
+    }
+
+    private func dispatchStartSession(profileID: String) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .sonarStartSession,
+                object: profileID
+            )
         }
     }
 

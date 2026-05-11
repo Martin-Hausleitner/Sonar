@@ -9,13 +9,15 @@ final class TailscaleTransportTests: XCTestCase {
     private var cancellables = Set<AnyCancellable>()
 
     override func tearDown() async throws {
+        if PrivacyMode.shared.isActive { PrivacyMode.shared.deactivate() }
         cancellables.removeAll()
     }
 
     func testPairingTokenConnectsAndCarriesAudioFramesOverLoopbackTCP() async throws {
         let port = try XCTUnwrap(freeTCPPort())
         let receiver = TailscaleTransport(listenPort: port)
-        let sender = try TailscaleTransport(listenPort: XCTUnwrap(freeTCPPort()))
+        let senderPort = try XCTUnwrap(freeTCPPort())
+        let sender = TailscaleTransport(listenPort: senderPort)
         defer {
             receiver.stop()
             sender.stop()
@@ -41,6 +43,14 @@ final class TailscaleTransportTests: XCTestCase {
             tsPort: port,
             ts: 1_750_000_000
         )
+        receiver.applyPairingToken(PairingToken(
+            id: "sender",
+            name: "Sender",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: senderPort,
+            ts: 1_750_000_000
+        ))
         sender.applyPairingToken(token)
 
         try await waitUntil { senderConnected }
@@ -48,9 +58,153 @@ final class TailscaleTransportTests: XCTestCase {
         let frame = AudioFrame(seq: 42, payload: Data([0xCA, 0xFE]), codec: .opus)
         await sender.send(frame)
 
-        try await waitUntil { received.count == 1 }
-        XCTAssertEqual(received.first?.seq, 42)
-        XCTAssertEqual(received.first?.payload, Data([0xCA, 0xFE]))
+        try await waitUntil { received.contains { $0.seq == 42 } }
+        let matchingFrame = try XCTUnwrap(received.first { $0.seq == 42 })
+        XCTAssertEqual(matchingFrame.payload, Data([0xCA, 0xFE]))
+    }
+
+    func testInboundConnectionWithoutReceiverSidePairingTokenStaysDisconnected() async throws {
+        let receiverPort = try XCTUnwrap(freeTCPPort())
+        let receiver = TailscaleTransport(listenPort: receiverPort)
+        let sender = try TailscaleTransport(listenPort: XCTUnwrap(freeTCPPort()))
+        defer {
+            receiver.stop()
+            sender.stop()
+        }
+
+        try receiver.start()
+        try sender.start()
+
+        var receiverConnected = false
+        receiver.isConnected
+            .sink { receiverConnected = $0 }
+            .store(in: &cancellables)
+
+        sender.applyPairingToken(PairingToken(
+            id: "receiver",
+            name: "Receiver",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: receiverPort,
+            ts: 1_750_000_000
+        ))
+
+        try await assertStaysFalse { receiverConnected }
+    }
+
+    func testRemovePairingTokenDisconnectsOutboundConnection() async throws {
+        let receiverPort = try XCTUnwrap(freeTCPPort())
+        let receiver = TailscaleTransport(listenPort: receiverPort)
+        let senderPort = try XCTUnwrap(freeTCPPort())
+        let sender = TailscaleTransport(listenPort: senderPort)
+        defer {
+            receiver.stop()
+            sender.stop()
+        }
+
+        try receiver.start()
+        try sender.start()
+
+        var senderConnected = false
+        sender.isConnected
+            .sink { senderConnected = $0 }
+            .store(in: &cancellables)
+
+        receiver.applyPairingToken(PairingToken(
+            id: "sender",
+            name: "Sender",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: senderPort,
+            ts: 1_750_000_000
+        ))
+        sender.applyPairingToken(PairingToken(
+            id: "receiver",
+            name: "Receiver",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: receiverPort,
+            ts: 1_750_000_000
+        ))
+
+        try await waitUntil { senderConnected }
+
+        sender.removePairingToken(forTSIP: "127.0.0.1", port: receiverPort)
+
+        try await waitUntil { !senderConnected }
+    }
+
+    func testRemovePairingTokenDisconnectsInboundAcceptedConnectionByRemoteIP() async throws {
+        let receiverPort = try XCTUnwrap(freeTCPPort())
+        let receiver = TailscaleTransport(listenPort: receiverPort)
+        let senderPort = try XCTUnwrap(freeTCPPort())
+        let sender = TailscaleTransport(listenPort: senderPort)
+        defer {
+            receiver.stop()
+            sender.stop()
+        }
+
+        try receiver.start()
+        try sender.start()
+
+        var receiverConnected = false
+        receiver.isConnected
+            .sink { receiverConnected = $0 }
+            .store(in: &cancellables)
+
+        receiver.applyPairingToken(PairingToken(
+            id: "sender",
+            name: "Sender",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: senderPort,
+            ts: 1_750_000_000
+        ))
+        sender.applyPairingToken(PairingToken(
+            id: "receiver",
+            name: "Receiver",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: receiverPort,
+            ts: 1_750_000_000
+        ))
+
+        try await waitUntil { receiverConnected }
+
+        receiver.removePairingToken(forTSIP: "127.0.0.1", port: receiverPort)
+
+        try await waitUntil { !receiverConnected }
+    }
+
+    func testPrivacyModeBlocksPairingTokenOutboundDial() async throws {
+        let receiverPort = try XCTUnwrap(freeTCPPort())
+        let receiver = TailscaleTransport(listenPort: receiverPort)
+        let sender = try TailscaleTransport(listenPort: XCTUnwrap(freeTCPPort()))
+        defer {
+            PrivacyMode.shared.deactivate()
+            receiver.stop()
+            sender.stop()
+        }
+
+        try receiver.start()
+        try sender.start()
+
+        var senderConnected = false
+        sender.isConnected
+            .sink { senderConnected = $0 }
+            .store(in: &cancellables)
+
+        PrivacyMode.shared.activate()
+        sender.applyPairingToken(PairingToken(
+            id: "receiver",
+            name: "Receiver",
+            host: "localhost",
+            tsIP: "127.0.0.1",
+            tsPort: receiverPort,
+            ts: 1_750_000_000
+        ))
+
+        try await assertStaysFalse { senderConnected }
     }
 
     private func waitUntil(
@@ -64,6 +218,19 @@ final class TailscaleTransportTests: XCTestCase {
             try await Task.sleep(nanoseconds: pollNanoseconds)
         }
         XCTAssertTrue(condition(), "Timed out waiting for Tailscale transport condition")
+    }
+
+    private func assertStaysFalse(
+        durationNanoseconds: UInt64 = 300_000_000,
+        pollNanoseconds: UInt64 = 20_000_000,
+        _ condition: @escaping () -> Bool
+    ) async throws {
+        let deadline = DispatchTime.now().uptimeNanoseconds + durationNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            XCTAssertFalse(condition(), "Condition became true before timeout elapsed")
+            try await Task.sleep(nanoseconds: pollNanoseconds)
+        }
+        XCTAssertFalse(condition())
     }
 
     private func freeTCPPort() -> UInt16? {

@@ -41,6 +41,10 @@ struct PairingView: View {
     /// can't scan again without leaving the view.
     @State private var scannerEpoch: UUID = .init()
 
+    init(initialMode: Mode = .show) {
+        _mode = State(initialValue: initialMode)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Picker("Modus", selection: $mode) {
@@ -86,7 +90,7 @@ struct PairingView: View {
                 .padding(.horizontal, 28)
 
             VStack(spacing: 4) {
-                Text(appState.testIdentity.displayName)
+                Text(appState.effectiveDisplayName)
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Text("Lass dein Gegenüber diesen Code scannen.")
@@ -134,9 +138,10 @@ struct PairingView: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(SonarTheme.separator, lineWidth: 0.5)
                 )
-                .accessibilityElement()
-                .accessibilityLabel("Pairing-QR-Code")
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pairing-QR-Code")
+        .accessibilityIdentifier("Pairing-QR-Code")
     }
 
     // MARK: - Scannen
@@ -166,7 +171,7 @@ struct PairingView: View {
                         .foregroundStyle(.secondary)
                     Text("Noch keine Kontakte")
                         .font(.headline)
-                    Text("Scanne einmal den QR-Code deines Gegenübers — danach erscheint er hier und ihr verbindet euch automatisch.")
+                    Text("Scanne den QR-Code deines Gegenübers, um Kontakt und Hinweis zu speichern. Danach kann Sonar diesen Peer bei künftigen Sessionstarts gezielt ansteuern, wenn der Kontakt- oder Hinweis-Pfad auf beiden Seiten besteht.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

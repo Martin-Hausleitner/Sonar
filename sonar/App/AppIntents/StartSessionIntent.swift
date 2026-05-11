@@ -4,9 +4,33 @@ import Foundation
 // MARK: - Notification name
 
 extension Notification.Name {
+    /// Posted by the AppIntent entry point. `SonarApp` decides whether the
+    /// request can be dispatched immediately or must wait for onboarding.
+    static let sonarStartSessionRequested = Notification.Name("sonarStartSessionRequested")
+
     /// Posted when a Siri / Shortcuts intent requests a new Sonar session.
-    /// The SessionCoordinator observes this and calls `start()`.
+    /// Mounted session UI observes this and calls into `SessionCoordinator`.
     static let sonarStartSession = Notification.Name("sonarStartSession")
+}
+
+struct StartSessionIntentRoutingDecision: Equatable {
+    enum Action: Equatable {
+        case dispatchToMountedSession
+        case queueUntilOnboarded
+    }
+
+    let action: Action
+    let profileID: String
+}
+
+enum StartSessionIntentRouter {
+    static func decision(onboarded: Bool, profileID: String) -> StartSessionIntentRoutingDecision {
+        let trimmed = profileID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return StartSessionIntentRoutingDecision(
+            action: onboarded ? .dispatchToMountedSession : .queueUntilOnboarded,
+            profileID: trimmed.isEmpty ? "zimmer" : trimmed
+        )
+    }
 }
 
 // MARK: - Intent
@@ -24,11 +48,10 @@ struct StartSessionIntent: AppIntent {
     var profileID: String
 
     func perform() async throws -> some IntentResult {
-        // Post a notification carrying the requested profileID as the object.
-        // SessionCoordinator (and/or AppState) observes .sonarStartSession and
-        // routes to ProfileManager.select(_:) + SessionCoordinator.start().
+        // The app root receives this first because SessionView is not mounted
+        // until onboarding is complete. SonarApp queues or forwards it.
         NotificationCenter.default.post(
-            name: .sonarStartSession,
+            name: .sonarStartSessionRequested,
             object: profileID
         )
         return .result()

@@ -12,12 +12,16 @@ final class LiveTranscriptionEngineTests: XCTestCase {
     private let localModelUD = "sonar.localmodel.selected"
 
     override func setUp() async throws {
+        if PrivacyMode.shared.isActive { PrivacyMode.shared.deactivate() }
         UserDefaults.standard.removeObject(forKey: apiKeyUD)
+        UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey")
         UserDefaults.standard.removeObject(forKey: localModelUD)
     }
 
     override func tearDown() async throws {
+        if PrivacyMode.shared.isActive { PrivacyMode.shared.deactivate() }
         UserDefaults.standard.removeObject(forKey: apiKeyUD)
+        UserDefaults.standard.removeObject(forKey: "sonar.openai.apiKey")
         UserDefaults.standard.removeObject(forKey: localModelUD)
     }
 
@@ -76,6 +80,30 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         engine.stop()
     }
 
+    func testPrivacyModeBlocksCloudEnginesAtStartup() async throws {
+        let model = try XCTUnwrap(LocalModelManager.availableModels.first)
+        let modelURL = plantLocalModelFileIfNeeded(model)
+        defer { removePlantedModelIfNeeded(modelURL) }
+        UserDefaults.standard.set(model.id, forKey: localModelUD)
+        UserDefaults.standard.set("sk-proj-test", forKey: "sonar.openai.apiKey")
+        UserDefaults.standard.set("nvapi-test-key-1234", forKey: apiKeyUD)
+        PrivacyMode.shared.activate()
+
+        let fake = FakeLocalTranscriber()
+        let engine = LiveTranscriptionEngine(localTranscriberFactory: { modelID, _, onSegment in
+            XCTAssertEqual(modelID, model.id)
+            fake.onSegment = onSegment
+            return fake
+        })
+
+        try await engine.start()
+
+        XCTAssertEqual(engine.currentEngine, .local)
+        engine.append(makePCMBuffer(frameCount: 160))
+        XCTAssertEqual(fake.appendCount, 1)
+        engine.stop()
+    }
+
     func testLocalWhisperEngineUsesSelectedDownloadedModel() async throws {
         let model = try XCTUnwrap(LocalModelManager.availableModels.first)
         let modelURL = plantLocalModelFileIfNeeded(model)
@@ -100,6 +128,29 @@ final class LiveTranscriptionEngineTests: XCTestCase {
 
         engine.stop()
         XCTAssertEqual(fake.stopCount, 1)
+        XCTAssertTrue(engine.transcript.isEmpty)
+    }
+
+    func testClearTranscriptRemovesExistingSegments() async throws {
+        let model = try XCTUnwrap(LocalModelManager.availableModels.first)
+        let modelURL = plantLocalModelFileIfNeeded(model)
+        defer { removePlantedModelIfNeeded(modelURL) }
+        UserDefaults.standard.set(model.id, forKey: localModelUD)
+
+        let fake = FakeLocalTranscriber()
+        let engine = LiveTranscriptionEngine(localTranscriberFactory: { _, _, onSegment in
+            fake.onSegment = onSegment
+            return fake
+        })
+
+        try await engine.start()
+        fake.emit("sensitive text")
+        XCTAssertFalse(engine.transcript.isEmpty)
+
+        engine.clearTranscript()
+
+        XCTAssertTrue(engine.transcript.isEmpty)
+        engine.stop()
     }
 
     func testAppleSpeechSelectedWhenAPIKeyEmpty() {
@@ -154,6 +205,129 @@ final class LiveTranscriptionEngineTests: XCTestCase {
         try await engine.start()
         engine.append(makePCMBuffer(frameCount: 160))
         engine.stop() // flush() called; buffer < chunk threshold → safe no-op
+    }
+
+    func testPrivacyActivationAbortsCloudTranscriberWithoutFinishing() async throws {
+        UserDefaults.standard.set("nvapi-fake", forKey: apiKeyUD)
+        let fake = FakeCloudTranscriber()
+        let engine = LiveTranscriptionEngine(
+            parakeetFactory: { _, onSegment in
+                fake.onSegment = onSegment
+                return fake
+            }
+        )
+
+        try await engine.start()
+        XCTAssertEqual(engine.currentEngine, .parakeet)
+
+        PrivacyMode.shared.activate()
+        await Task.yield()
+
+        XCTAssertEqual(fake.abortCount, 1)
+        XCTAssertEqual(fake.finishCount, 0)
+        XCTAssertEqual(engine.currentEngine, .appleSpeech)
+    }
+
+    func testPrivacyActivationIgnoresLateParakeetSegmentCallback() async throws {
+        UserDefaults.standard.set("nvapi-fake", forKey: apiKeyUD)
+        let fake = FakeCloudTranscriber()
+        let engine = LiveTranscriptionEngine(
+            parakeetFactory: { _, onSegment in
+                fake.onSegment = onSegment
+                return fake
+            }
+        )
+
+        try await engine.start()
+        XCTAssertEqual(engine.currentEngine, .parakeet)
+
+        PrivacyMode.shared.activate()
+        await Task.yield()
+        fake.emit("late cloud text")
+
+        XCTAssertTrue(
+            engine.transcript.isEmpty,
+            "Late Parakeet callbacks after privacy activation must not repopulate transcript"
+        )
+    }
+
+    func testQueuedParakeetAppendDoesNotUploadAfterPrivacyAbort() async throws {
+        UserDefaults.standard.set("nvapi-fake", forKey: apiKeyUD)
+        let appendEntered = DispatchSemaphore(value: 0)
+        let releaseAppend = DispatchSemaphore(value: 0)
+        let sender = RecordingParakeetSender()
+        let transcriber = ParakeetTranscriber(
+            apiKey: "nvapi-fake",
+            onSegment: { _ in },
+            transcribeChunk: { _, _, _, _ in
+                sender.recordCall()
+                return "uploaded"
+            },
+            queueWorkGate: {
+                appendEntered.signal()
+                _ = releaseAppend.wait(timeout: .now() + 2)
+            }
+        )
+        let engine = LiveTranscriptionEngine(
+            parakeetFactory: { _, _ in transcriber }
+        )
+
+        try await engine.start()
+        XCTAssertEqual(engine.currentEngine, .parakeet)
+
+        engine.append(makePCMBuffer(frameCount: 80000))
+        XCTAssertEqual(appendEntered.wait(timeout: .now() + 2), .success)
+
+        PrivacyMode.shared.activate()
+        await Task.yield()
+        releaseAppend.signal()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            sender.callCount,
+            0,
+            "A queued Parakeet append must not call the cloud sender after Privacy Mode abort"
+        )
+    }
+
+    func testParakeetAbortCancelsInFlightChunkUploadAndSuppressesCallback() async throws {
+        let sender = BlockingParakeetSender()
+        let callback = CallbackRecorder()
+        let transcriber = ParakeetTranscriber(
+            apiKey: "nvapi-fake",
+            onSegment: { text in
+                callback.record(text)
+            },
+            transcribeChunk: { _, _, _, _ in
+                try await sender.transcribe()
+            }
+        )
+
+        transcriber.append(makePCMBuffer(frameCount: 80000))
+        await sender.waitUntilStarted()
+
+        transcriber.abort()
+        let cancellationObserved = sender.waitUntilCancelled(timeout: .now() + 1)
+        sender.release(returning: "should not surface")
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sender.startedCount, 1)
+        XCTAssertTrue(cancellationObserved)
+        XCTAssertTrue(callback.segments.isEmpty)
+    }
+
+    func testNormalStopFinishesCloudTranscriber() async throws {
+        UserDefaults.standard.set("nvapi-fake", forKey: apiKeyUD)
+        let fake = FakeCloudTranscriber()
+        let engine = LiveTranscriptionEngine(
+            parakeetFactory: { _, _ in fake }
+        )
+
+        try await engine.start()
+        engine.stop()
+
+        XCTAssertEqual(fake.finishCount, 1)
+        XCTAssertEqual(fake.abortCount, 0)
     }
 
     // MARK: - Apple Speech path: append does not crash (request may be nil in sim)
@@ -229,6 +403,138 @@ private final class FakeLocalTranscriber: LocalTranscribing {
 
     func stop() {
         stopCount += 1
+    }
+
+    func emit(_ text: String) {
+        onSegment?(text)
+    }
+}
+
+private final class RecordingParakeetSender: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+
+    var callCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return calls
+    }
+
+    func recordCall() {
+        lock.lock()
+        calls += 1
+        lock.unlock()
+    }
+}
+
+private final class BlockingParakeetSender: @unchecked Sendable {
+    private let lock = NSLock()
+    private var startedContinuations: [CheckedContinuation<Void, Never>] = []
+    private var releaseContinuation: CheckedContinuation<String, Error>?
+    private let cancellationSemaphore = DispatchSemaphore(value: 0)
+    private var didStart = false
+    private var didCancel = false
+    private var starts = 0
+
+    var startedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return starts
+    }
+
+    func transcribe() async throws -> String {
+        markStarted()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                releaseContinuation = continuation
+                lock.unlock()
+            }
+        } onCancel: {
+            markCancelled()
+        }
+    }
+
+    func waitUntilStarted() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if didStart {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                startedContinuations.append(continuation)
+                lock.unlock()
+            }
+        }
+    }
+
+    func waitUntilCancelled(timeout: DispatchTime) -> Bool {
+        lock.lock()
+        let alreadyCancelled = didCancel
+        lock.unlock()
+        if alreadyCancelled { return true }
+        return cancellationSemaphore.wait(timeout: timeout) == .success
+    }
+
+    func release(returning text: String) {
+        lock.lock()
+        let continuation = releaseContinuation
+        releaseContinuation = nil
+        lock.unlock()
+        continuation?.resume(returning: text)
+    }
+
+    private func markStarted() {
+        lock.lock()
+        didStart = true
+        starts += 1
+        let continuations = startedContinuations
+        startedContinuations.removeAll()
+        lock.unlock()
+        continuations.forEach { $0.resume() }
+    }
+
+    private func markCancelled() {
+        lock.lock()
+        didCancel = true
+        lock.unlock()
+        cancellationSemaphore.signal()
+    }
+}
+
+private final class CallbackRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedSegments: [String] = []
+
+    var segments: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedSegments
+    }
+
+    func record(_ text: String) {
+        lock.lock()
+        recordedSegments.append(text)
+        lock.unlock()
+    }
+}
+
+private final class FakeCloudTranscriber: CloudTranscribing {
+    var appendCount = 0
+    var finishCount = 0
+    var abortCount = 0
+    var onSegment: ((String) -> Void)?
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        appendCount += 1
+    }
+
+    func finish() {
+        finishCount += 1
+    }
+
+    func abort() {
+        abortCount += 1
     }
 
     func emit(_ text: String) {

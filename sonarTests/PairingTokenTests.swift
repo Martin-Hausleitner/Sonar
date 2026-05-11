@@ -6,7 +6,7 @@ final class PairingTokenTests: XCTestCase {
         let token = PairingToken(
             id: "SIM-A-38D0B9",
             name: "iPhone von Martin",
-            bonjour: "_sonar._tcp",
+            bonjour: PairingToken.mpcBonjourServiceName,
             host: "martin-iphone.local",
             tsIP: "100.64.1.42",
             ble: "B8C9D0E1-1234-5678-9ABC-DEF012345678",
@@ -22,7 +22,7 @@ final class PairingTokenTests: XCTestCase {
         XCTAssertEqual(decoded.v, PairingToken.currentVersion)
         XCTAssertEqual(decoded.id, "SIM-A-38D0B9")
         XCTAssertEqual(decoded.name, "iPhone von Martin")
-        XCTAssertEqual(decoded.bonjour, "_sonar._tcp")
+        XCTAssertEqual(decoded.bonjour, PairingToken.mpcBonjourServiceName)
         XCTAssertEqual(decoded.host, "martin-iphone.local")
         XCTAssertEqual(decoded.tsIP, "100.64.1.42")
         XCTAssertEqual(decoded.ble, "B8C9D0E1-1234-5678-9ABC-DEF012345678")
@@ -45,10 +45,34 @@ final class PairingTokenTests: XCTestCase {
         XCTAssertNil(decoded.ble)
     }
 
+    func testDefaultBonjourUsesMPCServiceName() {
+        let token = PairingToken(
+            id: "SIM-C-A1B2C3",
+            name: "Sim C",
+            host: "sim-c.local",
+            ts: 1_750_000_002
+        )
+
+        XCTAssertEqual(token.bonjour, "_sonar-mpc._tcp")
+    }
+
+    @MainActor
+    func testGeneratedTokenUsesMPCBonjourServiceName() {
+        let appState = AppState()
+        appState.localDisplayName = "Generated Sim"
+
+        let token = PairingTokenGenerator.makeToken(
+            appState: appState,
+            now: Date(timeIntervalSince1970: 1_750_000_003)
+        )
+
+        XCTAssertEqual(token.bonjour, "_sonar-mpc._tcp")
+    }
+
     func testDecodeRejectsUnsupportedVersion() {
         // Construct a v=99 token by hand and base64url-encode it, then try
         // to decode through the public API — should be rejected.
-        let json = #"{"v":99,"id":"X","name":"X","bonjour":"_sonar._tcp","host":"h","ts":1}"#
+        let json = #"{"v":99,"id":"X","name":"X","bonjour":"_sonar-mpc._tcp","host":"h","ts":1}"#
         let b64 = Data(json.utf8)
             .base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")

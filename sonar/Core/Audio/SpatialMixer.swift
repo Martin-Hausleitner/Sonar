@@ -15,6 +15,11 @@ final class SpatialMixer {
     /// Tracks whether `prepare(engine:)` has been called.
     private var isPrepared = false
 
+    /// Per-profile remote voice gain. Multiplied with the global Sonar output
+    /// volume so profiles can make the peer quieter/louder without changing
+    /// the user's master slider.
+    private var profileVoiceGain: Float = 1.0
+
     // MARK: - Setup
 
     /// Attach the environment node and remote player to `engine` and wire them
@@ -84,7 +89,7 @@ final class SpatialMixer {
 
     /// Start / stop the remote player.
     func startRemotePlayer() {
-        remotePlayer.volume = Self.currentOutputVolume
+        applyEffectiveRemoteVolume()
         remotePlayer.play()
     }
 
@@ -95,6 +100,16 @@ final class SpatialMixer {
     /// Expose the underlying player so callers can query `isPlaying`.
     var remotePlayerNode: AVAudioPlayerNode {
         remotePlayer
+    }
+
+    /// Apply the active session profile's remote-voice gain live.
+    func applyProfileVoiceGain(_ gain: Float) {
+        profileVoiceGain = max(0, min(1, gain))
+        applyEffectiveRemoteVolume()
+    }
+
+    private func applyEffectiveRemoteVolume() {
+        remotePlayer.volume = Self.currentOutputVolume * profileVoiceGain
     }
 
     // MARK: - Output volume (Settings → Sonar-Lautstärke)
@@ -114,7 +129,7 @@ final class SpatialMixer {
         currentOutputVolume = clamped
         Task { @MainActor in
             for mixer in liveMixers.allObjects {
-                mixer.remotePlayer.volume = clamped
+                mixer.applyEffectiveRemoteVolume()
             }
         }
     }

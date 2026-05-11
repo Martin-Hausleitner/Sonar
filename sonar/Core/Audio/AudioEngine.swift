@@ -4,6 +4,64 @@ import Combine
 import Foundation
 import os
 
+/// Single source of truth for Sonar's AVAudioSession category/mode/options.
+///
+/// Profile helpers such as MusicDucker and AirPodsController express desired
+/// state here; AudioEngine is the only component that applies the merged
+/// session configuration during prepare/reassert/restart.
+struct AudioSessionPolicy: Equatable {
+    enum ListeningModeNudge: Equatable {
+        case none
+        case `default`
+        case voiceChat
+
+        var sessionMode: AVAudioSession.Mode? {
+            switch self {
+            case .none: nil
+            case .default: .default
+            case .voiceChat: .voiceChat
+            }
+        }
+    }
+
+    var rawAudioMode: Bool = true
+    var listeningModeNudge: ListeningModeNudge = .none
+    var musicDuckingEnabled: Bool = false
+
+    init(
+        rawAudioMode: Bool = true,
+        listeningModeNudge: ListeningModeNudge = .none,
+        musicDuckingEnabled: Bool = false
+    ) {
+        self.rawAudioMode = rawAudioMode
+        self.listeningModeNudge = listeningModeNudge
+        self.musicDuckingEnabled = musicDuckingEnabled
+    }
+
+    var sessionMode: AVAudioSession.Mode {
+        if let nudgedMode = listeningModeNudge.sessionMode {
+            return nudgedMode
+        }
+        return rawAudioMode ? .default : .voiceChat
+    }
+
+    var voiceProcessingEnabled: Bool {
+        !rawAudioMode
+    }
+
+    var categoryOptions: AVAudioSession.CategoryOptions {
+        var options: AVAudioSession.CategoryOptions = [
+            .allowAirPlay,
+            .allowBluetoothHFP,
+            .mixWithOthers
+        ]
+        if musicDuckingEnabled {
+            options.insert(.duckOthers)
+        }
+        return options
+    }
+}
+
 /// AVAudioEngine + VoiceProcessingIO. Plan §10/3, LATENCY.md.
 ///
 /// Sets `AVAudioSession.preferredIOBufferDuration` to
@@ -33,11 +91,15 @@ final class AudioEngine {
         }
     }
 
-    /// When true, `prepare()` configures the AVAudioSession with the neutral
-    /// `.default` mode and *does not* enable Apple's voice-processing chain
-    /// (which performs aggressive AGC + noise suppression). Set this BEFORE
-    /// calling `prepare()` — toggling at runtime requires a session restart.
-    var rawAudioMode: Bool = true
+    private var sessionPolicy = AudioSessionPolicy()
+
+    /// When true, `prepare()` keeps Apple's VoiceProcessingIO chain disabled.
+    /// The AVAudioSession mode itself is resolved through `AudioSessionPolicy`
+    /// so best-effort AirPods nudges and ducking options survive reasserts.
+    var rawAudioMode: Bool {
+        get { sessionPolicy.rawAudioMode }
+        set { sessionPolicy.rawAudioMode = newValue }
+    }
 
     /// Each captured buffer is published with the frame ID it was assigned by
     /// `Metrics.openTrace()`. Subscribers must forward the ID through encode/
@@ -50,26 +112,7 @@ final class AudioEngine {
     }
 
     func prepare() throws {
-        let session = AVAudioSession.sharedInstance()
-        // `.voiceChat` activates Apple's AGC + noise suppression which dulls
-        // speech ("verpackt"). `.default` keeps the signal flat — better for
-        // remote-room use where echo isn't a problem. Toggled by AppState.
-        let mode: AVAudioSession.Mode = rawAudioMode ? .default : .voiceChat
-        try session.setCategory(
-            .playAndRecord,
-            mode: mode,
-            options: [.mixWithOthers, .allowAirPlay]
-        )
-        try session.setPreferredIOBufferDuration(LatencyBudget.preferredIOBufferDurationSec)
-        try session.setPreferredSampleRate(LatencyBudget.audioSampleRate)
-
-        // Voice processing must be configured BEFORE setActive(true). Calling
-        // setVoiceProcessingEnabled after the session is active is silently
-        // ignored — that was the v0.2.9 bug where flipping "Ungefiltertes
-        // Audio" had no audible effect.
-        try engine.inputNode.setVoiceProcessingEnabled(!rawAudioMode)
-
-        try session.setActive(true, options: [])
+        try applySessionConfiguration(activate: true, updateVoiceProcessing: true)
 
         let format = engine.inputNode.inputFormat(forBus: 0)
         let bufSize = AVAudioFrameCount(LatencyBudget.samplesPerFrame)
@@ -108,6 +151,18 @@ final class AudioEngine {
         }
         stop()
         try prepare()
+    }
+
+    /// Reassert category/mode after profile helpers that also touch the shared
+    /// AVAudioSession. This preserves raw/non-raw mode without rebuilding the
+    /// whole graph; voice processing itself is changed only by `reapplyConfig()`.
+    func reassertSessionConfiguration() {
+        try? applySessionConfiguration(activate: true, updateVoiceProcessing: false)
+    }
+
+    func updateSessionPolicy(_ update: (inout AudioSessionPolicy) -> Void) {
+        update(&sessionPolicy)
+        reassertSessionConfiguration()
     }
 
     deinit {
@@ -168,7 +223,7 @@ final class AudioEngine {
         case .ended:
             let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt).map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
             guard opts.contains(.shouldResume) else { return }
-            try? AVAudioSession.sharedInstance().setActive(true, options: [])
+            reassertSessionConfiguration()
             if !engine.isRunning { try? engine.start() }
         @unknown default:
             break
@@ -186,7 +241,31 @@ final class AudioEngine {
         // pauses the engine on iOS — kick it back on so the live session
         // keeps streaming through the new route (built-in mic/speaker).
         if reason == .oldDeviceUnavailable || reason == .newDeviceAvailable {
+            reassertSessionConfiguration()
             if !engine.isRunning { try? engine.start() }
+        }
+    }
+
+    private func applySessionConfiguration(activate: Bool, updateVoiceProcessing: Bool) throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+            .playAndRecord,
+            mode: sessionPolicy.sessionMode,
+            options: sessionPolicy.categoryOptions
+        )
+        try session.setPreferredIOBufferDuration(LatencyBudget.preferredIOBufferDurationSec)
+        try session.setPreferredSampleRate(LatencyBudget.audioSampleRate)
+
+        if updateVoiceProcessing {
+            // Voice processing must be configured BEFORE setActive(true). Calling
+            // setVoiceProcessingEnabled after the session is active is silently
+            // ignored — that was the v0.2.9 bug where flipping "Ungefiltertes
+            // Audio" had no audible effect.
+            try engine.inputNode.setVoiceProcessingEnabled(sessionPolicy.voiceProcessingEnabled)
+        }
+
+        if activate {
+            try session.setActive(true, options: [])
         }
     }
 

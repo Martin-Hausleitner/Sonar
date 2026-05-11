@@ -10,7 +10,7 @@ final class MultipathBonder: ObservableObject {
     enum Mode {
         case redundant // default: all paths, same frame
         case primaryStandby // only primary active, others warm
-        case eco // cheapest single path
+        case eco // cheapest two active paths
     }
 
     @Published private(set) var activePaths: [PathID] = []
@@ -20,7 +20,7 @@ final class MultipathBonder: ObservableObject {
     private let deduplicator = FrameDeduplicator()
     private var seqCounter: UInt32 = 0
     private let lock = NSLock()
-    private var cancellables = Set<AnyCancellable>()
+    private var pathCancellables: [PathID: Set<AnyCancellable>] = [:]
 
     let inboundFrames = PassthroughSubject<AudioFrame, Never>()
 
@@ -30,10 +30,20 @@ final class MultipathBonder: ObservableObject {
         case mpquic // Internet path ID: LiveKit FarTransport in production
         case tailscale // Optional WireGuard P2P
         case simulatorRelay // Local Mac relay for two-simulator E2E tests
+
+        static let primaryStandbyPriority: [PathID] = [
+            .multipeer,
+            .bluetooth,
+            .tailscale,
+            .mpquic,
+            .simulatorRelay
+        ]
     }
 
     func addPath(_ path: any BondedPath) {
+        removePath(path.id)
         paths[path.id] = path
+        var subscriptions = Set<AnyCancellable>()
         path.inboundFrames
             .receive(on: DispatchQueue.global(qos: .userInteractive))
             .sink { [weak self] frame in
@@ -42,23 +52,36 @@ final class MultipathBonder: ObservableObject {
                     Task { @MainActor in self.inboundFrames.send(unique) }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &subscriptions)
         path.isConnected
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] connected in
+            .sink { [weak self, pathID = path.id] connected in
                 guard let self else { return }
+                guard paths[pathID] != nil else { return }
                 if connected {
-                    if !activePaths.contains(path.id) { activePaths.append(path.id) }
+                    if !activePaths.contains(pathID) { activePaths.append(pathID) }
                 } else {
-                    activePaths.removeAll { $0 == path.id }
+                    activePaths.removeAll { $0 == pathID }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &subscriptions)
+        pathCancellables[path.id] = subscriptions
     }
 
     func removePath(_ id: PathID) {
+        pathCancellables.removeValue(forKey: id)?.forEach { $0.cancel() }
         paths.removeValue(forKey: id)
         activePaths.removeAll { $0 == id }
+    }
+
+    func removeAllPaths() {
+        for subscriptions in pathCancellables.values {
+            subscriptions.forEach { $0.cancel() }
+        }
+        pathCancellables.removeAll()
+        paths.removeAll()
+        activePaths.removeAll()
+        deduplicator.reset()
     }
 
     func send(opusData: Data, codec: AudioFrame.CodecID = .opus) async {
@@ -85,9 +108,19 @@ final class MultipathBonder: ObservableObject {
         case .redundant:
             return Array(connected)
         case .primaryStandby:
-            return connected.first.map { [$0] } ?? []
+            return PathID.primaryStandbyPriority
+                .compactMap { id in
+                    guard activePaths.contains(id) else { return nil }
+                    return paths[id]
+                }
+                .first
+                .map { [$0] } ?? []
         case .eco:
-            return connected.min(by: { $0.estimatedCostPerByte < $1.estimatedCostPerByte }).map { [$0] } ?? []
+            return Array(
+                connected
+                    .sorted { $0.estimatedCostPerByte < $1.estimatedCostPerByte }
+                    .prefix(2)
+            )
         }
     }
 }

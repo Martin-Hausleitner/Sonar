@@ -32,6 +32,51 @@ final class DistancePublisherTests: XCTestCase {
         XCTAssertNil(dp.distance, "distance stays nil until a value is sent")
     }
 
+    func testStartsRSSIFallbackOnBindWhenUWBIsUnavailable() {
+        XCTAssertTrue(DistancePublisher.shouldStartRSSIFallbackOnBind(uwbAvailable: false))
+    }
+
+    func testDoesNotStartRSSIFallbackOnBindWhenUWBIsAvailable() {
+        XCTAssertFalse(DistancePublisher.shouldStartRSSIFallbackOnBind(uwbAvailable: true))
+    }
+
+    func testQueuedUWBInvalidationDoesNotStartRSSIAfterUnbind() {
+        XCTAssertFalse(DistancePublisher.shouldStartRSSIFallbackAfterInvalidation(isBound: false))
+    }
+
+    func testUWBInvalidationStartsRSSIOnlyWhileBound() {
+        XCTAssertTrue(DistancePublisher.shouldStartRSSIFallbackAfterInvalidation(isBound: true))
+    }
+
+    // MARK: - RSSI stale callback guard
+
+    func testRSSIFallbackIgnoresCallbackWhenNoCentralIsActive() {
+        let staleCentral = NSObject()
+
+        XCTAssertFalse(
+            RSSIFallback.shouldHandleCallback(from: staleCentral, activeCentral: nil),
+            "callbacks queued after stop() must be ignored"
+        )
+    }
+
+    func testRSSIFallbackIgnoresCallbackFromStaleCentral() {
+        let activeCentral = NSObject()
+        let staleCentral = NSObject()
+
+        XCTAssertFalse(
+            RSSIFallback.shouldHandleCallback(from: staleCentral, activeCentral: activeCentral),
+            "callbacks from a replaced/stopped CBCentralManager must not affect scanning or distance"
+        )
+    }
+
+    func testRSSIFallbackHandlesCallbackFromActiveCentralOnly() {
+        let activeCentral = NSObject()
+
+        XCTAssertTrue(
+            RSSIFallback.shouldHandleCallback(from: activeCentral, activeCentral: activeCentral)
+        )
+    }
+
     // MARK: - RSSI → distance math (log-distance path-loss model)
 
     // Mirrors the private formula in RSSIFallback: d = 10^((txPower-RSSI)/(10*n))

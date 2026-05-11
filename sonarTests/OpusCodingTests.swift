@@ -13,6 +13,10 @@ final class OpusCodingTests: XCTestCase {
         XCTAssertEqual(c.sampleRate, LatencyBudget.audioSampleRate)
     }
 
+    func testNativeAVAudioConverterPathDoesNotAdvertiseFEC() {
+        XCTAssertFalse(OpusCoder.supportsForwardErrorCorrection)
+    }
+
     /// Verifies that real Opus compression works end-to-end.
     ///
     /// We do NOT compare sample-by-sample values: Opus is a perceptual lossy codec,
