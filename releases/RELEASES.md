@@ -14,6 +14,7 @@ abgeglichen werden; der lokale Root-Build ist derzeit nicht bytegleich mit
 
 | Version | Date | Tag | Commit | Size |
 |---|---|---|---|---|
+| 0.2.12 | 2026-05-11 | [v0.2.12-20260511-2035](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.12-20260511-2035) | `3d21ede` | 11.3 MB |
 | 0.2.11 | 2026-05-10 | [v0.2.11-20260510-2221](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.11-20260510-2221) | `1470555` | 11.2 MB |
 | 0.2.10 | 2026-05-10 | [v0.2.10-20260510-1708](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.10-20260510-1708) | `c87d39a` | 11.2 MB |
 | 0.2.9 | 2026-05-09 | [v0.2.9-20260509-2108](https://github.com/Martin-Hausleitner/Sonar/releases/tag/v0.2.9-20260509-2108) | `f8e90c0` | 11.2 MB |
