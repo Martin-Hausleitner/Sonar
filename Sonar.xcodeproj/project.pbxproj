@@ -626,7 +626,7 @@
 			path = Power;
 			sourceTree = "<group>";
 		};
-		"TEMP_EAB7A3AC-7B5D-402D-88D1-82F096ED3A3F" /* Resources */ = {
+		"TEMP_7ED37A5C-D3E2-402C-9392-A0F4BCADFAE0" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
