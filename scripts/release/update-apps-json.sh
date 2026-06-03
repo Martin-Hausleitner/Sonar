@@ -75,7 +75,7 @@ new_entry = {
     "localizedDescription": notes,
     "downloadURL": ARCHIVED_TPL.format(v=version),
     "size": size_bytes,
-    "minOSVersion": "26.2",
+    "minOSVersion": "18.0",
 }
 
 if versions and versions[0].get("version") == version:

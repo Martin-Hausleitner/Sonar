@@ -21,6 +21,7 @@
 		1368121D300A13AF06FA40E7 /* FarTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64B05DA869EBBC166499928 /* FarTransportTests.swift */; };
 		17D32D7C61DDF24BF829CE20 /* NvidiaRivaASRClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9529A0CFE21F913BE06D4A2 /* NvidiaRivaASRClientTests.swift */; };
 		1A3BC7A628C42ABE73383E84 /* BluetoothMeshTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA71890A5E11D3D250947842 /* BluetoothMeshTransport.swift */; };
+		1CB03C735FD7ABC5547B737D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6420580B323FA62AE240AAA /* Assets.xcassets */; };
 		1CFE81DD166FCEFEB7FE832D /* SimulatorRelayTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2692DBC90772B532C4C179 /* SimulatorRelayTransportTests.swift */; };
 		1ED2B34E0744D68D3237E591 /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98E5783740A56E8F745CAA3 /* WaveformView.swift */; };
 		201E8670396E279B0D7D8103 /* MessageFramingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05432E6C166434891FF7C3A5 /* MessageFramingTests.swift */; };
@@ -105,6 +106,7 @@
 		C288016763C2BA83AD0F8D77 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586745EC6FBDE9C5CED2A285 /* Reachability.swift */; };
 		C4464E958A796CDFC2E3C832 /* AmbientSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA40D7D53B844F663F53978 /* AmbientSharing.swift */; };
 		C48607665FDFCD350287FCC5 /* DuplicateVoiceSuppressorMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1ECD22A35A027429EE2D4D7 /* DuplicateVoiceSuppressorMathTests.swift */; };
+		C7202A2A876EBDCB9410D125 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 567A636FDA4D3320660F22CE /* PrivacyInfo.xcprivacy */; };
 		C8A089CB6219F40200907FF2 /* ReverseSideTone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F407FA8777EA977156C72C7 /* ReverseSideTone.swift */; };
 		C935EF6611BBF811AD458AAF /* PreCaptureBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F7FBE466D08F1FCC2C7E9B /* PreCaptureBuffer.swift */; };
 		CC80D14E615A82E7E3D4F346 /* TransportSwitchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FFFD0EDCBDB40D33598E738 /* TransportSwitchingTests.swift */; };
@@ -193,6 +195,7 @@
 		531E5EBE78DB82A92DDDD0E5 /* AudioFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFrameTests.swift; sourceTree = "<group>"; };
 		53FF489DB639BEF92AEC94C4 /* NearTransportPairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearTransportPairingTests.swift; sourceTree = "<group>"; };
 		547920B10BBEEE5059DEA5BB /* OpusCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusCoder.swift; sourceTree = "<group>"; };
+		567A636FDA4D3320660F22CE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		586745EC6FBDE9C5CED2A285 /* Reachability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reachability.swift; sourceTree = "<group>"; };
 		5C15DF276A9A4E2ACCCE1C45 /* SpatialMixer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialMixer.swift; sourceTree = "<group>"; };
 		5CF0BBADC68FD17341C420D2 /* PreCaptureBufferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreCaptureBufferTests.swift; sourceTree = "<group>"; };
@@ -276,6 +279,7 @@
 		F20EE50C160AE1D3FA6290EF /* AppStateConnectionTypeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateConnectionTypeTests.swift; sourceTree = "<group>"; };
 		F2328FE0FED0DA92C1797F05 /* RoomTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomTokenProvider.swift; sourceTree = "<group>"; };
 		F5B5A59BA1D091FC84AEC05A /* PrivacyModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyModeTests.swift; sourceTree = "<group>"; };
+		F6420580B323FA62AE240AAA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F657004C0F866368D589D7F1 /* LatencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatencyTests.swift; sourceTree = "<group>"; };
 		F7E11EFEFCC15B5595CB104B /* BatteryManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryManagerTests.swift; sourceTree = "<group>"; };
 		F8FA70D88E87B0644B2B087C /* TailscaleDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailscaleDetectorTests.swift; sourceTree = "<group>"; };
@@ -357,9 +361,19 @@
 			children = (
 				267ACF6D6CD9929F17DA5513 /* App */,
 				DAF1A2A2F1EEF43D771A516E /* Core */,
+				2544AF4139E52E2352EA0B31 /* Resources */,
 				6CFC5505A865D1A740DE734E /* UI */,
 			);
 			path = sonar;
+			sourceTree = "<group>";
+		};
+		2544AF4139E52E2352EA0B31 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F6420580B323FA62AE240AAA /* Assets.xcassets */,
+				567A636FDA4D3320660F22CE /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		267ACF6D6CD9929F17DA5513 /* App */ = {
@@ -626,13 +640,6 @@
 			path = Power;
 			sourceTree = "<group>";
 		};
-		"TEMP_7ED37A5C-D3E2-402C-9392-A0F4BCADFAE0" /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -677,6 +684,7 @@
 			buildConfigurationList = 83ED670357959AF99821D60F /* Build configuration list for PBXNativeTarget "Sonar" */;
 			buildPhases = (
 				7C988BE8E568319B7F4A0FF2 /* Sources */,
+				64401E30938C031972D59051 /* Resources */,
 				842B6F31A4F9E961D4188F91 /* Frameworks */,
 			);
 			buildRules = (
@@ -737,6 +745,18 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		64401E30938C031972D59051 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1CB03C735FD7ABC5547B737D /* Assets.xcassets in Resources */,
+				C7202A2A876EBDCB9410D125 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		64FB317C0D56A82EC9C65B09 /* Sources */ = {
@@ -1185,16 +1205,16 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift.git";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.18.0;
+				kind = exactVersion;
+				version = 0.18.0;
 			};
 		};
 		C501DA4EA08825F48F84FAAA /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/livekit/client-sdk-swift";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+				kind = exactVersion;
+				version = 2.13.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

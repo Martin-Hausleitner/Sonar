@@ -106,9 +106,9 @@ final class SonarUITests: XCTestCase {
         XCTAssertTrue(waitForVisibleStaticText("KI-Auslöser", timeout: 6))
         attachScreenshot(named: "profile-details")
         app.buttons["Fertig"].tap()
+        XCTAssertTrue(app.navigationBars["Profil-Details"].waitForNonExistence(timeout: 4))
 
-        XCTAssertTrue(app.buttons["Einstellungen öffnen"].waitForExistence(timeout: 4))
-        app.buttons["Einstellungen öffnen"].tap()
+        tapHittableButton("Einstellungen öffnen", timeout: 6)
         XCTAssertTrue(app.navigationBars["Einstellungen"].waitForExistence(timeout: 4))
 
         let volumeSlider = waitForHittableSlider("Sonar-Lautstärke")

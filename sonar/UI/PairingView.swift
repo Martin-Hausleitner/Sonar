@@ -571,10 +571,13 @@ private struct QRScannerContainer: View {
 // MARK: - Preview
 
 struct PairingPreview: View {
+    private let appState = AppState()
+
     var body: some View {
         NavigationStack {
             PairingView()
-                .environmentObject(AppState())
+                .environmentObject(appState)
+                .environmentObject(appState.peerStore)
         }
         .preferredColorScheme(.dark)
     }

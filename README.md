@@ -25,7 +25,7 @@ Spatial audio · Ultra-Wideband ranging · Multipath mesh · AI transcription
 Drop the IPA into SideStore  →  open Verbinden on both phones  →  each side has a hint  →  talk.
 ```
 
-1. `Sonar-unsigned-iOS26.ipa` (im Repo-Root) auf beide iPhones via SideStore sideloaden.
+1. Die neueste versionierte IPA aus [`releases/`](./releases/) oder den Legacy-Pfad `Sonar-unsigned-iOS26.ipa` auf beide iPhones via SideStore sideloaden.
 2. Sonar auf beiden Geräten öffnen.
 3. Auf beiden Geräten: TopBar → **Verbinden** öffnen. Wenn beide sich in **In der Nähe** sehen, tippen beide den jeweils anderen Peer an.
 4. Falls ein Gerät nicht auftaucht: Gerät A → **Eigenen QR-Code anzeigen**, Gerät B → **Neues Gerät per QR scannen**. Der Scan erzeugt nur auf Gerät B den lokalen Hint; Gerät A muss Gerät B ebenfalls kennen, live antippen oder über einen expliziten Annahmepfad akzeptieren.
@@ -616,10 +616,15 @@ open Sonar.xcodeproj
 # → Targets → Sonar → Signing & Capabilities → Team auswählen
 
 # Tests ausführen
-xcodebuild test -scheme Sonar \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
-# Erwartet: ** TEST SUCCEEDED ** (174 Tests)
+make test
+# Erwartet: ** TEST SUCCEEDED **
 ```
+
+`make test` wählt dynamisch einen verfügbaren iPhone-Simulator. Für einen
+bestimmten Simulator: `SIMULATOR_ID=<UDID> make test`.
+
+Die vollständigen lokalen und CI-nahen Qualitätsgates stehen in
+[`docs/quality-gates.md`](./docs/quality-gates.md).
 
 ---
 
@@ -628,10 +633,8 @@ xcodebuild test -scheme Sonar \
 Die SideStore-Source verweist auf die versionierte IPA unter
 [`releases/`](./releases/). Der Repo-Root enthält zusätzlich
 [`Sonar-unsigned-iOS26.ipa`](./Sonar-unsigned-iOS26.ipa) als stabilen
-Legacy-Dateinamen für manuelle Sideloads. Vor einem neuen Release muss
-dieser Root-Pfad neu erzeugt oder mit der neuesten `releases/Sonar-v*.ipa`
-abgeglichen werden; lokal stimmt er derzeit nicht bytegleich mit
-`releases/Sonar-v0.2.11.ipa` überein.
+Legacy-Dateinamen für manuelle Sideloads; `make publish` überschreibt diesen
+Pfad bei jedem Release mit der neuesten `releases/Sonar-v*.ipa`.
 
 ```bash
 # Sideload via SideStore:
@@ -654,7 +657,7 @@ make publish VERSION=0.3.0    # explizite Version
 
 Das Skript [`scripts/release/publish.sh`](./scripts/release/publish.sh)
 aktualisiert `Info.plist`, baut die Tests, archiviert eine Release-Build
-für iOS 26.2 ohne Code-Signing, packt das IPA, schreibt
+für iOS 18.0+ ohne Code-Signing, packt das IPA, schreibt
 `releases/RELEASES.md` fort, committet, pusht und legt einen
 GitHub-Release an.
 

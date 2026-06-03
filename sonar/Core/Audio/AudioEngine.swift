@@ -52,7 +52,7 @@ struct AudioSessionPolicy: Equatable {
     var categoryOptions: AVAudioSession.CategoryOptions {
         var options: AVAudioSession.CategoryOptions = [
             .allowAirPlay,
-            .allowBluetoothHFP,
+            .allowBluetooth,
             .mixWithOthers
         ]
         if musicDuckingEnabled {
@@ -72,7 +72,7 @@ final class AudioEngine {
     /// Allowed range for the live mic-gain slider. Voice-processing AGC tends to
     /// pull real-world speech low; 0.5×–6× covers the practical span without
     /// distorting beyond reason.
-    static let inputGainRange: ClosedRange<Float> = 0.5 ... 6.0
+    nonisolated static let inputGainRange: ClosedRange<Float> = 0.5 ... 6.0
 
     private let engine = AVAudioEngine()
 

@@ -1,6 +1,18 @@
 # Xcode / generated project
-Sonar.xcodeproj/
+Sonar.xcodeproj/*
+!Sonar.xcodeproj/project.pbxproj
+!Sonar.xcodeproj/project.xcworkspace/
+!Sonar.xcodeproj/project.xcworkspace/**
+Sonar.xcodeproj/project.xcworkspace/*
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/**
+Sonar.xcodeproj/project.xcworkspace/xcshareddata/*
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/**
+Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 *.xcworkspace/
+!Sonar.xcodeproj/project.xcworkspace/
 xcuserdata/
 *.xcuserstate
 *.xcuserdatad
@@ -12,6 +24,7 @@ build/
 .build/
 .swiftpm/
 Package.resolved
+!Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # macOS
 .DS_Store

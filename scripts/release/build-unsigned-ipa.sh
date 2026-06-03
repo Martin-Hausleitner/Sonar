@@ -12,6 +12,12 @@ PRODUCTS_DIR="${DERIVED_DATA}/Build/Products/Release-iphoneos"
 APP_PATH="${PRODUCTS_DIR}/Sonar.app"
 OUT_DIR="${OUT_DIR:-build/release/UnsignedIPA}"
 IPA_PATH="${OUT_DIR}/Sonar-unsigned.ipa"
+XCODEBUILD_PACKAGE_ARGS=(
+  -onlyUsePackageVersionsFromResolvedFile
+  -skipPackageUpdates
+  -scmProvider system
+  -packageAuthorizationProvider netrc
+)
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/Payload"
@@ -22,6 +28,7 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$DERIVED_DATA" \
+  "${XCODEBUILD_PACKAGE_ARGS[@]}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY='' \

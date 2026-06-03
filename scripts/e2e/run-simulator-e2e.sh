@@ -4,8 +4,67 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-DEVICE_A="${DEVICE_A:-38D0B930-6B32-4F07-B170-845A120C2516}"
-DEVICE_B="${DEVICE_B:-97D9490F-66CA-44A3-9A42-693CC113BB80}"
+pick_iphone_simulators() {
+  local exclude_a="$1"
+  local exclude_b="$2"
+  local sims_json
+  sims_json="$(mktemp)"
+  xcrun simctl list devices available --json >"$sims_json"
+  if python3 - "$sims_json" "$exclude_a" "$exclude_b" <<'PY'
+import json
+import sys
+
+excluded = {value for value in sys.argv[2:] if value}
+needed = 2 - len(excluded)
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+iphones = []
+for runtime, devices in data.get("devices", {}).items():
+    if "iOS" not in runtime:
+        continue
+    for device in devices:
+        if (
+            device.get("isAvailable")
+            and "iPhone" in device.get("name", "")
+            and device.get("udid") not in excluded
+        ):
+            iphones.append(device["udid"])
+if len(iphones) < needed:
+    raise SystemExit(f"need {needed} more iPhone simulator(s), found {len(iphones)}")
+print("\n".join(iphones[:needed]))
+PY
+  then
+    local status=0
+  else
+    local status=$?
+  fi
+  rm -f "$sims_json"
+  return "$status"
+}
+
+ORIGINAL_DEVICE_A="${DEVICE_A:-}"
+ORIGINAL_DEVICE_B="${DEVICE_B:-}"
+if [[ -z "$ORIGINAL_DEVICE_A" || -z "$ORIGINAL_DEVICE_B" ]]; then
+  SELECTED_DEVICES="$(pick_iphone_simulators "$ORIGINAL_DEVICE_A" "$ORIGINAL_DEVICE_B")"
+  if [[ -z "$ORIGINAL_DEVICE_A" ]]; then
+    DEVICE_A="$(printf '%s\n' "$SELECTED_DEVICES" | sed -n '1p')"
+  else
+    DEVICE_A="$ORIGINAL_DEVICE_A"
+  fi
+  if [[ -z "$ORIGINAL_DEVICE_B" ]]; then
+    if [[ -z "$ORIGINAL_DEVICE_A" ]]; then
+      DEVICE_B="$(printf '%s\n' "$SELECTED_DEVICES" | sed -n '2p')"
+    else
+      DEVICE_B="$(printf '%s\n' "$SELECTED_DEVICES" | sed -n '1p')"
+    fi
+  else
+    DEVICE_B="$ORIGINAL_DEVICE_B"
+  fi
+fi
+if [[ -z "$DEVICE_A" || -z "$DEVICE_B" || "$DEVICE_A" == "$DEVICE_B" ]]; then
+  echo "error: two distinct iPhone simulators are required (DEVICE_A=${DEVICE_A:-unset}, DEVICE_B=${DEVICE_B:-unset})" >&2
+  exit 1
+fi
 BUNDLE_ID="${BUNDLE_ID:-app.sonar.ios}"
 PORT="${SONAR_RELAY_PORT:-8787}"
 RELAY_URL="http://127.0.0.1:${PORT}"
@@ -72,6 +131,10 @@ xcodebuild \
   -scheme Sonar \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=${DEVICE_A}" \
+  -onlyUsePackageVersionsFromResolvedFile \
+  -skipPackageUpdates \
+  -scmProvider system \
+  -packageAuthorizationProvider netrc \
   -derivedDataPath "$DERIVED_DATA" \
   build | tee "$OUT_DIR/build.log"
 

@@ -17,14 +17,60 @@ cd "$REPO_ROOT"
 DERIVED_DATA="build/CoverageDerived"
 COVERAGE_JSON="/tmp/sonar-coverage.json"
 REPORT_PATH="docs/coverage.md"
-SIMULATOR_ID="DCF24978-ABA7-4DC1-9E95-D96B0CE16CD4"
+
+pick_iphone_simulator() {
+  local sims_json
+  sims_json="$(mktemp)"
+  xcrun simctl list devices available --json >"$sims_json"
+  if python3 - "$sims_json" <<'PY'
+import json
+import os
+import sys
+
+preferred = os.environ.get("SIMULATOR_NAME", "iPhone 16 Pro")
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+iphones = []
+for runtime, devices in data.get("devices", {}).items():
+    if "iOS" not in runtime:
+        continue
+    for device in devices:
+        if device.get("isAvailable") and "iPhone" in device.get("name", ""):
+            iphones.append(device)
+if not iphones:
+    raise SystemExit("no available iPhone simulator found")
+for device in iphones:
+    if device.get("name") == preferred:
+        print(device["udid"])
+        break
+else:
+    print(iphones[0]["udid"])
+PY
+  then
+    local status=0
+  else
+    local status=$?
+  fi
+  rm -f "$sims_json"
+  return "$status"
+}
+
+SIMULATOR_ID="${SIMULATOR_ID:-${SIM_UDID:-}}"
+if [[ -z "$SIMULATOR_ID" ]]; then
+  SIMULATOR_ID="$(pick_iphone_simulator)"
+fi
 
 mkdir -p "$(dirname "$REPORT_PATH")"
 
 # --- 1. Run tests with coverage ---------------------------------------------
 echo "==> Running xcodebuild test with coverage (this can take a few minutes)..."
+echo "==> Simulator: ${SIMULATOR_ID}"
 xcodebuild test -project Sonar.xcodeproj -scheme Sonar \
   -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
+  -onlyUsePackageVersionsFromResolvedFile \
+  -skipPackageUpdates \
+  -scmProvider system \
+  -packageAuthorizationProvider netrc \
   -enableCodeCoverage YES \
   -derivedDataPath "$DERIVED_DATA" 2>&1 | tail -10
 

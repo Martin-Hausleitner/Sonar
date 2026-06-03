@@ -27,6 +27,13 @@ if [[ -n "${ASC_KEY_PATH:-}" || -n "${ASC_KEY_ID:-}" || -n "${ASC_ISSUER_ID:-}" 
   )
 fi
 
+XCODEBUILD_PACKAGE_ARGS=(
+  -onlyUsePackageVersionsFromResolvedFile
+  -skipPackageUpdates
+  -scmProvider system
+  -packageAuthorizationProvider netrc
+)
+
 cat >"$EXPORT_OPTIONS" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,6 +63,7 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE_PATH" \
+  "${XCODEBUILD_PACKAGE_ARGS[@]}" \
   -allowProvisioningUpdates \
   "${AUTH_ARGS[@]}" \
   DEVELOPMENT_TEAM="$TEAM_ID" \

@@ -39,10 +39,16 @@ lint-actions:
 	actionlint .github/workflows/*.yml
 
 test:
+	@SIMULATOR_ID="$${SIMULATOR_ID:-$$(xcrun simctl list devices available --json | python3 -c 'import json, sys; data=json.load(sys.stdin); iphones=[d for runtime, devices in data.get("devices", {}).items() if "iOS" in runtime for d in devices if d.get("isAvailable") and "iPhone" in d.get("name", "")]; preferred=next((d for d in iphones if d.get("name") == "iPhone 16 Pro"), None); print((preferred or iphones[0])["udid"])')}"; \
+	echo "Using simulator $$SIMULATOR_ID"; \
 	xcodebuild test \
 	  -project Sonar.xcodeproj \
 	  -scheme Sonar \
-	  -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+	  -onlyUsePackageVersionsFromResolvedFile \
+	  -skipPackageUpdates \
+	  -scmProvider system \
+	  -packageAuthorizationProvider netrc \
+	  -destination "platform=iOS Simulator,id=$$SIMULATOR_ID"
 
 publish:
 	@./scripts/release/publish.sh $(VERSION)

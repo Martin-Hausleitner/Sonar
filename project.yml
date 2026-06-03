@@ -44,10 +44,10 @@ schemes:
 packages:
   LiveKit:
     url: https://github.com/livekit/client-sdk-swift
-    from: "2.0.0"
+    exactVersion: "2.13.0"
   ArgmaxOSS:
     url: https://github.com/argmaxinc/argmax-oss-swift.git
-    from: "0.18.0"
+    exactVersion: "0.18.0"
 
 targets:
   Sonar:
@@ -59,7 +59,6 @@ targets:
           - "**/.DS_Store"
           - "Resources/Info.plist"
           - "Resources/Sonar.entitlements"
-          - "Resources/Assets.xcassets"
     # Info.plist is hand-maintained at sonar/Resources/Info.plist —
     # XcodeGen would otherwise overwrite it on every `xcodegen generate`.
     # Same for entitlements — file is hand-maintained.

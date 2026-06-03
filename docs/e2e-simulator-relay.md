@@ -27,8 +27,9 @@ self-test passed
 
 ## Run Fresh-Install Two-Simulator E2E
 
-The script defaults to the two simulator UDIDs used in the current E2E setup.
-Override them with `DEVICE_A` and `DEVICE_B` if needed.
+The script picks two distinct available iPhone simulators. Override selection
+with `DEVICE_A` and `DEVICE_B`, or with `SIMULATOR_A_NAME` and
+`SIMULATOR_B_NAME`, when a machine needs specific devices.
 
 ```bash
 scripts/e2e/run-simulator-e2e.sh

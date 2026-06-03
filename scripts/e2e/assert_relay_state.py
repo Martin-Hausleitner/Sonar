@@ -29,6 +29,10 @@ def assert_device(state, expected_id, expected_name):
 
 
 def frame_sources(state):
+    counts = frame_source_counts(state)
+    if counts:
+        return [source for source, count in counts.items() if count > 0]
+
     sources = []
     for item in state.get("frames", []):
         source = item.get("from")
@@ -36,13 +40,23 @@ def frame_sources(state):
         wire = frame.get("wireDataBase64", "")
         if source and valid_base64(wire):
             sources.append(source)
+    return sources
 
-    if sources:
-        return sources
 
-    return [
-        event.get("device") for event in state.get("events", []) if event.get("type") == "frame" and event.get("device")
-    ]
+def frame_source_counts(state):
+    raw_counts = state.get("frameCountsBySource", {})
+    if not isinstance(raw_counts, dict):
+        return {}
+
+    counts = {}
+    for source, count in raw_counts.items():
+        if not source:
+            continue
+        try:
+            counts[source] = int(count)
+        except (TypeError, ValueError):
+            continue
+    return counts
 
 
 def valid_base64(value):
@@ -74,6 +88,7 @@ def main():
         fail(f"expected at least {args.min_total_frames} relayed frames, got {frame_count}")
 
     sources = frame_sources(state)
+    source_counts = frame_source_counts(state)
     missing_sources = [
         expected_id for expected_id in [args.expected_a_id, args.expected_b_id] if expected_id not in sources
     ]
@@ -85,6 +100,7 @@ def main():
             {
                 "devices": [device_summary(device) for device in state.get("devices", [])],
                 "frameCount": frame_count,
+                "frameCountsBySource": source_counts,
                 "frameSources": sorted(set(sources)),
                 "serverSeq": state.get("serverSeq", 0),
             },

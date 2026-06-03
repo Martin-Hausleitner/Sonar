@@ -4,6 +4,7 @@ import base64
 import json
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,6 +15,7 @@ class RelayState:
         self.lock = threading.Lock()
         self.devices = {}
         self.frames = []
+        self.frame_counts_by_source = {}
         self.events = []
         self.server_seq = 0
 
@@ -22,6 +24,8 @@ class RelayState:
         return self.server_seq
 
     def register(self, device_id, name):
+        if not device_id or not name:
+            raise ValueError("register requires non-empty id and name")
         with self.lock:
             now = time.time()
             self.devices[device_id] = {"id": device_id, "name": name, "lastSeen": now}
@@ -31,6 +35,8 @@ class RelayState:
             return {"ok": True, "serverSeq": self.server_seq}
 
     def unregister(self, device_id):
+        if not device_id:
+            raise ValueError("unregister requires non-empty id")
         with self.lock:
             now = time.time()
             self.devices.pop(device_id, None)
@@ -38,12 +44,19 @@ class RelayState:
             return {"ok": True, "serverSeq": self.server_seq}
 
     def send_frame(self, sender, frame):
+        if not sender:
+            raise ValueError("send requires non-empty from")
+        if not isinstance(frame, dict):
+            raise ValueError("send requires frame object")
+        if not valid_base64(frame.get("wireDataBase64", "")):
+            raise ValueError("send requires valid frame.wireDataBase64")
         with self.lock:
             now = time.time()
             if sender in self.devices:
                 self.devices[sender]["lastSeen"] = now
             item = {"seq": self._next_seq(), "from": sender, "frame": frame, "time": now}
             self.frames.append(item)
+            self.frame_counts_by_source[sender] = self.frame_counts_by_source.get(sender, 0) + 1
             self.events.append(
                 {"seq": item["seq"], "type": "frame", "device": sender, "frameSeq": frame.get("seq"), "time": now}
             )
@@ -72,6 +85,8 @@ class RelayState:
                 "serverSeq": self.server_seq,
                 "devices": list(self.devices.values()),
                 "frameCount": len(self.frames),
+                "frameCountsBySource": dict(self.frame_counts_by_source),
+                "frameSourcesSeen": sorted(self.frame_counts_by_source),
                 "frames": self.frames[-50:],
                 "eventCount": len(self.events),
                 "events": self.events[-50:],
@@ -91,24 +106,31 @@ def make_handler(state):
                 self._send_json(state.snapshot())
                 return
             if parsed.path == "/api/poll":
-                query = urllib.parse.parse_qs(parsed.query)
-                device_id = query.get("deviceId", [""])[0]
-                after = int(query.get("after", ["0"])[0] or 0)
-                self._send_json(state.poll(device_id, after))
+                try:
+                    query = urllib.parse.parse_qs(parsed.query)
+                    device_id = query.get("deviceId", [""])[0]
+                    after = self._query_int(query, "after", 0)
+                    self._send_json(state.poll(device_id, after))
+                except ValueError as error:
+                    self._send_json({"error": str(error)}, status=400)
                 return
             self.send_error(404)
 
         def do_POST(self):
             parsed = urllib.parse.urlparse(self.path)
-            body = self._read_json()
-            if parsed.path == "/api/register":
-                self._send_json(state.register(body["id"], body["name"]))
-                return
-            if parsed.path == "/api/unregister":
-                self._send_json(state.unregister(body["id"]))
-                return
-            if parsed.path == "/api/send":
-                self._send_json(state.send_frame(body["from"], body["frame"]))
+            try:
+                body = self._read_json()
+                if parsed.path == "/api/register":
+                    self._send_json(state.register(self._require_str(body, "id"), self._require_str(body, "name")))
+                    return
+                if parsed.path == "/api/unregister":
+                    self._send_json(state.unregister(self._require_str(body, "id")))
+                    return
+                if parsed.path == "/api/send":
+                    self._send_json(state.send_frame(self._require_str(body, "from"), body["frame"]))
+                    return
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+                self._send_json({"error": str(error)}, status=400)
                 return
             self.send_error(404)
 
@@ -119,6 +141,19 @@ def make_handler(state):
             length = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(length)
             return json.loads(raw.decode("utf-8") or "{}")
+
+        def _require_str(self, body, key):
+            value = body[key]
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"{key} must be a non-empty string")
+            return value
+
+        def _query_int(self, query, key, default):
+            value = query.get(key, [str(default)])[0] or str(default)
+            try:
+                return int(value)
+            except ValueError as error:
+                raise ValueError(f"{key} must be an integer") from error
 
         def _send_json(self, payload, status=200):
             data = json.dumps(payload, sort_keys=True).encode("utf-8")
@@ -139,6 +174,16 @@ def make_handler(state):
             self.wfile.write(data)
 
     return Handler
+
+
+def valid_base64(value):
+    if not value:
+        return False
+    try:
+        base64.b64decode(value, validate=True)
+    except Exception:
+        return False
+    return True
 
 
 def dashboard_html():
@@ -214,6 +259,17 @@ def post_json(base, path, payload):
         return json.loads(response.read().decode("utf-8"))
 
 
+def post_raw(base, path, payload):
+    request = urllib.request.Request(
+        base + path,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=2) as response:
+        return response.status
+
+
 def get_json(base, path):
     with urllib.request.urlopen(base + path, timeout=2) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -244,6 +300,13 @@ def self_test():
         state = get_json(base, "/api/state")
         assert len(state["devices"]) == 2
         assert state["frameCount"] == 1
+        assert state["frameCountsBySource"] == {"SIM-A-38D0B9": 1}
+        assert state["frameSourcesSeen"] == ["SIM-A-38D0B9"]
+        try:
+            post_raw(base, "/api/send", b"{bad json")
+            raise AssertionError("malformed JSON should fail")
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
         print("self-test passed")
     finally:
         server.shutdown()

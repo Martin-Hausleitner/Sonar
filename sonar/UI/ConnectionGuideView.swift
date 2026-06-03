@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Step-by-step connection guide: Tailscale VPN, WLAN, Bluetooth.
 struct ConnectionGuideView: View {
+    @EnvironmentObject var appState: AppState
     @State private var selected: Method = .auto
     @State private var showPairing: Bool = false
 
@@ -74,6 +75,8 @@ struct ConnectionGuideView: View {
         .sheet(isPresented: $showPairing) {
             NavigationStack {
                 PairingView()
+                    .environmentObject(appState)
+                    .environmentObject(appState.peerStore)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Fertig") { showPairing = false }
@@ -334,9 +337,11 @@ struct ConnectionGuideView: View {
 }
 
 #Preview {
+    let appState = AppState()
     NavigationStack {
         ConnectionGuideView()
-            .environmentObject(AppState())
+            .environmentObject(appState)
+            .environmentObject(appState.peerStore)
     }
     .preferredColorScheme(.dark)
 }

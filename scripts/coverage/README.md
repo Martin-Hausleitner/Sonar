@@ -13,14 +13,17 @@ Voraussetzungen:
 
 - Xcode-Toolchain (`xcodebuild`, `xcrun xccov`).
 - `jq` (`brew install jq`).
-- Der iOS-Simulator mit der UDID `DCF24978-ABA7-4DC1-9E95-D96B0CE16CD4`
-  muss verfügbar sein. (UDID ggf. im Skript anpassen.)
+- Ein verfügbarer iPhone-Simulator. Das Skript bevorzugt `iPhone 16 Pro`,
+  fällt aber auf den ersten verfügbaren iPhone-Simulator zurück.
 
 Aus dem Repo-Root:
 
 ```bash
 scripts/coverage/measure.sh
 ```
+
+Optional kannst du `SIMULATOR_ID`, `SIM_UDID` oder `SIMULATOR_NAME` setzen,
+wenn du einen bestimmten Simulator verwenden willst.
 
 Der Lauf dauert einige Minuten (kompletter Test-Durchlauf mit
 Coverage-Instrumentierung). Ergebnis:

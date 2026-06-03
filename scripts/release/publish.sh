@@ -11,8 +11,8 @@
 #   releases/Sonar-v<NEW_VERSION>.ipa     (archived per-version)
 #   Sonar-unsigned-iOS26.ipa              (legacy compatibility link)
 #
-# Then updates releases/RELEASES.md, commits + pushes, and creates a
-# GitHub release with the IPA from releases/.
+# Then updates releases/RELEASES.md, commits + pushes, and pushes a release
+# tag. The tag-triggered GitHub Actions workflow owns GitHub Release creation.
 #
 # Usage:
 #   ./scripts/release/publish.sh                  # auto-bump patch
@@ -43,9 +43,54 @@ DERIVED_DATA="build/release/PublishDerivedData"
 PRODUCTS_DIR="${DERIVED_DATA}/Build/Products/Release-iphoneos"
 APP_PATH="${PRODUCTS_DIR}/Sonar.app"
 STAGING_DIR="build/release/PublishStaging"
+XCODEBUILD_PACKAGE_ARGS=(
+  -onlyUsePackageVersionsFromResolvedFile
+  -skipPackageUpdates
+  -scmProvider system
+  -packageAuthorizationProvider netrc
+)
 
-# Single iPhone 16 Pro simulator UDID — set via env if your local UDID differs.
-SIM_UDID="${SIM_UDID:-DCF24978-ABA7-4DC1-9E95-D96B0CE16CD4}"
+pick_iphone_simulator() {
+  local sims_json
+  sims_json="$(mktemp)"
+  xcrun simctl list devices available --json >"$sims_json"
+  if python3 - "$sims_json" <<'PY'
+import json
+import os
+import sys
+
+preferred = os.environ.get("SIMULATOR_NAME", "iPhone 16 Pro")
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+iphones = []
+for runtime, devices in data.get("devices", {}).items():
+    if "iOS" not in runtime:
+        continue
+    for device in devices:
+        if device.get("isAvailable") and "iPhone" in device.get("name", ""):
+            iphones.append(device)
+if not iphones:
+    raise SystemExit("no available iPhone simulator found")
+for device in iphones:
+    if device.get("name") == preferred:
+        print(device["udid"])
+        break
+else:
+    print(iphones[0]["udid"])
+PY
+  then
+    local status=0
+  else
+    local status=$?
+  fi
+  rm -f "$sims_json"
+  return "$status"
+}
+
+SIM_UDID="${SIM_UDID:-}"
+if [[ -z "$SIM_UDID" ]]; then
+  SIM_UDID="$(pick_iphone_simulator)"
+fi
 
 # -----------------------------------------------------------------------------
 # 1. Read current version & determine NEW_VERSION
@@ -95,8 +140,35 @@ if [[ -e "$NEW_IPA" ]]; then
   exit 1
 fi
 
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "main" && "${ALLOW_RELEASE_BRANCH:-}" != "1" ]]; then
+  echo "error: refusing to release from branch ${BRANCH}. Switch to main or set ALLOW_RELEASE_BRANCH=1." >&2
+  exit 1
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "error: worktree must be clean before release so unrelated changes are not published." >&2
+  exit 1
+fi
+
+if [[ "$BRANCH" == "main" && "${SKIP_RELEASE_FETCH:-}" != "1" ]]; then
+  echo "==> Verifying local main is current with origin/main"
+  git fetch origin main --tags
+  LOCAL_MAIN="$(git rev-parse HEAD)"
+  REMOTE_MAIN="$(git rev-parse origin/main)"
+  if [[ "$LOCAL_MAIN" != "$REMOTE_MAIN" ]]; then
+    echo "error: local main is not current with origin/main. Pull/rebase before releasing." >&2
+    exit 1
+  fi
+fi
+
 if git rev-parse --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
   echo "error: git tag ${TAG} already exists locally." >&2
+  exit 1
+fi
+
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+  echo "error: git tag ${TAG} already exists on origin." >&2
   exit 1
 fi
 
@@ -108,20 +180,21 @@ echo "==> Bumping ${INFO_PLIST}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${NEW_BUILD}" "$INFO_PLIST"
 
 # -----------------------------------------------------------------------------
-# 4. Tests (single iPhone 16 Pro simulator by UDID)
+# 4. Tests (available iPhone simulator)
 # -----------------------------------------------------------------------------
 echo "==> Running tests on simulator ${SIM_UDID}"
 xcodebuild test \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=${SIM_UDID}" \
+  "${XCODEBUILD_PACKAGE_ARGS[@]}" \
   -skip-testing:SonarUITests \
   -quiet
 
 # -----------------------------------------------------------------------------
-# 5. Build (signing disabled, iOS 26.2 deployment target)
+# 5. Build (signing disabled, iOS 18.0 deployment target)
 # -----------------------------------------------------------------------------
-echo "==> Building Release app (unsigned, iOS 26.2)"
+echo "==> Building Release app (unsigned, iOS 18.0)"
 rm -rf "$DERIVED_DATA" "$STAGING_DIR"
 mkdir -p "$STAGING_DIR/Payload" "$RELEASES_DIR"
 
@@ -131,7 +204,8 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$DERIVED_DATA" \
-  IPHONEOS_DEPLOYMENT_TARGET=26.2 \
+  "${XCODEBUILD_PACKAGE_ARGS[@]}" \
+  IPHONEOS_DEPLOYMENT_TARGET=18.0 \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY='' \
@@ -155,10 +229,8 @@ ditto "$APP_PATH" "$STAGING_DIR/Payload/Sonar.app"
 ( cd "$STAGING_DIR" && ditto -c -k --sequesterRsrc --keepParent Payload "Sonar-v${NEW_VERSION}.ipa" )
 mv "$STAGING_DIR/Sonar-v${NEW_VERSION}.ipa" "$NEW_IPA"
 
-echo "==> Preserving legacy root ${ROOT_IPA}"
-if [[ ! -f "$ROOT_IPA" ]]; then
-  cp "$NEW_IPA" "$ROOT_IPA"
-fi
+echo "==> Updating legacy root ${ROOT_IPA}"
+cp "$NEW_IPA" "$ROOT_IPA"
 
 IPA_SIZE_BYTES="$(stat -f%z "$NEW_IPA")"
 IPA_SIZE_MB="$(awk -v b="$IPA_SIZE_BYTES" 'BEGIN { printf "%.1f", b/1024/1024 }')"
@@ -224,19 +296,13 @@ EOF
 )"
 
 echo "==> Pushing to origin"
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git push origin "$BRANCH"
 
 # -----------------------------------------------------------------------------
-# 9. Create GitHub release
+# 9. Push release tag
 # -----------------------------------------------------------------------------
-echo "==> Creating GitHub release ${TAG}"
+echo "==> Pushing release tag ${TAG}"
 git tag -a "$TAG" -m "Sonar v${NEW_VERSION}"
 git push origin "$TAG"
 
-gh release create "$TAG" \
-  --title "Sonar v${NEW_VERSION} — unsigned IPA" \
-  --notes "Unsigned IPA for SideStore sideloading (iOS 26.2). See [RELEASES.md](https://github.com/Martin-Hausleitner/Sonar/blob/main/releases/RELEASES.md)." \
-  "$NEW_IPA"
-
-echo "==> Done. Released v${NEW_VERSION}."
+echo "==> Done. Released v${NEW_VERSION}. GitHub Actions will create the Release for ${TAG}."

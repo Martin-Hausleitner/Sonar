@@ -86,6 +86,7 @@ struct SettingsView: View {
             NavigationLink {
                 PairingView()
                     .environmentObject(appState)
+                    .environmentObject(appState.peerStore)
             } label: {
                 Label("QR-Pairing", systemImage: "qrcode.viewfinder")
             }
@@ -570,9 +571,11 @@ private struct LicensesView: View {
 // MARK: - Preview
 
 #Preview {
+    let appState = AppState()
     NavigationStack {
         SettingsView()
-            .environmentObject(AppState())
+            .environmentObject(appState)
+            .environmentObject(appState.peerStore)
     }
     .preferredColorScheme(.dark)
 }

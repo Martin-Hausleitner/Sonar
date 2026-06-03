@@ -44,7 +44,7 @@ permissions:
 jobs:
   release:
     name: Build, Test, Package, Publish (iOS, unsigned)
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 60
 
     env:
@@ -52,7 +52,7 @@ jobs:
       PROJECT: Sonar.xcodeproj
       CONFIGURATION: Release
       IPA_NAME: Sonar-unsigned-iOS26.ipa
-      DEPLOYMENT_TARGET: '26.2'
+      DEPLOYMENT_TARGET: '18.0'
 
     steps:
       - name: Checkout
@@ -92,10 +92,33 @@ jobs:
             echo "xcodegen already installed: $(xcodegen --version)"
           fi
 
+      - name: Install quality tools
+        run: |
+          set -euo pipefail
+          for tool in swiftformat swiftlint shellcheck yamllint actionlint ruff; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              brew install "$tool"
+            else
+              echo "$tool already installed: $($tool --version | head -1)"
+            fi
+          done
+
+      - name: Lint
+        run: make lint
+
       - name: Generate Xcode project
         run: |
           set -o pipefail
           xcodegen generate 2>&1 | tee xcodegen.log
+
+      - name: Check generated project is committed
+        run: |
+          git ls-files --error-unmatch \
+            Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          git diff --exit-code -- \
+            project.yml \
+            Sonar.xcodeproj/project.pbxproj \
+            Sonar.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Pick first available iPhone simulator
         id: pick-sim
@@ -119,6 +142,19 @@ jobs:
           echo "device-id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
           echo "Picked simulator: $DEVICE_ID"
 
+      - name: Resolve Swift packages
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackageUpdates \
+            -scmProvider system \
+            -packageAuthorizationProvider netrc \
+            -disableAutomaticPackageResolution 2>&1 | tee package-resolve.log
+
       - name: Build (Debug, iOS Simulator)
         run: |
           set -o pipefail
@@ -127,6 +163,10 @@ jobs:
             -scheme "$SCHEME" \
             -configuration Debug \
             -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackageUpdates \
+            -scmProvider system \
+            -packageAuthorizationProvider netrc \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -140,6 +180,10 @@ jobs:
             -scheme "$SCHEME" \
             -configuration Debug \
             -destination "id=${{ steps.pick-sim.outputs.device-id }}" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackageUpdates \
+            -scmProvider system \
+            -packageAuthorizationProvider netrc \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -156,6 +200,10 @@ jobs:
             -scheme "$SCHEME" \
             -configuration "$CONFIGURATION" \
             -destination 'generic/platform=iOS' \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackageUpdates \
+            -scmProvider system \
+            -packageAuthorizationProvider netrc \
             -derivedDataPath "$DERIVED_DATA" \
             IPHONEOS_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET" \
             CODE_SIGNING_ALLOWED=NO \
@@ -208,17 +256,16 @@ jobs:
             git push origin "refs/tags/${TAG}"
           fi
 
-          # Delete any existing release with the same tag, then create a fresh one.
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release delete "$TAG" --yes --cleanup-tag=false
-          fi
-
           NOTES="Automated release for ${TAG}. Unsigned iOS IPA built with CODE_SIGNING_ALLOWED=NO "
           NOTES+="and IPHONEOS_DEPLOYMENT_TARGET=${DEPLOYMENT_TARGET}. Sideload with SideStore/AltStore."
 
-          gh release create "$TAG" "$IPA_PATH" \
-            --title "Sonar $TAG" \
-            --notes "$NOTES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$IPA_PATH" --clobber
+          else
+            gh release create "$TAG" "$IPA_PATH" \
+              --title "Sonar $TAG" \
+              --notes "$NOTES"
+          fi
 
       - name: Upload diagnostic logs
         if: always()
@@ -227,6 +274,7 @@ jobs:
           name: release-logs-${{ github.sha }}
           path: |
             xcodegen.log
+            package-resolve.log
             build.log
             test.log
             archive.log
