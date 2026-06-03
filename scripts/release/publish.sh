@@ -49,6 +49,13 @@ XCODEBUILD_PACKAGE_ARGS=(
   -scmProvider system
   -packageAuthorizationProvider netrc
 )
+XCODEBUILD_GIT_ENV=(
+  GIT_TERMINAL_PROMPT=0
+  GIT_ASKPASS=/usr/bin/false
+  GIT_CONFIG_COUNT=1
+  GIT_CONFIG_KEY_0=credential.helper
+  GIT_CONFIG_VALUE_0=
+)
 
 pick_iphone_simulator() {
   local sims_json
@@ -183,12 +190,11 @@ echo "==> Bumping ${INFO_PLIST}"
 # 4. Tests (available iPhone simulator)
 # -----------------------------------------------------------------------------
 echo "==> Running tests on simulator ${SIM_UDID}"
-xcodebuild test \
+env "${XCODEBUILD_GIT_ENV[@]}" xcodebuild test \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=${SIM_UDID}" \
   "${XCODEBUILD_PACKAGE_ARGS[@]}" \
-  -skip-testing:SonarUITests \
   -quiet
 
 # -----------------------------------------------------------------------------
@@ -198,7 +204,7 @@ echo "==> Building Release app (unsigned, iOS 18.0)"
 rm -rf "$DERIVED_DATA" "$STAGING_DIR"
 mkdir -p "$STAGING_DIR/Payload" "$RELEASES_DIR"
 
-xcodebuild \
+env "${XCODEBUILD_GIT_ENV[@]}" xcodebuild \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \

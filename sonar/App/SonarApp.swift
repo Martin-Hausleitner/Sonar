@@ -79,13 +79,15 @@ struct SonarApp: App {
         private static func seedUITestRecordingIfRequested() {
             guard ProcessInfo.processInfo.arguments.contains("-sonar.seedRecording") else { return }
             guard LocalRecorder.allSessions().isEmpty else { return }
-            guard let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1),
-                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 96000) else { return }
+            let sampleRate: Double = 48000
+            let frameCount = AVAudioFrameCount(sampleRate * 8)
+            guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return }
 
-            buffer.frameLength = 96000
+            buffer.frameLength = frameCount
             if let samples = buffer.floatChannelData?[0] {
                 for index in 0 ..< Int(buffer.frameLength) {
-                    let t = Float(index) / 48000
+                    let t = Float(index) / Float(sampleRate)
                     samples[index] = sinf(2 * .pi * 440 * t) * 0.08
                 }
             }

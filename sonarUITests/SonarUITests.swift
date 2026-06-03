@@ -53,7 +53,7 @@ final class SonarUITests: XCTestCase {
         XCTAssertTrue(app.sliders["Aufnahme-Position"].waitForExistence(timeout: 4))
         attachScreenshot(named: "recording-player")
         app.buttons["Abspielen"].tap()
-        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 8))
         app.buttons["Pause"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
