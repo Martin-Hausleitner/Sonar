@@ -35,7 +35,7 @@ final class SimulatorRelayTransportTests: XCTestCase {
         XCTAssertEqual(client.registeredDeviceIDs, ["SIM-A-38D0B9"])
     }
 
-    func testPollResponsePublishesInboundAudioFrame() async throws {
+    func testPollResponsePublishesInboundAudioFrame() async {
         let frame = AudioFrame(seq: 42, payload: Data([0xDE, 0xAD]))
         let client = MockSimulatorRelayClient()
         client.pollResponses = [
@@ -54,9 +54,7 @@ final class SimulatorRelayTransportTests: XCTestCase {
             .sink { received.append($0) }
             .store(in: &cancellables)
 
-        try await transport.start()
-        try await waitUntil { received.count == 1 }
-        await transport.stop()
+        await transport.pollOnceForTesting()
 
         XCTAssertEqual(received.first?.seq, frame.seq)
         XCTAssertEqual(received.first?.payload, frame.payload)

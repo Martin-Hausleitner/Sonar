@@ -127,6 +127,12 @@ final class SimulatorRelayTransport: Transport, BondedPath {
         }
     }
 
+    #if DEBUG
+        func pollOnceForTesting() async {
+            await pollOnce()
+        }
+    #endif
+
     private func process(_ response: SimulatorRelayPollResponse) {
         lastServerSeq = max(lastServerSeq, response.serverSeq)
 
