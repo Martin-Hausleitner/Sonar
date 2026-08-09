@@ -44,5 +44,48 @@ final class AudioRoutePolicyTests: XCTestCase {
         }
         XCTAssertTrue(services.contains("_sonar-mpc._tcp"), "declared: \(services)")
         XCTAssertTrue(services.contains("_sonar-mpc._udp"), "declared: \(services)")
+
+        // The declared Bonjour names must match the service type NearTransport
+        // actually advertises/browses with — a rename on either side silently
+        // kills discovery.
+        XCTAssertTrue(
+            services.contains("_\(PairingToken.mpcServiceType)._tcp"),
+            "Info.plist NSBonjourServices out of sync with NearTransport service type \(PairingToken.mpcServiceType)"
+        )
+        XCTAssertTrue(
+            services.contains("_\(PairingToken.mpcServiceType)._udp"),
+            "Info.plist NSBonjourServices out of sync with NearTransport service type \(PairingToken.mpcServiceType)"
+        )
+    }
+}
+
+/// Task 1.4: encode failures must hit an explicit metrics counter, not just a
+/// throttled log line.
+final class MetricsCounterTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        Metrics.shared.resetCounters()
+    }
+
+    override func tearDown() {
+        Metrics.shared.resetCounters()
+        super.tearDown()
+    }
+
+    func testCountersStartAtZero() {
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeFailure), 0)
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeSuccess), 0)
+    }
+
+    func testIncrementAndReset() {
+        Metrics.shared.increment(.opusEncodeFailure)
+        Metrics.shared.increment(.opusEncodeFailure, by: 2)
+        Metrics.shared.increment(.opusEncodeSuccess)
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeFailure), 3)
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeSuccess), 1)
+
+        Metrics.shared.resetCounters()
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeFailure), 0)
+        XCTAssertEqual(Metrics.shared.count(.opusEncodeSuccess), 0)
     }
 }

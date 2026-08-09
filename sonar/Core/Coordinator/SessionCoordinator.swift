@@ -71,6 +71,18 @@ final class SessionCoordinator: ObservableObject {
     /// remote audio actually arrives and decodes on this device.
     private var playedFrameCount: UInt64 = 0
 
+    /// The synthetic liveness payload the simulator-relay pipeline sends at
+    /// 2 Hz. It is NOT Opus — the receive chain must never feed it to the
+    /// decoder (§1.6), and the E2E wiretap identifies it by these exact bytes.
+    nonisolated static let simulatorRelayKeepalivePayload = Data("sonar-simulator-relay-frame".utf8)
+
+    /// Receive-chain admission filter: everything except the sim-relay
+    /// keepalive goes to the jitter buffer. Split out for unit testing.
+    /// `nonisolated`: runs on the inbound-frame queue, not the main actor.
+    nonisolated static func shouldEnqueueInbound(_ frame: AudioFrame) -> Bool {
+        frame.payload != simulatorRelayKeepalivePayload
+    }
+
     // Smart audio processing
     private let preCaptureBuffer = PreCaptureBuffer()
     private let whisperDetector = WhisperDetector()
@@ -385,64 +397,11 @@ final class SessionCoordinator: ObservableObject {
 
         // MARK: SEND CHAIN: mic → pre-processing → conform → Opus encode → bonder → transports.
 
-        // Fresh route ⇒ fresh resampler state, no leftovers from a previous run.
-        captureConformer.reset()
-        encodedFrameCount = 0
-        droppedFrameCount = 0
+        wireSendChain(feedTranscription: !simulatorRelayMode)
 
-        audioEngine.captured
-            .receive(on: captureQueue)
-            .sink { [weak self] _, buffer in
-                guard let self else { return }
-                let rms = MicrophoneMonitor.rms(buffer)
-                Task { @MainActor [weak self] in
-                    self?.appState?.inputLevelRMS = rms
-                }
-                preCaptureBuffer.push(buffer)
-                whisperDetector.process(buffer)
-                smartMute.process(buffer)
-                // VAD drives music ducking when voice is detected.
-                let speaking = vad.feed(buffer)
-                Task { @MainActor [weak self] in
-                    self?.musicDucker.duckOnVoice(active: speaking)
-                }
-                guard MicrophoneMonitor.shouldForwardCapturedAudio(
-                    isMuted: appState?.isMuted ?? false
-                ) else {
-                    return
-                }
-                if !simulatorRelayMode {
-                    transcription.append(buffer)
-                }
-                recorder.append(buffer)
-                wakeWord.feed(buffer)
-                encodeAndSend(buffer)
-            }
-            .store(in: &cancellables)
+        // MARK: RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer → playback.
 
-        // MARK: RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer.
-
-        bonder.inboundFrames
-            .receive(on: DispatchQueue.global(qos: .userInteractive))
-            .sink { [weak self] frame in
-                self?.jitterBuffer.enqueue(frame)
-            }
-            .store(in: &cancellables)
-
-        // Drain the jitter buffer at the audio frame rate and schedule decoded PCM.
-        // Must run in `.common` modes: a `scheduledTimer` lands in `.default`
-        // only, so playback stalled for as long as the user scrolled or held a
-        // slider (UITrackingRunLoopMode).
-        let timer = Timer(
-            timeInterval: Double(LatencyBudget.audioFrameMs) / 1000.0,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.drainJitterBuffer()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        playbackTimer = timer
+        wireReceiveChain()
 
         // MARK: Battery tier → bonder mode + appState.
 
@@ -509,6 +468,78 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// SEND CHAIN: mic → pre-processing → conform → Opus encode → bonder.
+    /// Shared by the device pipeline and the simulator-relay pipeline (§1.6) —
+    /// only the transcription tap differs, so the relay carries real Opus
+    /// audio instead of a synthetic keepalive.
+    private func wireSendChain(feedTranscription: Bool) {
+        // Fresh route ⇒ fresh resampler state, no leftovers from a previous run.
+        captureConformer.reset()
+        encodedFrameCount = 0
+        droppedFrameCount = 0
+
+        audioEngine.captured
+            .receive(on: captureQueue)
+            .sink { [weak self] _, buffer in
+                guard let self else { return }
+                let rms = MicrophoneMonitor.rms(buffer)
+                Task { @MainActor [weak self] in
+                    self?.appState?.inputLevelRMS = rms
+                }
+                preCaptureBuffer.push(buffer)
+                whisperDetector.process(buffer)
+                smartMute.process(buffer)
+                // VAD drives music ducking when voice is detected.
+                let speaking = vad.feed(buffer)
+                Task { @MainActor [weak self] in
+                    self?.musicDucker.duckOnVoice(active: speaking)
+                }
+                guard MicrophoneMonitor.shouldForwardCapturedAudio(
+                    isMuted: appState?.isMuted ?? false
+                ) else {
+                    return
+                }
+                if feedTranscription {
+                    transcription.append(buffer)
+                }
+                recorder.append(buffer)
+                wakeWord.feed(buffer)
+                encodeAndSend(buffer)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// RECEIVE CHAIN: transports → bonder (dedup) → jitter buffer → drain
+    /// timer → Opus decode → SpatialMixer playback. Shared by the device
+    /// pipeline and the simulator-relay pipeline (§1.6).
+    private func wireReceiveChain() {
+        playedFrameCount = 0
+        bonder.inboundFrames
+            .receive(on: DispatchQueue.global(qos: .userInteractive))
+            .sink { [weak self] frame in
+                // The sim-relay keepalive is not Opus — never feed it to the
+                // decoder; it would only burn the decode-error throttle.
+                guard Self.shouldEnqueueInbound(frame) else { return }
+                self?.jitterBuffer.enqueue(frame)
+            }
+            .store(in: &cancellables)
+
+        // Drain the jitter buffer at the audio frame rate and schedule decoded PCM.
+        // Must run in `.common` modes: a `scheduledTimer` lands in `.default`
+        // only, so playback stalled for as long as the user scrolled or held a
+        // slider (UITrackingRunLoopMode).
+        let timer = Timer(
+            timeInterval: Double(LatencyBudget.audioFrameMs) / 1000.0,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.drainJitterBuffer()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        playbackTimer = timer
+    }
+
     private func startSimulatorRelayPipeline() async {
         guard let appState, let relay = SimulatorRelayTransport.makeFromIdentity(appState.testIdentity) else {
             phase = .idle
@@ -557,9 +588,30 @@ final class SessionCoordinator: ObservableObject {
             .sink { [weak self] g in self?.appState?.signalGrade = g }
             .store(in: &cancellables)
 
+        // §1.6: the relay must carry REAL audio, not only the keepalive. Wire
+        // the same capture→Opus→send and receive→jitter→decode→playback chains
+        // as the device pipeline; only the transport underneath differs.
+        // Verified gap 2026-08-10: without this, all relayed frames were the
+        // 27-byte keepalive and no audio ever flowed between simulators.
+        audioEngine.connect(spatialMixer: spatialMixer)
+        audioEngine.rawAudioMode = appState.rawAudioMode
+        do {
+            try audioEngine.prepare()
+            spatialMixer.startRemotePlayer()
+            wireSendChain(feedTranscription: false)
+            wireReceiveChain()
+        } catch {
+            // Relay session stays up (keepalive still proves transport
+            // liveness), but say loudly that no audio chain exists so the
+            // audio-proof harness fails visibly instead of silently.
+            Log.audio.error(
+                "Sim-relay: audioEngine.prepare() failed — relay carries keepalive only, no audio: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+
         simulatorRelayFrameTask?.cancel()
         simulatorRelayFrameTask = Task { [weak self] in
-            let payload = Data("sonar-simulator-relay-frame".utf8)
+            let payload = Self.simulatorRelayKeepalivePayload
             while !Task.isCancelled {
                 await self?.bonder.send(opusData: payload)
                 try? await Task.sleep(nanoseconds: 500_000_000)
@@ -826,9 +878,11 @@ final class SessionCoordinator: ObservableObject {
             do {
                 let data = try encoder.encode(frame)
                 encodedFrameCount &+= 1
+                Metrics.shared.increment(.opusEncodeSuccess)
                 Task { await self.bonder.send(opusData: data) }
             } catch {
                 droppedFrameCount &+= 1
+                Metrics.shared.increment(.opusEncodeFailure)
                 logThrottled(
                     encodeErrorThrottle,
                     "Opus encode failed: \(error) — dropped \(droppedFrameCount) of \(droppedFrameCount + encodedFrameCount) capture frames"
