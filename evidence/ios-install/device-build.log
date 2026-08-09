@@ -1,0 +1,306 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme Sonar -destination id=7C62FC1E-FD1A-5EF1-B385-6FB189B54AD9 -allowProvisioningUpdates build
+
+2026-08-09 23:53:45.298 xcodebuild[57642:1894169]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+2026-08-09 23:53:45.431 xcodebuild[57642:1894126] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-argument-parser: https://github.com/apple/swift-argument-parser.git @ 1.7.1
+  LiveKitUniFFI: https://github.com/livekit/livekit-uniffi-xcframework.git @ 0.0.5
+  LiveKit: https://github.com/livekit/client-sdk-swift @ 2.13.0
+  Jinja: https://github.com/huggingface/swift-jinja.git @ 2.3.5
+  SwiftProtobuf: https://github.com/apple/swift-protobuf.git @ 1.37.0
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.4.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.0
+  LiveKitWebRTC: https://github.com/livekit/webrtc-xcframework.git @ 144.7559.3
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.0
+  yyjson: https://github.com/ibireme/yyjson.git @ 0.12.0
+  whisperkit: https://github.com/argmaxinc/argmax-oss-swift.git @ 0.18.0
+  swift-transformers: https://github.com/huggingface/swift-transformers.git @ 1.1.9
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (29 targets)
+    Target 'Sonar' in project 'Sonar'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson' (no dependencies)
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target 'swift-transformers_Hub' in project 'swift-transformers' (no dependencies)
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf' (no dependencies)
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI' (no dependencies)
+    Target 'LiveKitWebRTC' in project 'LiveKitWebRTC' (no dependencies)
+    Target 'LKObjCHelpers' in project 'LiveKit' (no dependencies)
+    Target 'LiveKit_LiveKit' in project 'LiveKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x objective-c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/mh/orca/workspaces/sonar-live-audio/sonar/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+Build description signature: 237d84b27ef594edffc33061f7c814d9
+Build description path: /Users/mh/Library/Developer/Xcode/DerivedData/Sonar-doqrqwtykddrsmapblpyjctvddmq/Build/Intermediates.noindex/XCBuildData/237d84b27ef594edffc33061f7c814d9.xcbuilddata
+/Users/mh/orca/workspaces/sonar-live-audio/Sonar.xcodeproj: error: Signing for "Sonar" requires a development team. Select a development team in the Signing & Capabilities editor. (in target 'Sonar' from project 'Sonar')
+** BUILD FAILED **
+
+
+The following build commands failed:
+	Building project Sonar with scheme Sonar
+(1 failure)
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme Sonar -destination id=7C62FC1E-FD1A-5EF1-B385-6FB189B54AD9 -allowProvisioningUpdates DEVELOPMENT_TEAM=TH2WQG73S9 build
+
+Build settings from command line:
+    DEVELOPMENT_TEAM = TH2WQG73S9
+
+2026-08-09 23:54:02.290 xcodebuild[58908:1898269]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+2026-08-09 23:54:02.325 xcodebuild[58908:1898197] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+Resolve Package Graph
+
+
+Resolved source packages:
+  whisperkit: https://github.com/argmaxinc/argmax-oss-swift.git @ 0.18.0
+  LiveKitUniFFI: https://github.com/livekit/livekit-uniffi-xcframework.git @ 0.0.5
+  swift-transformers: https://github.com/huggingface/swift-transformers.git @ 1.1.9
+  LiveKitWebRTC: https://github.com/livekit/webrtc-xcframework.git @ 144.7559.3
+  Jinja: https://github.com/huggingface/swift-jinja.git @ 2.3.5
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.0
+  swift-argument-parser: https://github.com/apple/swift-argument-parser.git @ 1.7.1
+  LiveKit: https://github.com/livekit/client-sdk-swift @ 2.13.0
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.0
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.4.1
+  SwiftProtobuf: https://github.com/apple/swift-protobuf.git @ 1.37.0
+  yyjson: https://github.com/ibireme/yyjson.git @ 0.12.0
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (29 targets)
+    Target 'Sonar' in project 'Sonar'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson' (no dependencies)
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target 'swift-transformers_Hub' in project 'swift-transformers' (no dependencies)
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf' (no dependencies)
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI' (no dependencies)
+    Target 'LiveKitWebRTC' in project 'LiveKitWebRTC' (no dependencies)
+    Target 'LKObjCHelpers' in project 'LiveKit' (no dependencies)
+    Target 'LiveKit_LiveKit' in project 'LiveKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x objective-c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/mh/orca/workspaces/sonar-live-audio/sonar/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: 9e390985ffb1215108e6730b90eae45b
+Build description path: /Users/mh/Library/Developer/Xcode/DerivedData/Sonar-doqrqwtykddrsmapblpyjctvddmq/Build/Intermediates.noindex/XCBuildData/9e390985ffb1215108e6730b90eae45b.xcbuilddata
+/Users/mh/orca/workspaces/sonar-live-audio/Sonar.xcodeproj: error: No Accounts: Add a new account in Accounts settings. (in target 'Sonar' from project 'Sonar')
+/Users/mh/orca/workspaces/sonar-live-audio/Sonar.xcodeproj: error: No profiles for 'app.sonar.ios' were found: Xcode couldn't find any iOS App Development provisioning profiles matching 'app.sonar.ios'. (in target 'Sonar' from project 'Sonar')
+** BUILD FAILED **
+
+
+The following build commands failed:
+	Building project Sonar with scheme Sonar
+(1 failure)
