@@ -1,0 +1,3 @@
+Name                        Hostname                                     Identifier                             State                Model                     
+-------------------------   ------------------------------------------   ------------------------------------   ------------------   --------------------------
+mRNA-Impfchip_R1CK-R0773D   mRNA-Impfchip-R1CK-R0773D.coredevice.local   7C62FC1E-FD1A-5EF1-B385-6FB189B54AD9   available (paired)   iPhone 17 Pro (iPhone18,1)
