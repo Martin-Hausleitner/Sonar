@@ -491,22 +491,45 @@ struct SessionView: View {
 
     @ViewBuilder
     private var liveTranscriptPreview: some View {
-        let finalSegs = appState.transcriptSegments.filter(\.isFinal).suffix(2)
-        if !finalSegs.isEmpty {
+        let preview = Self.transcriptPreview(from: appState.transcriptSegments)
+        if !preview.finals.isEmpty || preview.partial != nil {
             Divider()
             VStack(alignment: .leading, spacing: 4) {
                 Label("Transkript", systemImage: "text.bubble")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                ForEach(finalSegs) { seg in
+                ForEach(preview.finals) { seg in
                     Text(seg.text)
                         .font(.caption)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                if let partial = preview.partial {
+                    Text(partial.text + " …")
+                        .font(.caption.italic())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
+    }
+
+    /// What the in-call card shows of the live transcript: the last two
+    /// committed segments plus the currently-forming (partial) tail, so the
+    /// Soniox stream is visible *while* someone is speaking, not only after
+    /// the segment finalizes. Pure so the selection is unit-testable.
+    static func transcriptPreview(
+        from segments: [LiveTranscriptionEngine.Segment]
+    ) -> (finals: [LiveTranscriptionEngine.Segment], partial: LiveTranscriptionEngine.Segment?) {
+        let finals = Array(segments.filter(\.isFinal).suffix(2))
+        let partial = segments.last.flatMap { seg -> LiveTranscriptionEngine.Segment? in
+            guard !seg.isFinal else { return nil }
+            let trimmed = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : seg
+        }
+        return (finals, partial)
     }
 
     private var compactMuteButton: some View {

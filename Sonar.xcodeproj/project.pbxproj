@@ -66,6 +66,7 @@
 		62AC911177488B67D054F41C /* SimulatorRelayTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A2A95D4BE19F68D6DC7D1 /* SimulatorRelayTransport.swift */; };
 		6458DC6EB942927C7BC8509F /* WhisperDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8425355469D5556788F15481 /* WhisperDetectorTests.swift */; };
 		670045A35E369058ED49E9F1 /* BatteryManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E11EFEFCC15B5595CB104B /* BatteryManagerTests.swift */; };
+		67632CF299170D2B7E171AE5 /* SonioxBetaUIWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E429CBCEDAFCA6939E68849 /* SonioxBetaUIWiringTests.swift */; };
 		67822B91372101B38A370BB3 /* AirPodsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF43608835E7D99C6B730A43 /* AirPodsController.swift */; };
 		6A66B1651FD904672488E698 /* SonarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88DF1BC0D75E4AB0A7777D84 /* SonarApp.swift */; };
 		6C0B7EE00993E855E3E960BD /* AudioRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 882B6C7B36F51C4F4C36CF7A /* AudioRouter.swift */; };
@@ -171,6 +172,7 @@
 		05432E6C166434891FF7C3A5 /* MessageFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageFramingTests.swift; sourceTree = "<group>"; };
 		067C4000EB3B555D3B6882E7 /* LocalModelManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelManagerTests.swift; sourceTree = "<group>"; };
 		0D157E9BF4FE5353AED8CE10 /* RSSIFallbackMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSSIFallbackMathTests.swift; sourceTree = "<group>"; };
+		0E429CBCEDAFCA6939E68849 /* SonioxBetaUIWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonioxBetaUIWiringTests.swift; sourceTree = "<group>"; };
 		0E62E334C047ACBA4824B4A8 /* DuplicateVoiceSuppressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateVoiceSuppressor.swift; sourceTree = "<group>"; };
 		1A2255356D11E59AA4ADE342 /* FarTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FarTransport.swift; sourceTree = "<group>"; };
 		1A56E3F4A3F6E57B43A6F02A /* SignalScoreCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalScoreCalculatorTests.swift; sourceTree = "<group>"; };
@@ -589,6 +591,7 @@
 				9E2692DBC90772B532C4C179 /* SimulatorRelayTransportTests.swift */,
 				7F485BF755341E6F0C08CB1F /* SmartMuteDetectorTests.swift */,
 				36584D2D159A07FB3AA5E8D1 /* SonarTestIdentityTests.swift */,
+				0E429CBCEDAFCA6939E68849 /* SonioxBetaUIWiringTests.swift */,
 				BBD554EBB4EE7C4C69C00CE0 /* SonioxRealtimeTranscriberTests.swift */,
 				8E881EAC58474CD8041BF743 /* SonioxSessionGovernorTests.swift */,
 				F8FA70D88E87B0644B2B087C /* TailscaleDetectorTests.swift */,
@@ -824,6 +827,7 @@
 				1CFE81DD166FCEFEB7FE832D /* SimulatorRelayTransportTests.swift in Sources */,
 				283E42D760567123DB0239B7 /* SmartMuteDetectorTests.swift in Sources */,
 				FCBD30F6AC5FD3D08D32880E /* SonarTestIdentityTests.swift in Sources */,
+				67632CF299170D2B7E171AE5 /* SonioxBetaUIWiringTests.swift in Sources */,
 				CD1EF6D7D88ADCB0F6D6F2CF /* SonioxRealtimeTranscriberTests.swift in Sources */,
 				38C1DE2EB540EE348CC6B305 /* SonioxSessionGovernorTests.swift in Sources */,
 				49E1CEDF64C9F6086481C066 /* TailscaleDetectorTests.swift in Sources */,
