@@ -1,0 +1,347 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -project Sonar.xcodeproj -scheme Sonar -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates -scmProvider system -packageAuthorizationProvider netrc "-only-testing:SonarTests/JitterBufferTests" "-only-testing:SonarTests/CaptureFrameConformerTests" "-only-testing:SonarTests/AudioLogThrottleTests" "-only-testing:SonarTests/AudioRoutePolicyTests" "-only-testing:SonarTests/OpusCodingTests" "-only-testing:SonarTests/BluetoothMeshTransportTests" "-only-testing:SonarTests/SonioxRealtimeTranscriberTests" "-only-testing:SonarTests/SonioxLiveTranscriptionEngineTests" -destination "platform=iOS Simulator,id=FE36E59B-CA47-49E9-9784-CE5DA6C93F87" -resultBundlePath evidence/test-results.xcresult
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-argument-parser: https://github.com/apple/swift-argument-parser.git @ 1.7.1
+  Jinja: https://github.com/huggingface/swift-jinja.git @ 2.3.5
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.4.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.0
+  whisperkit: https://github.com/argmaxinc/argmax-oss-swift.git @ 0.18.0
+  yyjson: https://github.com/ibireme/yyjson.git @ 0.12.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.0
+  swift-transformers: https://github.com/huggingface/swift-transformers.git @ 1.1.9
+  LiveKit: https://github.com/livekit/client-sdk-swift @ 2.13.0
+  LiveKitUniFFI: https://github.com/livekit/livekit-uniffi-xcframework.git @ 0.0.5
+  SwiftProtobuf: https://github.com/apple/swift-protobuf.git @ 1.37.0
+  LiveKitWebRTC: https://github.com/livekit/webrtc-xcframework.git @ 144.7559.3
+
+Writing result bundle at path:
+	/Users/mh/orca/workspaces/sonar-live-audio/evidence/test-results.xcresult
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (31 targets)
+    Target 'SonarUITests' in project 'Sonar'
+        ➜ Explicit dependency on target 'Sonar' in project 'Sonar'
+    Target 'SonarTests' in project 'Sonar'
+        ➜ Explicit dependency on target 'Sonar' in project 'Sonar'
+    Target 'Sonar' in project 'Sonar'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'WhisperKit' in project 'whisperkit'
+        ➜ Explicit dependency on target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Tokenizers' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'ArgmaxCore' in project 'whisperkit'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'swift-transformers_Hub' in project 'swift-transformers'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson'
+        ➜ Explicit dependency on target 'yyjson' in project 'yyjson'
+    Target 'yyjson' in project 'yyjson' (no dependencies)
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'Jinja' in project 'Jinja'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'OrderedCollections' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target 'swift-transformers_Hub' in project 'swift-transformers' (no dependencies)
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKit_LiveKit' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LKObjCHelpers' in project 'LiveKit'
+        ➜ Explicit dependency on target 'LiveKitWebRTC' in project 'LiveKitWebRTC'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf' in project 'SwiftProtobuf'
+        ➜ Explicit dependency on target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf'
+    Target 'SwiftProtobuf_SwiftProtobuf' in project 'SwiftProtobuf' (no dependencies)
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+        ➜ Explicit dependency on target 'LiveKitUniFFI' in project 'LiveKitUniFFI'
+    Target 'LiveKitUniFFI' in project 'LiveKitUniFFI' (no dependencies)
+    Target 'LiveKitWebRTC' in project 'LiveKitWebRTC' (no dependencies)
+    Target 'LKObjCHelpers' in project 'LiveKit' (no dependencies)
+    Target 'LiveKit_LiveKit' in project 'LiveKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/mh/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/mh/orca/workspaces/sonar-live-audio/Sonar.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/mh/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+Test Suite 'Selected tests' started at 2026-08-09 20:06:30.603.
+Test Suite 'SonarTests.xctest' started at 2026-08-09 20:06:30.603.
+Test Suite 'AudioLogThrottleTests' started at 2026-08-09 20:06:30.603.
+Test Case '-[SonarTests.AudioLogThrottleTests testFirstCallLogsWithNothingSuppressed]' started.
+Test Case '-[SonarTests.AudioLogThrottleTests testFirstCallLogsWithNothingSuppressed]' passed (0.001 seconds).
+Test Case '-[SonarTests.AudioLogThrottleTests testResetClearsCounters]' started.
+Test Case '-[SonarTests.AudioLogThrottleTests testResetClearsCounters]' passed (0.001 seconds).
+Test Case '-[SonarTests.AudioLogThrottleTests testSubsequentCallsInsideWindowAreSuppressedAndCounted]' started.
+Test Case '-[SonarTests.AudioLogThrottleTests testSubsequentCallsInsideWindowAreSuppressedAndCounted]' passed (0.000 seconds).
+Test Suite 'AudioLogThrottleTests' passed at 2026-08-09 20:06:30.606.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'AudioRoutePolicyTests' started at 2026-08-09 20:06:30.606.
+Test Case '-[SonarTests.AudioRoutePolicyTests testBonjourServicesDeclareTCPAndUDP]' started.
+Test Case '-[SonarTests.AudioRoutePolicyTests testBonjourServicesDeclareTCPAndUDP]' passed (0.001 seconds).
+Test Case '-[SonarTests.AudioRoutePolicyTests testCategoryOptionsKeepAirPlayBluetoothAndMixing]' started.
+Test Case '-[SonarTests.AudioRoutePolicyTests testCategoryOptionsKeepAirPlayBluetoothAndMixing]' passed (0.000 seconds).
+Test Case '-[SonarTests.AudioRoutePolicyTests testCategoryOptionsRouteToSpeakerByDefault]' started.
+Test Case '-[SonarTests.AudioRoutePolicyTests testCategoryOptionsRouteToSpeakerByDefault]' passed (0.000 seconds).
+Test Case '-[SonarTests.AudioRoutePolicyTests testSpeakerRoutingSurvivesDuckingAndModeNudges]' started.
+Test Case '-[SonarTests.AudioRoutePolicyTests testSpeakerRoutingSurvivesDuckingAndModeNudges]' passed (0.000 seconds).
+Test Suite 'AudioRoutePolicyTests' passed at 2026-08-09 20:06:30.629.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.023) seconds
+Test Suite 'BluetoothMeshTransportTests' started at 2026-08-09 20:06:30.630.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testBLEFrameRoundTripUsesAudioFrameWireData]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testBLEFrameRoundTripUsesAudioFrameWireData]' passed (0.001 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testDisconnectMutationGuardAcceptsKnownConnectedOrWritablePeripheral]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testDisconnectMutationGuardAcceptsKnownConnectedOrWritablePeripheral]' passed (0.001 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testDisconnectMutationGuardIgnoresStaleForgottenDisconnect]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testDisconnectMutationGuardIgnoresStaleForgottenDisconnect]' passed (0.000 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testInvalidBLEFrameReturnsNil]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testInvalidBLEFrameReturnsNil]' passed (0.004 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testPeerCallbackGuardAcceptsAllowedExpectedPeripheral]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testPeerCallbackGuardAcceptsAllowedExpectedPeripheral]' passed (0.001 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testPeerCallbackGuardRejectsForgottenPendingConnect]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testPeerCallbackGuardRejectsForgottenPendingConnect]' passed (0.001 seconds).
+Test Case '-[SonarTests.BluetoothMeshTransportTests testRemovePairingTokenPlanDisconnectsMatchingBLEIdentifierAndClearsWritablePath]' started.
+Test Case '-[SonarTests.BluetoothMeshTransportTests testRemovePairingTokenPlanDisconnectsMatchingBLEIdentifierAndClearsWritablePath]' passed (0.001 seconds).
+Test Suite 'BluetoothMeshTransportTests' passed at 2026-08-09 20:06:30.640.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.009 (0.011) seconds
+Test Suite 'CaptureFrameConformerTests' started at 2026-08-09 20:06:30.643.
+Test Case '-[SonarTests.CaptureFrameConformerTests testBluetoothHFP16kInputIsResampledTo48k]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testBluetoothHFP16kInputIsResampledTo48k]' passed (0.009 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testEmptyBufferProducesNothing]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testEmptyBufferProducesNothing]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testEncoderRejectsRawTapBuffer]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testEncoderRejectsRawTapBuffer]' passed (0.002 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testEncoderRejectsWrongFrameLength]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testEncoderRejectsWrongFrameLength]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testMatchingFormatPassesSamplesThroughUnchanged]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testMatchingFormatPassesSamplesThroughUnchanged]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testMono24kInputYieldsExactFrames]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testMono24kInputYieldsExactFrames]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testOversizedBufferIsSlicedIntoSeveralFrames]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testOversizedBufferIsSlicedIntoSeveralFrames]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testRemainderAccumulatesAcrossBuffers]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testRemainderAccumulatesAcrossBuffers]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testResetDropsBufferedRemainder]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testResetDropsBufferedRemainder]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testRouteSwitchDropsRemainderAndRebuildsConverter]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testRouteSwitchDropsRemainderAndRebuildsConverter]' passed (0.002 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testSameFormatIsNotTreatedAsRouteSwitch]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testSameFormatIsNotTreatedAsRouteSwitch]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testStereo44kInputYieldsExact480SampleMonoFrames]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testStereo44kInputYieldsExact480SampleMonoFrames]' passed (0.001 seconds).
+Test Case '-[SonarTests.CaptureFrameConformerTests testTapFormatRoundtripProducesNonSilentAudio]' started.
+Test Case '-[SonarTests.CaptureFrameConformerTests testTapFormatRoundtripProducesNonSilentAudio]' passed (0.111 seconds).
+Test Suite 'CaptureFrameConformerTests' passed at 2026-08-09 20:06:30.781.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.132 (0.138) seconds
+Test Suite 'JitterBufferTests' started at 2026-08-09 20:06:30.781.
+Test Case '-[SonarTests.JitterBufferTests testAdvanceOnConcealNeverSkipsAFrameThatArrivedInTheMeantime]' started.
+Test Case '-[SonarTests.JitterBufferTests testAdvanceOnConcealNeverSkipsAFrameThatArrivedInTheMeantime]' passed (0.002 seconds).
+Test Case '-[SonarTests.JitterBufferTests testAdvanceOnConcealSkipsSeq]' started.
+Test Case '-[SonarTests.JitterBufferTests testAdvanceOnConcealSkipsSeq]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testAdvanceWrapsAroundUInt32]' started.
+Test Case '-[SonarTests.JitterBufferTests testAdvanceWrapsAroundUInt32]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testDequeueAdvancesNextExpected]' started.
+Test Case '-[SonarTests.JitterBufferTests testDequeueAdvancesNextExpected]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testDequeueWithoutEnqueueReturnsNil]' started.
+Test Case '-[SonarTests.JitterBufferTests testDequeueWithoutEnqueueReturnsNil]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testDuplicateEnqueueSecondDequeueReturnsNilForMissingNext]' started.
+Test Case '-[SonarTests.JitterBufferTests testDuplicateEnqueueSecondDequeueReturnsNilForMissingNext]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testEmptyDrainTicksDoNotDesyncFromSenderStartingAtSeqOne]' started.
+Test Case '-[SonarTests.JitterBufferTests testEmptyDrainTicksDoNotDesyncFromSenderStartingAtSeqOne]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testEnqueueDequeueReturnsFrameInOrder]' started.
+Test Case '-[SonarTests.JitterBufferTests testEnqueueDequeueReturnsFrameInOrder]' passed (0.009 seconds).
+Test Case '-[SonarTests.JitterBufferTests testFirstFrameAdoptsSenderSequenceNumber]' started.
+Test Case '-[SonarTests.JitterBufferTests testFirstFrameAdoptsSenderSequenceNumber]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testGapOfMaxConcealGapIsConcealedFrameByFrame]' started.
+Test Case '-[SonarTests.JitterBufferTests testGapOfMaxConcealGapIsConcealedFrameByFrame]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testGapOfMaxConcealGapPlusOneResyncsImmediately]' started.
+Test Case '-[SonarTests.JitterBufferTests testGapOfMaxConcealGapPlusOneResyncsImmediately]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testLateDuplicateDoesNotRewindPlayback]' started.
+Test Case '-[SonarTests.JitterBufferTests testLateDuplicateDoesNotRewindPlayback]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testLateFrameAtWindowEdgeIsDropped]' started.
+Test Case '-[SonarTests.JitterBufferTests testLateFrameAtWindowEdgeIsDropped]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testMultipleAdvancesSkipMultipleSeqs]' started.
+Test Case '-[SonarTests.JitterBufferTests testMultipleAdvancesSkipMultipleSeqs]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentAfterDequeue]' started.
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentAfterDequeue]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentFalseWhenGapFilledAfterAdvance]' started.
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentFalseWhenGapFilledAfterAdvance]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentFalseWhenNextFramePresent]' started.
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentFalseWhenNextFramePresent]' passed (0.000 seconds).
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentTrueWhenNextFrameMissing]' started.
+Test Case '-[SonarTests.JitterBufferTests testNeedsConcealmentTrueWhenNextFrameMissing]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testOutOfOrderEnqueueDequeuesInOrder]' started.
+Test Case '-[SonarTests.JitterBufferTests testOutOfOrderEnqueueDequeuesInOrder]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testResetReturnsToUnsyncedState]' started.
+Test Case '-[SonarTests.JitterBufferTests testResetReturnsToUnsyncedState]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testResyncSnapsToOldestBufferedFrameAfterLongGap]' started.
+Test Case '-[SonarTests.JitterBufferTests testResyncSnapsToOldestBufferedFrameAfterLongGap]' passed (0.001 seconds).
+Test Case '-[SonarTests.JitterBufferTests testSenderRestartAdoptsTheNewNumbering]' started.
+Test Case '-[SonarTests.JitterBufferTests testSenderRestartAdoptsTheNewNumbering]' passed (0.001 seconds).
+Test Suite 'JitterBufferTests' passed at 2026-08-09 20:06:30.815.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.024 (0.034) seconds
+Test Suite 'OpusCodingTests' started at 2026-08-09 20:06:30.815.
+Test Case '-[SonarTests.OpusCodingTests testCoderInitialises]' started.
+Test Case '-[SonarTests.OpusCodingTests testCoderInitialises]' passed (0.005 seconds).
+Test Case '-[SonarTests.OpusCodingTests testDefaultsMatchLatencyBudget]' started.
+Test Case '-[SonarTests.OpusCodingTests testDefaultsMatchLatencyBudget]' passed (0.001 seconds).
+Test Case '-[SonarTests.OpusCodingTests testEncodeDecodesRoundtrip]' started.
+Test Case '-[SonarTests.OpusCodingTests testEncodeDecodesRoundtrip]' passed (0.003 seconds).
+Test Case '-[SonarTests.OpusCodingTests testNativeAVAudioConverterPathDoesNotAdvertiseFEC]' started.
+Test Case '-[SonarTests.OpusCodingTests testNativeAVAudioConverterPathDoesNotAdvertiseFEC]' passed (0.001 seconds).
+Test Suite 'OpusCodingTests' passed at 2026-08-09 20:06:30.826.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.009 (0.010) seconds
+Test Suite 'SonioxLiveTranscriptionEngineTests' started at 2026-08-09 20:06:30.826.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testAppendAfterPrivacyActivationDoesNotReachSoniox]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testAppendAfterPrivacyActivationDoesNotReachSoniox]' passed (0.090 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testAudioIsForwardedToSoniox]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testAudioIsForwardedToSoniox]' passed (0.002 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testFinalSegmentReplacesItsPartialTailAndKeepsSpeakerID]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testFinalSegmentReplacesItsPartialTailAndKeepsSpeakerID]' passed (0.003 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testLateSonioxCallbackAfterPrivacyAbortIsIgnored]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testLateSonioxCallbackAfterPrivacyAbortIsIgnored]' passed (0.095 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testPrivacyModeAbortsSonioxAndFallsBackToAppleSpeech]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testPrivacyModeAbortsSonioxAndFallsBackToAppleSpeech]' passed (0.007 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxIsClassifiedAsCloudEngine]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxIsClassifiedAsCloudEngine]' passed (0.020 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxNotSelectedWhenUnconfigured]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxNotSelectedWhenUnconfigured]' passed (0.010 seconds).
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxSelectedWhenConfigured]' started.
+Test Case '-[SonarTests.SonioxLiveTranscriptionEngineTests testSonioxSelectedWhenConfigured]' passed (0.024 seconds).
+Test Suite 'SonioxLiveTranscriptionEngineTests' passed at 2026-08-09 20:06:31.082.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.251 (0.256) seconds
+Test Suite 'SonioxRealtimeTranscriberTests' started at 2026-08-09 20:06:31.082.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationDefaultsMatchTheObservedSonioxContract]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationDefaultsMatchTheObservedSonioxContract]' passed (0.004 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationIsConfiguredWithBrokerURLAlone]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationIsConfiguredWithBrokerURLAlone]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationPrefersEnvironmentOverUserDefaults]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConfigurationPrefersEnvironmentOverUserDefaults]' passed (0.021 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConvertProducesSixteenKilohertzPCM16Bytes]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testConvertProducesSixteenKilohertzPCM16Bytes]' passed (0.003 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesAlternativeSpeakerFieldNames]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesAlternativeSpeakerFieldNames]' passed (0.003 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesFinishedAndErrorFrames]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesFinishedAndErrorFrames]' passed (0.003 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesTokensWithNumericSpeakerLabel]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDecodesTokensWithNumericSpeakerLabel]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsampleAveragesRatherThanDecimates]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsampleAveragesRatherThanDecimates]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsampleIsIdentityWhenRatesMatch]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsampleIsIdentityWhenRatesMatch]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsamplesFortyEightToSixteenKilohertz]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testDownsamplesFortyEightToSixteenKilohertz]' passed (0.002 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testEmptyFrameProducesNoEmission]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testEmptyFrameProducesNoEmission]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testEndpointTokenCommitsFinalSegment]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testEndpointTokenCommitsFinalSegment]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testErrorDescriptionRedactsKeyShapedStrings]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testErrorDescriptionRedactsKeyShapedStrings]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testFinishedFrameFlushesCommittedText]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testFinishedFrameFlushesCommittedText]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testFlushCommitsPendingTextOnStop]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testFlushCommitsPendingTextOnStop]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testLanguageHintsAreParsedFromCommaSeparatedValue]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testLanguageHintsAreParsedFromCommaSeparatedValue]' passed (0.002 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testMalformedPayloadThrows]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testMalformedPayloadThrows]' passed (0.002 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testPartialTokensProduceReplaceableNonFinalSegment]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testPartialTokensProduceReplaceableNonFinalSegment]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testPCM16IsLittleEndianAndClamped]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testPCM16IsLittleEndianAndClamped]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testSpeakerChangeFlushesPreviousSpeakerAsFinalSegment]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testSpeakerChangeFlushesPreviousSpeakerAsFinalSegment]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testStartMessageMatchesSonioxWireContract]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testStartMessageMatchesSonioxWireContract]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyDecodesLoopbackBrokerShape]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyDecodesLoopbackBrokerShape]' passed (0.077 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyDecodesOfficialSonioxShape]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyDecodesOfficialSonioxShape]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyRejectsResponseWithoutKey]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTemporaryKeyRejectsResponseWithoutKey]' passed (0.001 seconds).
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTranslationTokensAreIgnoredByDefault]' started.
+Test Case '-[SonarTests.SonioxRealtimeTranscriberTests testTranslationTokensAreIgnoredByDefault]' passed (0.001 seconds).
+Test Suite 'SonioxRealtimeTranscriberTests' passed at 2026-08-09 20:06:31.239.
+	 Executed 25 tests, with 0 failures (0 unexpected) in 0.132 (0.157) seconds
+Test Suite 'SonarTests.xctest' passed at 2026-08-09 20:06:31.240.
+	 Executed 86 tests, with 0 failures (0 unexpected) in 0.560 (0.637) seconds
+Test Suite 'Selected tests' passed at 2026-08-09 20:06:31.258.
+	 Executed 86 tests, with 0 failures (0 unexpected) in 0.560 (0.655) seconds
+2026-08-09 20:06:31.579 xcodebuild[3938:367322] [MT] IDETestOperationsObserverDebug: 4.620 elapsed -- Testing started completed.
+2026-08-09 20:06:31.579 xcodebuild[3938:367322] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-08-09 20:06:31.579 xcodebuild[3938:367322] [MT] IDETestOperationsObserverDebug: 4.620 sec, +4.620 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/mh/orca/workspaces/sonar-live-audio/evidence/test-results.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
