@@ -159,10 +159,20 @@ M4  Stille-Abschaltung + Resume       ██████████ 100%   ✅ 
 M5  Qualitäts-Metriken                ██████████ 100%   ✅ Code fertig
 M6  Broker deployed                   ░░░░░░░░░░   0%   🔴 offen
 M7  Echter Gerätelauf + Messwerte     ░░░░░░░░░░   0%   🔴 offen
-M8  UI zeigt Metriken                 ░░░░░░░░░░   0%   🔴 offen
+M8  UI zeigt Metriken                 ██████████ 100%   ✅ fertig
 ```
 
-**Gesamt-Beta:** `███████░░░ ~65%` — der Code steht, der **Beweis fehlt**.
+**M8 konkret:** `SessionCoordinator.bindTranscriptionToAppState()` spiegelt
+`LiveTranscriptionEngine.sonioxMetrics` nach `AppState.sonioxMetrics`; das
+**Live-Daten-Sheet** (`sonar/UI/LiveDataSheet.swift`, Karte
+„Cloud-Transkription (Soniox)") zeigt Latenz-EMA, Final-Anteil, Ersparnis,
+Sprecher, gestreamte/unterdrückte Sekunden, Sessions, Reconnects und den
+letzten (redigierten) Fehler. Die In-Call-Karte (`sonar/UI/SessionView.swift`,
+`liveTranscriptPreview`) zeigt zusätzlich zum Final-Verlauf jetzt auch den
+**laufenden Partial-Tail** — die Transkription ist *während* des Sprechens
+sichtbar. Unit-belegt in `sonarTests/SonioxBetaUIWiringTests.swift`.
+
+**Gesamt-Beta:** `████████░░ ~75%` — Code + UI stehen, der **Gerätebeweis fehlt**.
 
 ---
 
@@ -187,4 +197,8 @@ M8  UI zeigt Metriken                 ░░░░░░░░░░   0%   🔴
 | `sonar/Core/Transcription/LiveTranscriptionEngine.swift` | Engine-Auswahl, Segmente, `sonioxMetrics` |
 | `sonarTests/SonioxRealtimeTranscriberTests.swift` | Parsing, PCM, Config, Engine |
 | `sonarTests/SonioxSessionGovernorTests.swift` | Governor, Metriken, Suspend/Resume |
+| `sonar/Core/Coordinator/SessionCoordinator.swift` | Transkript + Metriken → `AppState` |
+| `sonar/UI/LiveDataSheet.swift` | Soniox-Metrik-Karte (M8) |
+| `sonar/UI/SessionView.swift` | In-Call-Transkript inkl. Partial-Tail |
+| `sonarTests/SonioxBetaUIWiringTests.swift` | UI-Wiring, Preview-Auswahl, Formatierung |
 | `openspec/changes/soniox-beta/` | Spec + Akzeptanzkriterien |

@@ -45,6 +45,11 @@ final class AppState: ObservableObject {
     /// §5 — live transcript
     @Published var transcriptSegments: [LiveTranscriptionEngine.Segment] = []
 
+    /// Soniox Beta (M8) — live quality/cost metrics of the cloud transcription
+    /// engine, mirrored from `LiveTranscriptionEngine.sonioxMetrics` by
+    /// `SessionCoordinator` so the Live-Daten sheet can render them.
+    @Published var sonioxMetrics = SonioxQualityMetrics()
+
     /// §4.2 — recording state
     @Published var isRecording: Bool = false
 

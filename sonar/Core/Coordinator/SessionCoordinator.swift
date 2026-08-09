@@ -474,11 +474,7 @@ final class SessionCoordinator: ObservableObject {
         LocalRecorder.applyStoredRetentionPolicy()
         appState?.isRecording = (try? recorder.startSession()) ?? false
 
-        // Live transcript → AppState (drives UI)
-        transcription.$transcript
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] segs in self?.appState?.transcriptSegments = segs }
-            .store(in: &cancellables)
+        bindTranscriptionToAppState()
 
         if simulatorRelayMode {
             appState?.transcriptSegments = []
@@ -490,6 +486,22 @@ final class SessionCoordinator: ObservableObject {
         // phase back over the .idle that stop() just set.
         guard !Task.isCancelled else { return }
         setFallbackPhaseForCurrentConnection()
+    }
+
+    /// Mirrors the transcription engine's published output into `AppState`:
+    /// the live transcript (drives the transcript tab + in-call preview) and
+    /// the Soniox Beta quality metrics (drives the Live-Daten sheet, M8).
+    /// Internal so tests can bind without spinning up the audio pipeline.
+    func bindTranscriptionToAppState() {
+        transcription.$transcript
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] segs in self?.appState?.transcriptSegments = segs }
+            .store(in: &cancellables)
+
+        transcription.$sonioxMetrics
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] metrics in self?.appState?.sonioxMetrics = metrics }
+            .store(in: &cancellables)
     }
 
     private func startSimulatorRelayPipeline() async {

@@ -28,6 +28,7 @@ struct LiveDataSheet: View {
                     pathsCard
                     batteryCard
                     latencyCard
+                    transcriptionCard
                     sessionCard
                 }
                 .padding(.horizontal, 20)
@@ -167,6 +168,76 @@ struct LiveDataSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Soniox Beta (M8) — the quality/cost metrics `SonioxRealtimeTranscriber`
+    /// maintains, published through `LiveTranscriptionEngine.sonioxMetrics`
+    /// and mirrored into `AppState` by `SessionCoordinator`.
+    private var transcriptionCard: some View {
+        let metrics = appState.sonioxMetrics
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Cloud-Transkription (Soniox)", systemImage: "captions.bubble")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                if metrics.sessionsStarted == 0 {
+                    Text("Keine Soniox-Session in diesem Lauf")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    HStack(spacing: 0) {
+                        sonioxValue("Latenz", Self.latencyLabel(metrics.firstTokenLatencyEMA))
+                        sonioxValue("Final", Self.percentLabel(metrics.finalTokenRatio))
+                        sonioxValue("Gespart", Self.percentLabel(metrics.suppressionRatio))
+                        sonioxValue("Sprecher", "\(metrics.speakerCount)")
+                    }
+                    HStack(spacing: 0) {
+                        sonioxValue("Gestreamt", Self.secondsLabel(metrics.streamedAudioSeconds))
+                        sonioxValue("Stille", Self.secondsLabel(metrics.suppressedSilenceSeconds))
+                        sonioxValue("Sessions", "\(metrics.sessionsStarted)")
+                        sonioxValue("Reconnects", "\(metrics.reconnects)")
+                    }
+                    if let error = metrics.lastErrorMessage {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                            .lineLimit(2)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sonioxValue(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Soniox metric formatting (pure, unit-tested)
+
+    /// "—" until the first token, then the EMA in whole milliseconds.
+    static func latencyLabel(_ seconds: Double?) -> String {
+        guard let seconds else { return "—" }
+        return String(format: "%.0f ms", seconds * 1000)
+    }
+
+    /// Ratio 0...1 rendered as whole percent.
+    static func percentLabel(_ ratio: Double) -> String {
+        String(format: "%.0f %%", (ratio.isFinite ? max(0, min(1, ratio)) : 0) * 100)
+    }
+
+    /// Audio durations: seconds below one minute, minutes above.
+    static func secondsLabel(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0 s" }
+        if seconds < 60 { return String(format: "%.0f s", seconds) }
+        return String(format: "%.1f min", seconds / 60)
     }
 
     private var sessionCard: some View {
