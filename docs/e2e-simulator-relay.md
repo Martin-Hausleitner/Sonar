@@ -64,3 +64,43 @@ The run counts as a simulator E2E pass when:
 
 The run must still be labelled simulated. Hardware-only proof still requires
 real iPhones for Bluetooth, AWDL/Multipeer, UWB, AirPods, and acoustic latency.
+
+## Known Gap: No Real Audio Crosses The Relay (verified 2026-08-10)
+
+The relay E2E above proves identity/peer/frame *plumbing* only. The frames it
+routes are **synthetic keepalives, not audio**:
+
+- `SessionCoordinator.startAudioPipeline()` returns early into
+  `startSimulatorRelayPipeline()` in simulator-relay mode
+  (`sonar/Core/Coordinator/SessionCoordinator.swift:200-205`).
+- `startSimulatorRelayPipeline()`
+  (`sonar/Core/Coordinator/SessionCoordinator.swift:500-559`) never calls
+  `audioEngine.prepare()`, installs no mic-capture sink
+  (`audioEngine.captured → encodeAndSend`, only in the non-simulator branch at
+  `SessionCoordinator.swift:393`), no receive chain
+  (`bonder.inboundFrames → jitterBuffer`, `SessionCoordinator.swift:425`), and
+  no playback drain timer (`SessionCoordinator.swift:445`).
+- Instead a task sends the constant 27-byte payload
+  `"sonar-simulator-relay-frame"` every 500 ms
+  (`SessionCoordinator.swift:549-555`).
+
+Measured proof (evidence committed): a full run with an 880 Hz tone injected
+into the simulators' microphone routed 369 frames — every single payload was
+the 27-byte ASCII keepalive, 0 of 201 SIM-A frames Opus-decodable
+(`evidence/logs/2026-08-10-sim-relay-wiretap.json`,
+`evidence/logs/2026-08-10-sim-relay-decode-verdict.json`).
+
+Until the simulator-relay mode wires the real capture/encode/receive/playback
+chains, an audio-path proof in the simulator is impossible by design. The
+ready-made harness for the day that fix lands:
+
+```bash
+DEVICE_A=<udid> DEVICE_B=<udid> scripts/e2e/run-audio-proof.sh
+```
+
+It injects a known tone (BlackHole loopback), wiretaps the relay
+(`scripts/e2e/relay_wiretap.py`), Opus-decodes the routed frames back to WAV
+(`scripts/e2e/decode_relay_frames.swift`), verifies the tone spectrally
+(`scripts/e2e/analyze_tone.py`), and checks the receiver-side
+`playback inbound seq=… rms=…` log line
+(`SessionCoordinator.decodeAndSchedule`).

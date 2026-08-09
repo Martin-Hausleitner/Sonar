@@ -18,6 +18,17 @@
       with `OpusCoder`'s expected PCM format/frame size, either via format
       conversion before encode or by constructing the encoder to match the
       tap's actual negotiated hardware format.
+- [ ] 1.6 Wire the real audio chain into simulator-relay mode:
+      `startSimulatorRelayPipeline()` (`sonar/Core/Coordinator/
+      SessionCoordinator.swift:500-559`) currently skips
+      `audioEngine.prepare()`, the mic→Opus send chain and the
+      inbound→jitter→playback receive chain, and only sends a synthetic
+      `"sonar-simulator-relay-frame"` keepalive (lines 549-555) — so the
+      two-simulator relay E2E can never carry real audio. Verified
+      2026-08-10: all 369 relayed frames were the 27-byte keepalive
+      (`evidence/logs/2026-08-10-sim-relay-wiretap.json`). Once wired,
+      `scripts/e2e/run-audio-proof.sh` must pass (tone injection +
+      Opus decode + receiver playback log).
 
 ## 2. Unit tests
 

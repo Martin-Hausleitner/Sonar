@@ -66,6 +66,11 @@ final class SessionCoordinator: ObservableObject {
     private var encodedFrameCount: UInt64 = 0
     private var droppedFrameCount: UInt64 = 0
 
+    /// Receive-chain health counter (main thread — drain timer). Drives the
+    /// periodic playback evidence log below so an E2E harness can prove
+    /// remote audio actually arrives and decodes on this device.
+    private var playedFrameCount: UInt64 = 0
+
     // Smart audio processing
     private let preCaptureBuffer = PreCaptureBuffer()
     private let whisperDetector = WhisperDetector()
@@ -860,6 +865,16 @@ final class SessionCoordinator: ObservableObject {
             return
         }
         guard buf.frameLength > 0 else { return }
+        playedFrameCount &+= 1
+        // Once per second (100 × 10 ms frames): receive-side evidence that a
+        // remote frame arrived, decoded, and is being scheduled — with a level
+        // metric so silence vs. real signal is distinguishable in `log stream`.
+        if playedFrameCount % 100 == 1 {
+            let rms = MicrophoneMonitor.rms(buf)
+            Log.audio.info(
+                "playback inbound seq=\(frame.seq, privacy: .public) decodedFrames=\(self.playedFrameCount, privacy: .public) rms=\(rms, privacy: .public)"
+            )
+        }
         spatialMixer.scheduleBuffer(buf)
     }
 

@@ -1,0 +1,434 @@
+{
+  "devices": [
+    {
+      "id": "SIM-A-FE36E5",
+      "lastSeen": 1786312911.758943,
+      "name": "SIM-A"
+    },
+    {
+      "id": "SIM-B-210A4F",
+      "lastSeen": 1786312911.8258471,
+      "name": "SIM-B"
+    }
+  ],
+  "eventCount": 25,
+  "events": [
+    {
+      "device": "SIM-A-FE36E5",
+      "name": "SIM-A",
+      "seq": 1,
+      "time": 1786312904.977963,
+      "type": "register"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "name": "SIM-B",
+      "seq": 2,
+      "time": 1786312905.23395,
+      "type": "register"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 2,
+      "seq": 3,
+      "time": 1786312905.9013288,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 2,
+      "seq": 4,
+      "time": 1786312906.149256,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 3,
+      "seq": 5,
+      "time": 1786312906.4275131,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 3,
+      "seq": 6,
+      "time": 1786312906.672034,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 4,
+      "seq": 7,
+      "time": 1786312906.956772,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 4,
+      "seq": 8,
+      "time": 1786312907.20944,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 5,
+      "seq": 9,
+      "time": 1786312907.467123,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 5,
+      "seq": 10,
+      "time": 1786312907.730072,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 6,
+      "seq": 11,
+      "time": 1786312907.991968,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 6,
+      "seq": 12,
+      "time": 1786312908.261647,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 7,
+      "seq": 13,
+      "time": 1786312908.5187762,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 7,
+      "seq": 14,
+      "time": 1786312908.77046,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 8,
+      "seq": 15,
+      "time": 1786312909.0457978,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 8,
+      "seq": 16,
+      "time": 1786312909.305347,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 9,
+      "seq": 17,
+      "time": 1786312909.568779,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 9,
+      "seq": 18,
+      "time": 1786312909.838979,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 10,
+      "seq": 19,
+      "time": 1786312910.092766,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 10,
+      "seq": 20,
+      "time": 1786312910.3429499,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 11,
+      "seq": 21,
+      "time": 1786312910.618122,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 11,
+      "seq": 22,
+      "time": 1786312910.85072,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 12,
+      "seq": 23,
+      "time": 1786312911.1424818,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-B-210A4F",
+      "frameSeq": 12,
+      "seq": 24,
+      "time": 1786312911.385328,
+      "type": "frame"
+    },
+    {
+      "device": "SIM-A-FE36E5",
+      "frameSeq": 13,
+      "seq": 25,
+      "time": 1786312911.6656241,
+      "type": "frame"
+    }
+  ],
+  "frameCount": 23,
+  "frameCountsBySource": {
+    "SIM-A-FE36E5": 12,
+    "SIM-B-210A4F": 11
+  },
+  "frameSourcesSeen": [
+    "SIM-A-FE36E5",
+    "SIM-B-210A4F"
+  ],
+  "frames": [
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 2,
+        "wireDataBase64": "AAAAAgAAAEstnoIhAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 3,
+      "time": 1786312905.9013288
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 2,
+        "wireDataBase64": "AAAAAgAAAEst+PU9AHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 4,
+      "time": 1786312906.149256
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 3,
+        "wireDataBase64": "AAAAAwAAAEsuX4O8AHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 5,
+      "time": 1786312906.4275131
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 3,
+        "wireDataBase64": "AAAAAwAAAEsuuPxOAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 6,
+      "time": 1786312906.672034
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 4,
+        "wireDataBase64": "AAAABAAAAEsvIUTnAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 7,
+      "time": 1786312906.956772
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 4,
+        "wireDataBase64": "AAAABAAAAEsvfUtVAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 8,
+      "time": 1786312907.20944
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 5,
+        "wireDataBase64": "AAAABQAAAEsv3GZ1AHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 9,
+      "time": 1786312907.467123
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 5,
+        "wireDataBase64": "AAAABQAAAEswPKfBAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 10,
+      "time": 1786312907.730072
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 6,
+        "wireDataBase64": "AAAABgAAAEswnLfoAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 11,
+      "time": 1786312907.991968
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 6,
+        "wireDataBase64": "AAAABgAAAEsw/34MAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 12,
+      "time": 1786312908.261647
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 7,
+        "wireDataBase64": "AAAABwAAAEsxXKq4AHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 13,
+      "time": 1786312908.5187762
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 7,
+        "wireDataBase64": "AAAABwAAAEsxuc2lAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 14,
+      "time": 1786312908.77046
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 8,
+        "wireDataBase64": "AAAACAAAAEsyHhgGAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 15,
+      "time": 1786312909.0457978
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 8,
+        "wireDataBase64": "AAAACAAAAEsyfZ1RAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 16,
+      "time": 1786312909.305347
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 9,
+        "wireDataBase64": "AAAACQAAAEsy3HlcAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 17,
+      "time": 1786312909.568779
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 9,
+        "wireDataBase64": "AAAACQAAAEszQRhWAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 18,
+      "time": 1786312909.838979
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 10,
+        "wireDataBase64": "AAAACgAAAEsznJ41AHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 19,
+      "time": 1786312910.092766
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 10,
+        "wireDataBase64": "AAAACgAAAEsz+R1EAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 20,
+      "time": 1786312910.3429499
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 11,
+        "wireDataBase64": "AAAACwAAAEs0XQJjAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 21,
+      "time": 1786312910.618122
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 11,
+        "wireDataBase64": "AAAACwAAAEs0s2lRAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 22,
+      "time": 1786312910.85072
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 12,
+        "wireDataBase64": "AAAADAAAAEs1HXiLAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 23,
+      "time": 1786312911.1424818
+    },
+    {
+      "frame": {
+        "from": "SIM-B-210A4F",
+        "seq": 12,
+        "wireDataBase64": "AAAADAAAAEs1d2KjAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-B-210A4F",
+      "seq": 24,
+      "time": 1786312911.385328
+    },
+    {
+      "frame": {
+        "from": "SIM-A-FE36E5",
+        "seq": 13,
+        "wireDataBase64": "AAAADQAAAEs13U5XAHNvbmFyLXNpbXVsYXRvci1yZWxheS1mcmFtZQ=="
+      },
+      "from": "SIM-A-FE36E5",
+      "seq": 25,
+      "time": 1786312911.6656241
+    }
+  ],
+  "serverSeq": 25
+}
