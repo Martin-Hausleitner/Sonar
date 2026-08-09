@@ -4,10 +4,10 @@ import Foundation
 import Speech
 
 /// Drives transcription via the best available engine.
-/// Priority: OpenAI Realtime -> NVIDIA Parakeet -> Local Whisper -> Apple Speech.
+/// Priority: Soniox Realtime -> OpenAI Realtime -> NVIDIA Parakeet -> Local Whisper -> Apple Speech.
 @MainActor
 final class LiveTranscriptionEngine: ObservableObject {
-    enum Engine { case appleSpeech, parakeet, local, openAIRealtime }
+    enum Engine { case appleSpeech, parakeet, local, openAIRealtime, soniox }
 
     struct Segment: Identifiable {
         let id = UUID()
@@ -25,6 +25,7 @@ final class LiveTranscriptionEngine: ObservableObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var parakeet: CloudTranscribing?
     private var openAIRealtime: OpenAIRealtimeTranscribing?
+    private var soniox: SonioxRealtimeTranscribing?
     private var localWhisper: LocalTranscribing?
     private var privacyCancellable: AnyCancellable?
     private var cloudCallbackGeneration = 0
@@ -46,6 +47,12 @@ final class LiveTranscriptionEngine: ObservableObject {
         _ onSegment: @escaping (String, Bool) -> Void
     ) -> OpenAIRealtimeTranscribing
 
+    /// (text, speakerID, isFinal) — the diarized Soniox segment stream.
+    typealias SonioxFactory = @MainActor (
+        _ configuration: SonioxConfiguration,
+        _ onSegment: @escaping (String, String?, Bool) -> Void
+    ) -> SonioxRealtimeTranscribing
+
     typealias ParakeetChunkSender = @Sendable (
         _ apiKey: String,
         _ pcm16LE: Data,
@@ -56,6 +63,8 @@ final class LiveTranscriptionEngine: ObservableObject {
     private let localTranscriberFactory: LocalTranscriberFactory
     private let parakeetFactory: ParakeetFactory
     private let openAIRealtimeFactory: OpenAIRealtimeFactory
+    private let sonioxFactory: SonioxFactory
+    private let sonioxConfigurationProvider: @MainActor () -> SonioxConfiguration
 
     init(
         localTranscriberFactory: @escaping LocalTranscriberFactory = LiveTranscriptionEngine.makeLocalTranscriber,
@@ -71,8 +80,16 @@ final class LiveTranscriptionEngine: ObservableObject {
         parakeetFactory: ParakeetFactory? = nil,
         openAIRealtimeFactory: @escaping OpenAIRealtimeFactory = { apiKey, endpoint, onSegment in
             OpenAIRealtimeTranscriber(apiKey: apiKey, endpoint: endpoint, onSegment: onSegment)
+        },
+        sonioxFactory: @escaping SonioxFactory = { configuration, onSegment in
+            SonioxRealtimeTranscriber(configuration: configuration, onSegment: onSegment)
+        },
+        sonioxConfigurationProvider: @escaping @MainActor () -> SonioxConfiguration = {
+            SonioxConfiguration.resolved()
         }
     ) {
+        self.sonioxFactory = sonioxFactory
+        self.sonioxConfigurationProvider = sonioxConfigurationProvider
         self.localTranscriberFactory = localTranscriberFactory
         self.parakeetFactory = parakeetFactory ?? { apiKey, onSegment in
             ParakeetTranscriber(
@@ -145,13 +162,33 @@ final class LiveTranscriptionEngine: ObservableObject {
                 }
             }
             openAIRealtime?.connect()
+
+        case .soniox:
+            let configuration = sonioxConfigurationProvider()
+            let generation = cloudCallbackGeneration
+            soniox = sonioxFactory(configuration) { [weak self] text, speakerID, isFinal in
+                guard let self else { return }
+                guard isCurrentCloudCallback(generation) else { return }
+                applySonioxSegment(text: text, speakerID: speakerID, isFinal: isFinal)
+            }
+            soniox?.connect()
+        }
+    }
+
+    /// Soniox emits a replaceable non-final tail plus committed final segments.
+    /// A final segment therefore *replaces* the tail it was built from, and only
+    /// appends when the previous segment is already committed.
+    private func applySonioxSegment(text: String, speakerID: String?, isFinal: Bool) {
+        let segment = Segment(text: text, speakerID: speakerID, timestamp: Date(), isFinal: isFinal)
+        if let last = transcript.last, !last.isFinal {
+            transcript[transcript.count - 1] = segment
+        } else {
+            transcript.append(segment)
         }
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
-        if PrivacyMode.shared.isActive,
-           currentEngine == .parakeet || currentEngine == .openAIRealtime
-        {
+        if PrivacyMode.shared.isActive, Self.isCloudEngine(currentEngine) {
             abortCloudTranscribers()
             return
         }
@@ -160,6 +197,15 @@ final class LiveTranscriptionEngine: ObservableObject {
         case .local: localWhisper?.append(buffer)
         case .parakeet: parakeet?.append(buffer)
         case .openAIRealtime: openAIRealtime?.append(buffer)
+        case .soniox: soniox?.append(buffer)
+        }
+    }
+
+    /// Engines that ship audio off-device and must die with Privacy Mode.
+    static func isCloudEngine(_ engine: Engine) -> Bool {
+        switch engine {
+        case .parakeet, .openAIRealtime, .soniox: true
+        case .appleSpeech, .local: false
         }
     }
 
@@ -173,6 +219,8 @@ final class LiveTranscriptionEngine: ObservableObject {
         localWhisper = nil
         openAIRealtime?.finish()
         openAIRealtime = nil
+        soniox?.finish()
+        soniox = nil
         clearTranscript()
     }
 
@@ -188,6 +236,10 @@ final class LiveTranscriptionEngine: ObservableObject {
 
     private func pickEngine(language: Locale, allowCloud: Bool = true) -> Engine {
         if allowCloud {
+            // Soniox wins when configured: realtime diarization is the only
+            // cloud path that returns speaker labels.
+            if sonioxConfigurationProvider().isConfigured { return .soniox }
+
             let openAIKey = UserDefaults.standard.string(forKey: "sonar.openai.apiKey") ?? ""
             if !openAIKey.isEmpty { return .openAIRealtime }
 
@@ -212,7 +264,9 @@ final class LiveTranscriptionEngine: ObservableObject {
         parakeet = nil
         openAIRealtime?.abort()
         openAIRealtime = nil
-        if currentEngine == .parakeet || currentEngine == .openAIRealtime {
+        soniox?.abort()
+        soniox = nil
+        if Self.isCloudEngine(currentEngine) {
             currentEngine = .appleSpeech
         }
         clearTranscript()
