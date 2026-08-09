@@ -69,14 +69,27 @@
 
 ## 5. Soniox live transcription
 
-- [ ] 5.1 Extract the reverse-engineered Soniox streaming API contract
+- [x] 5.1 Extract the reverse-engineered Soniox streaming API contract
       (endpoint, auth, framing, model `stt-rt-v5`, diarization output
       format) from the `soniox-route-lab` repo.
-- [ ] 5.2 Implement a Soniox streaming client in Sonar (e.g. under
+      → Done: wire contract (endpoint, config frame, PCM16 framing,
+      token/diarization schema, empty-frame terminator, key-broker auth)
+      documented in `sonar/Core/Transcription/SonioxRealtimeTranscriber.swift`
+      header, mirrored from `soniox-route-lab` (`src/soniox-stream.mjs`,
+      `docs/auth-flow.md`).
+- [x] 5.2 Implement a Soniox streaming client in Sonar (e.g. under
       `sonar/Core/Transcription/`) that streams live audio to Soniox and
       receives incremental transcript + speaker-diarization results.
-- [ ] 5.3 Wire the live transcript into the call UI so it updates in
+      → Done: `SonioxRealtimeTranscriber.swift` + `SonioxSessionGovernor.swift`
+      (silence auto-suspend, pre-roll, quality metrics); full suite green
+      (`evidence/logs/2026-08-10_merged-suite.log`). See also the completed
+      `soniox-beta` change (all tasks ✅).
+- [x] 5.3 Wire the live transcript into the call UI so it updates in
       near-real-time while a call is active.
+      → Done: M8 UI wiring (commit 2ffac87, merged in 3c37fa2) — live
+      partial in call view (`sonar/UI/SessionView.swift`), transcript
+      bubbles (`sonar/UI/MainTabView.swift`), Soniox metrics in
+      `sonar/UI/LiveDataSheet.swift` via `AppState.sonioxMetrics`.
 - [ ] 5.4 During the E2E test (section 4), capture proof (screen recording/
       screenshot) that the live transcript appears with correct
       multi-speaker diarization, save under `evidence/`.
