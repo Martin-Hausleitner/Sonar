@@ -626,6 +626,22 @@ bestimmten Simulator: `SIMULATOR_ID=<UDID> make test`.
 Die vollständigen lokalen und CI-nahen Qualitätsgates stehen in
 [`docs/quality-gates.md`](./docs/quality-gates.md).
 
+### Direkter Geräte-Install (Xcode Free-Provisioning)
+
+```bash
+# 1. Vorbedingungen prüfen (Apple-Account in Xcode, Gerät verbunden, SDK):
+scripts/ios-install/preflight.sh
+
+# 2. Bauen + installieren + starten + Screenshot-Beweis (je Gerät):
+scripts/ios-install/install-device.sh <UDID> [TEAM_ID]
+#   z.B. iPhone 17 Pro (Martins Team TH2WQG73S9 ist Default):
+scripts/ios-install/install-device.sh 7C62FC1E-FD1A-5EF1-B385-6FB189B54AD9
+```
+
+Device-Signing-Defaults liegen in [`sonar-device.xcconfig`](./sonar-device.xcconfig)
+(`DEVELOPMENT_TEAM=TH2WQG73S9`, `CODE_SIGN_STYLE=Automatic`); Simulator-Builds
+nutzen weiterhin [`sonar-sim.xcconfig`](./sonar-sim.xcconfig).
+
 ---
 
 ## Releases

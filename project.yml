@@ -1,3 +1,7 @@
+# Signing-Configs (per xcodebuild -xcconfig übergeben, nicht hier eingebettet):
+#   sonar-sim.xcconfig    — Simulator-Builds (Runtime-Thinning aus)
+#   sonar-device.xcconfig — Device-Builds (DEVELOPMENT_TEAM=TH2WQG73S9, Automatic)
+#     → genutzt von scripts/ios-install/install-device.sh
 name: Sonar
 options:
   bundleIdPrefix: app.sonar

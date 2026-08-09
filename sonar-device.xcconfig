@@ -1,0 +1,9 @@
+// Device-Signing für physische iPhones (analog sonar-sim.xcconfig für den Sim).
+// Verwendung: xcodebuild … -xcconfig sonar-device.xcconfig
+// (so macht es scripts/ios-install/install-device.sh)
+//
+// Team TH2WQG73S9 = Martin (Apple Development: martin.hausleitner@icloud.com).
+// Für Felix' Gerät TEAM per Kommandozeile überschreiben:
+//   install-device.sh <UDID> <FELIX_TEAM_ID>
+DEVELOPMENT_TEAM = TH2WQG73S9
+CODE_SIGN_STYLE = Automatic
