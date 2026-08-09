@@ -341,6 +341,21 @@ final class NearTransport: NSObject, Transport, BondedPath {
 
 extension NearTransport: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        // Task 1.2: make the MPC handshake observable during manual testing.
+        // A silent `.connecting → .notConnected` flip is the classic symptom of
+        // the missing `_sonar-mpc._udp` Bonjour entry — log every transition so
+        // `log stream --predicate 'subsystem == "app.sonar.ios"'` shows whether
+        // both peers actually reach `.connected`.
+        let stateName: String
+        switch state {
+        case .notConnected: stateName = "notConnected"
+        case .connecting: stateName = "connecting"
+        case .connected: stateName = "connected"
+        @unknown default: stateName = "unknown(\(state.rawValue))"
+        }
+        Log.transport.info(
+            "MCSession peer \(peerID.displayName, privacy: .public) -> \(stateName, privacy: .public) (connected peers: \(session.connectedPeers.count, privacy: .public), service: \(self.serviceType, privacy: .public))"
+        )
         // Truth = "any peer is connected", not "this individual state change
         // is .connected". Prevents the connect/disconnect storm on AWDL flap.
         emitConnectedIfChanged(!session.connectedPeers.isEmpty)
