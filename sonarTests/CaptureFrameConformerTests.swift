@@ -179,6 +179,63 @@ final class CaptureFrameConformerTests: XCTestCase {
         }
     }
 
+    // MARK: - Route switches
+
+    /// AirPods connect/disconnect swaps the tap format mid-session. The
+    /// half-collected frame and the resampler state belong to the *old* route:
+    /// carrying either across the switch stitches two different points in time
+    /// together. The switch here also goes *into* the pass-through fast path,
+    /// which never touches the converter on its own.
+    func testRouteSwitchDropsRemainderAndRebuildsConverter() throws {
+        let route44k = try makeBuffer(sampleRate: 44100, channels: 2, frames: 1000, freq: 440)
+        try skipUnlessConverterAvailable(from: route44k.format)
+
+        let conformer = CaptureFrameConformer()
+        _ = conformer.conform(route44k)
+        try XCTSkipIf(conformer.bufferedSampleCount == 0, "need a partial frame to observe the switch")
+        let generationBefore = conformer.converterGeneration
+        XCTAssertGreaterThan(generationBefore, 0)
+
+        // New route already delivers the encoder format — distinct tone so a
+        // stitched-in remainder from the old route would be visible.
+        let route48k = try makeBuffer(
+            sampleRate: LatencyBudget.audioSampleRate,
+            channels: 1,
+            frames: LatencyBudget.samplesPerFrame,
+            freq: 3000,
+            amplitude: 0.9
+        )
+        let frames = conformer.conform(route48k)
+
+        XCTAssertEqual(frames.count, 1, "480 fresh samples ⇒ exactly one frame")
+        XCTAssertEqual(conformer.bufferedSampleCount, 0, "old route's leftover must be dropped")
+
+        let source = try XCTUnwrap(route48k.floatChannelData?[0])
+        let emitted = try XCTUnwrap(frames[0].floatChannelData?[0])
+        for i in 0 ..< LatencyBudget.samplesPerFrame {
+            XCTAssertEqual(emitted[i], source[i], accuracy: 1e-6, "sample \(i) must come from the new route only")
+        }
+
+        // Switching back must build a fresh converter instead of resuming the
+        // one parked mid-stream before the detour.
+        _ = conformer.conform(route44k)
+        XCTAssertGreaterThan(
+            conformer.converterGeneration,
+            generationBefore,
+            "a parked converter must not be resumed after a route detour"
+        )
+    }
+
+    /// Guard against the opposite mistake: identical formats must NOT be
+    /// treated as a switch, or the remainder would be dropped every buffer.
+    func testSameFormatIsNotTreatedAsRouteSwitch() throws {
+        let conformer = CaptureFrameConformer()
+        let chunk = try makeBuffer(sampleRate: LatencyBudget.audioSampleRate, channels: 1, frames: 100)
+        _ = conformer.conform(chunk)
+        _ = conformer.conform(chunk)
+        XCTAssertEqual(conformer.bufferedSampleCount, 200)
+    }
+
     func testResetDropsBufferedRemainder() throws {
         let conformer = CaptureFrameConformer()
         let chunk = try makeBuffer(sampleRate: LatencyBudget.audioSampleRate, channels: 1, frames: 100)

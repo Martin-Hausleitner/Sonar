@@ -832,12 +832,15 @@ final class SessionCoordinator: ObservableObject {
     private func drainJitterBuffer() {
         if let frame = jitterBuffer.dequeue() {
             decodeAndSchedule(frame)
-        } else if jitterBuffer.needsConcealment {
-            jitterBuffer.advanceOnConceal()
+        } else if jitterBuffer.needsConcealment, jitterBuffer.advanceOnConceal() {
             // Pre-fix, missing frames just advanced the seq counter and
             // scheduled nothing — audible hard gap. Schedule a frame of
             // silence to keep the audio graph continuous so packet loss
             // sounds like a brief muffle instead of a click.
+            //
+            // `advanceOnConceal()` returning false means the frame arrived
+            // between the two calls (or the stream hasn't started): nothing was
+            // concealed, so don't push filler in front of real audio.
             scheduleSilenceFrame()
         }
     }

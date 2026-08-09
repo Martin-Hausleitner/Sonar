@@ -78,6 +78,14 @@ final class CaptureFrameConformer {
     private var converter: AVAudioConverter?
     private var converterInputFormat: AVAudioFormat?
 
+    /// Format of the previous tap buffer, used to detect route switches even
+    /// when the new route takes the pass-through fast path.
+    private var lastInputFormat: AVAudioFormat?
+
+    /// Number of converters built so far. Diagnostics/test hook: a route switch
+    /// must build a *new* converter rather than resume a parked one.
+    private(set) var converterGeneration = 0
+
     /// Converted-but-not-yet-emitted samples (the remainder of the previous
     /// tap buffer). Never grows beyond one frame between calls.
     private var pending: [Float] = []
@@ -110,22 +118,31 @@ final class CaptureFrameConformer {
     /// Drop converter state + leftovers. Call on session start/stop so a new
     /// session never emits a frame stitched from the previous route's audio.
     func reset() {
-        pending.removeAll(keepingCapacity: true)
-        converter = nil
-        converterInputFormat = nil
+        discardStreamState()
+        lastInputFormat = nil
         errorThrottle.reset()
     }
 
     // MARK: - Private
 
     private func appendConverted(_ buffer: AVAudioPCMBuffer) {
+        // A route change (speaker → AirPods → speaker) swaps the tap format.
+        // Both the resampler state and the half-collected frame belong to the
+        // *old* route; carrying either across the switch would stitch two
+        // different points in time together — and reusing a converter that was
+        // parked mid-stream would resume it with stale filter state.
+        noteInputFormat(buffer.format)
+
         // Fast path: the route already delivers exactly the encoder's format.
         if buffer.format == outputFormat {
             append(buffer)
             return
         }
 
-        guard let converter = makeOrReuseConverter(for: buffer.format) else { return }
+        guard let converter = makeOrReuseConverter(for: buffer.format) else {
+            discardStreamState()
+            return
+        }
 
         // Sample-rate conversion can emit slightly more frames than the naive
         // ratio suggests (filter delay flush), so add headroom — an undersized
@@ -148,9 +165,31 @@ final class CaptureFrameConformer {
 
         guard status != .error, conversionError == nil else {
             logError("capture conversion \(buffer.format.sampleRate) Hz/\(buffer.format.channelCount) ch → encoder format failed: \(conversionError?.localizedDescription ?? "unknown")")
+            // The converter's internal state is undefined after an error and
+            // the buffered remainder now predates a gap of unknown length.
+            // Start the stream over rather than stitching across the hole.
+            discardStreamState()
             return
         }
         append(converted)
+    }
+
+    /// Notice route/format switches — including switching *into* and out of the
+    /// pass-through fast path, which never touches the converter and would
+    /// otherwise leave stale resampler state parked for the way back.
+    private func noteInputFormat(_ format: AVAudioFormat) {
+        let previous = lastInputFormat
+        lastInputFormat = format
+        guard let previous, previous != format else { return }
+        discardStreamState()
+    }
+
+    /// Drop everything tied to the current input stream: the half-collected
+    /// frame and the converter carrying its resampler state.
+    private func discardStreamState() {
+        pending.removeAll(keepingCapacity: true)
+        converter = nil
+        converterInputFormat = nil
     }
 
     /// Append channel 0 of an already-conformed buffer to `pending`.
@@ -198,6 +237,7 @@ final class CaptureFrameConformer {
         created.sampleRateConverterQuality = AVAudioQuality.medium.rawValue
         converter = created
         converterInputFormat = inputFormat
+        converterGeneration += 1
         // Fresh converter ⇒ fresh sample timeline; drop any stale remainder.
         pending.removeAll(keepingCapacity: true)
         return created

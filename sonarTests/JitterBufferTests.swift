@@ -161,6 +161,98 @@ final class JitterBufferTests: XCTestCase {
         XCTAssertEqual(jb.dequeue()?.seq, 1003)
     }
 
+    // MARK: - Conceal race + gap thresholds
+
+    /// `drainJitterBuffer` checks `needsConcealment` and calls
+    /// `advanceOnConceal()` as two separate lock acquisitions. If the awaited
+    /// frame arrives in between, concealing anyway would skip a frame that is
+    /// sitting right there — permanently, because playback never looks back.
+    func testAdvanceOnConcealNeverSkipsAFrameThatArrivedInTheMeantime() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 10))
+        XCTAssertEqual(jb.dequeue()?.seq, 10) // nextExpected = 11
+
+        XCTAssertTrue(jb.needsConcealment) // caller decides to conceal …
+        jb.enqueue(makeFrame(seq: 11)) // … and the frame arrives right now
+        jb.advanceOnConceal()
+
+        XCTAssertEqual(jb.dequeue()?.seq, 11, "the frame that arrived during the race must still be played")
+    }
+
+    /// Exactly `maxConcealGap` missing frames are concealed one tick at a time.
+    func testGapOfMaxConcealGapIsConcealedFrameByFrame() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 10))
+        XCTAssertEqual(jb.dequeue()?.seq, 10) // nextExpected = 11
+
+        jb.enqueue(makeFrame(seq: 14)) // 11, 12, 13 missing = 3 = maxConcealGap
+
+        jb.advanceOnConceal()
+        XCTAssertNil(jb.dequeue(), "a 3-frame gap must not snap forward")
+        jb.advanceOnConceal()
+        XCTAssertNil(jb.dequeue())
+        jb.advanceOnConceal()
+        XCTAssertEqual(jb.dequeue()?.seq, 14)
+    }
+
+    /// One more missing frame than we are willing to conceal must resync on the
+    /// very first tick — the threshold is measured *before* the increment.
+    func testGapOfMaxConcealGapPlusOneResyncsImmediately() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 10))
+        XCTAssertEqual(jb.dequeue()?.seq, 10) // nextExpected = 11
+
+        jb.enqueue(makeFrame(seq: 15)) // 11…14 missing = 4 = maxConcealGap + 1
+
+        jb.advanceOnConceal()
+        XCTAssertEqual(jb.dequeue()?.seq, 15, "a 4-frame gap must snap in one tick")
+    }
+
+    // MARK: - Late / duplicate frames
+
+    /// A duplicate arriving over a second bonded path after the frame was
+    /// already played must not rewind playback onto stale audio.
+    func testLateDuplicateDoesNotRewindPlayback() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 100))
+        XCTAssertEqual(jb.dequeue()?.seq, 100) // nextExpected = 101
+
+        jb.enqueue(makeFrame(seq: 105))
+        jb.enqueue(makeFrame(seq: 98)) // late straggler from a slower path
+        jb.enqueue(makeFrame(seq: 100)) // duplicate of what we just played
+
+        jb.advanceOnConceal() // 101…104 missing ⇒ resync forward
+        XCTAssertEqual(jb.dequeue()?.seq, 105, "playback must move forward, never back to 98/100")
+    }
+
+    func testLateFrameAtWindowEdgeIsDropped() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 1000))
+        XCTAssertEqual(jb.dequeue()?.seq, 1000) // nextExpected = 1001
+
+        // Exactly lateFrameWindow behind ⇒ still a straggler ⇒ dropped.
+        jb.enqueue(makeFrame(seq: UInt32(Int64(1001) - JitterBuffer.lateFrameWindow)))
+        XCTAssertTrue(jb.needsConcealment, "the dropped straggler must not become playable")
+        jb.enqueue(makeFrame(seq: 1001))
+        XCTAssertEqual(jb.dequeue()?.seq, 1001)
+    }
+
+    /// The peer restarts its session (and its sequence counter) while we keep
+    /// ours running. Treating those frames as "late" would mean silence forever.
+    func testSenderRestartAdoptsTheNewNumbering() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 5000))
+        XCTAssertEqual(jb.dequeue()?.seq, 5000)
+
+        // Peer restarted: MultipathBonder numbers its first frame 1 again.
+        for seq in UInt32(1) ... 3 {
+            jb.enqueue(makeFrame(seq: seq))
+        }
+        XCTAssertEqual(jb.dequeue()?.seq, 1, "a restarted sender must be adopted, not ignored")
+        XCTAssertEqual(jb.dequeue()?.seq, 2)
+        XCTAssertEqual(jb.dequeue()?.seq, 3)
+    }
+
     func testResetReturnsToUnsyncedState() {
         let jb = JitterBuffer()
         jb.enqueue(makeFrame(seq: 7))
