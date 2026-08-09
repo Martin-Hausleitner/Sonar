@@ -57,10 +57,40 @@ final class Metrics: @unchecked Sendable {
         }
     }
 
+    /// Monotonic event counters (task 1.4): pipeline failures that must never
+    /// be silently swallowed again get an explicit, queryable counter here in
+    /// addition to their `os.Logger` line.
+    enum Counter: String, CaseIterable {
+        case opusEncodeFailure // conformed capture frame rejected by the encoder
+        case opusEncodeSuccess // capture frames successfully turned into Opus
+    }
+
     private let lock = NSLock()
     private var traces: [Trace] = []
     private var nextID: UInt64 = 0
     private let capacity = 500
+    private var counters: [Counter: UInt64] = [:]
+
+    /// Bump a counter by `amount` (default 1). Thread-safe.
+    func increment(_ counter: Counter, by amount: UInt64 = 1) {
+        lock.lock()
+        defer { lock.unlock() }
+        counters[counter, default: 0] &+= amount
+    }
+
+    /// Current value of a counter (0 if never incremented). Thread-safe.
+    func count(_ counter: Counter) -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return counters[counter] ?? 0
+    }
+
+    /// Reset all counters — for tests and session restarts.
+    func resetCounters() {
+        lock.lock()
+        defer { lock.unlock() }
+        counters.removeAll()
+    }
 
     func openTrace() -> UInt64 {
         lock.lock()
