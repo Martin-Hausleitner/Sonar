@@ -646,11 +646,10 @@ final class SessionCoordinator: ObservableObject {
         bonder.removePath(.mpquic)
         tailscalePath.stop()
         await far.stop()
-        switch transcription.currentEngine {
-        case .openAIRealtime, .parakeet:
+        // Soniox is a cloud engine too — route it through the same helper so a
+        // new cloud engine can never silently bypass the privacy kill switch.
+        if LiveTranscriptionEngine.isCloudEngine(transcription.currentEngine) {
             transcription.abortCloudTranscriptionForPrivacy()
-        case .appleSpeech, .local:
-            break
         }
         // Clear any cloud-sourced live transcript so stale text doesn't
         // linger in the UI after the user pulls the kill switch.
