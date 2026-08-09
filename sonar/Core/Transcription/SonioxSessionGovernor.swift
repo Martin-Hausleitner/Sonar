@@ -101,7 +101,11 @@ final class SonioxSessionGovernor {
                 silenceStartedAt = nil
                 return .send(samples)
             }
+            // Re-anchor if the countdown somehow lost its start time —
+            // otherwise `since` would track `timestamp` forever and the
+            // governor could never reach `.suspended`.
             let since = silenceStartedAt ?? timestamp
+            if silenceStartedAt == nil { silenceStartedAt = timestamp }
             if timestamp - since >= silenceStopSeconds {
                 state = .suspended
                 silenceStartedAt = nil

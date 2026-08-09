@@ -394,6 +394,9 @@ final class SonioxTranscriberSessionTests: XCTestCase {
         // Drive the governor into `.suspended` without a socket: every chunk is
         // silence, so nothing is ever streamed.
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800)) // 0.1 s
+        // The append is processed asynchronously — drain before advancing the
+        // clock so the silence countdown anchors at the pre-advance timestamp.
+        drainQueue(transcriber)
         clock.advance(by: 5)
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
@@ -416,6 +419,7 @@ final class SonioxTranscriberSessionTests: XCTestCase {
         let transcriber = makeTranscriber(governor: governor, clock: clock)
 
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
+        drainQueue(transcriber) // anchor the silence countdown before advancing
         clock.advance(by: 5)
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
         drainQueue(transcriber)
@@ -431,6 +435,7 @@ final class SonioxTranscriberSessionTests: XCTestCase {
         let transcriber = makeTranscriber(governor: governor, clock: clock)
 
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
+        drainQueue(transcriber) // anchor the silence countdown before advancing
         clock.advance(by: 5)
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
         drainQueue(transcriber)
@@ -449,6 +454,7 @@ final class SonioxTranscriberSessionTests: XCTestCase {
         let transcriber = makeTranscriber(governor: governor, clock: clock)
 
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
+        drainQueue(transcriber) // anchor the silence countdown before advancing
         clock.advance(by: 5)
         transcriber.append(makeBuffer(amplitude: 0.001, frameCount: 4800))
         drainQueue(transcriber)
