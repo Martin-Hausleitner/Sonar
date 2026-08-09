@@ -33,7 +33,12 @@
 	<string>Sonar nutzt Bluetooth, um deine AirPods und die iPhones deiner Freunde zu finden.</string>
 	<key>NSBonjourServices</key>
 	<array>
+		<!-- MultipeerConnectivity needs BOTH the TCP and the UDP Bonjour entry
+		     since iOS 14. With only _tcp declared, discovery appears to work but
+		     the MCSession handshake fails silently — peers "connect" and no
+		     audio ever flows. -->
 		<string>_sonar-mpc._tcp</string>
+		<string>_sonar-mpc._udp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Sonar nutzt die Kamera, um den QR-Code des Pairing-Partners zu scannen.</string>

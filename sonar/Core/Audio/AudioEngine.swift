@@ -50,9 +50,15 @@ struct AudioSessionPolicy: Equatable {
     }
 
     var categoryOptions: AVAudioSession.CategoryOptions {
+        // `.defaultToSpeaker` is mandatory for `.playAndRecord`: without it iOS
+        // routes playback to the tiny earpiece receiver, so a user without
+        // headphones hears the peer at barely-audible volume and reports the
+        // session as "connected but silent". It only affects the *default*
+        // route — AirPods/wired headsets still win when connected.
         var options: AVAudioSession.CategoryOptions = [
             .allowAirPlay,
             .allowBluetooth,
+            .defaultToSpeaker,
             .mixWithOthers
         ]
         if musicDuckingEnabled {
@@ -73,6 +79,11 @@ final class AudioEngine {
     /// pull real-world speech low; 0.5×–6× covers the practical span without
     /// distorting beyond reason.
     nonisolated static let inputGainRange: ClosedRange<Float> = 0.5 ... 6.0
+
+    enum EngineError: Error {
+        /// `inputNode.inputFormat(forBus:)` returned a 0 Hz / 0 channel format.
+        case noUsableInputFormat
+    }
 
     private let engine = AVAudioEngine()
 
@@ -114,14 +125,30 @@ final class AudioEngine {
     func prepare() throws {
         try applySessionConfiguration(activate: true, updateVoiceProcessing: true)
 
+        // The tap format is whatever the *hardware route* produces (44.1 kHz,
+        // 24 kHz, mono or stereo) and `bufferSize` is only a hint — buffers
+        // arrive with arbitrary frame counts. Downstream, CaptureFrameConformer
+        // converts/slices them into the encoder's fixed 48 kHz mono 10 ms frames.
         let format = engine.inputNode.inputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            // Happens when the mic permission was denied or no input route
+            // exists. installTap() would raise an ObjC exception here, which
+            // cannot be caught in Swift — so bail out with a real error.
+            Log.audio.error("AudioEngine: input node has no usable format (mic permission or route missing)")
+            throw EngineError.noUsableInputFormat
+        }
+
         let bufSize = AVAudioFrameCount(LatencyBudget.samplesPerFrame)
         engine.inputNode.installTap(onBus: 0, bufferSize: bufSize, format: format) { [weak self] buf, _ in
             guard let self else { return }
-            applyInputGain(to: buf)
+            // The tap buffer belongs to the engine and may be recycled as soon
+            // as this block returns. Every consumer downstream is asynchronous
+            // (Combine `.receive(on:)`), so hand out a private copy.
+            guard let owned = Self.copy(of: buf) else { return }
+            applyInputGain(to: owned)
             let id = Metrics.shared.openTrace()
             Metrics.shared.mark(id, .captured)
-            captured.send((frameID: id, buffer: buf))
+            captured.send((frameID: id, buffer: owned))
         }
 
         engine.prepare()
@@ -267,6 +294,28 @@ final class AudioEngine {
         if activate {
             try session.setActive(true, options: [])
         }
+    }
+
+    /// Deep-copy a tap buffer so it outlives the tap callback. Works for any
+    /// PCM layout (interleaved or not) because it copies the raw
+    /// `AudioBufferList` rather than assuming `floatChannelData`.
+    nonisolated static func copy(of buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard buffer.frameLength > 0,
+              let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength)
+        else { return nil }
+        out.frameLength = buffer.frameLength
+
+        let source = UnsafeMutableAudioBufferListPointer(
+            UnsafeMutablePointer(mutating: buffer.audioBufferList)
+        )
+        let destination = UnsafeMutableAudioBufferListPointer(out.mutableAudioBufferList)
+        guard source.count == destination.count else { return nil }
+        for index in 0 ..< source.count {
+            guard let src = source[index].mData, let dst = destination[index].mData else { continue }
+            let bytes = Int(min(source[index].mDataByteSize, destination[index].mDataByteSize))
+            memcpy(dst, src, bytes)
+        }
+        return out
     }
 
     /// Multiply each sample by the current `inputGain`, in-place, on the audio

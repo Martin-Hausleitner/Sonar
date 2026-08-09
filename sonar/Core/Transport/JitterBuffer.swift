@@ -5,8 +5,27 @@ import Foundation
 final class JitterBuffer: @unchecked Sendable {
     enum Tier { case excellent, good, fair, poor }
 
+    /// How far ahead of `nextExpected` the oldest buffered frame may sit before
+    /// we treat the gap as "lost sync" instead of "lost packet". Three 10 ms
+    /// frames of concealment is still inaudible; beyond that, counting upwards
+    /// one frame per tick would never catch up.
+    static let maxConcealGap: Int64 = 3
+
     private var buffer: [UInt32: AudioFrame] = [:]
     private var nextExpected: UInt32 = 0
+
+    /// `false` until the first frame ever arrives. The playback timer starts
+    /// ticking at session start — long before MPC/BLE finish connecting — and
+    /// pre-fix it free-ran `nextExpected` upward the whole time. Since the
+    /// sender's first sequence number is 1 (`MultipathBonder.nextSeq`
+    /// increments *before* returning), the two counters never met again and
+    /// `dequeue()` returned nil forever: connected peers, permanent silence.
+    private var hasReceivedFrame = false
+
+    /// `true` once a frame has actually been handed to playback. Before that,
+    /// a lower sequence number may still rewind `nextExpected` (frames can
+    /// arrive out of order across bonded paths right at session start).
+    private var hasDequeued = false
 
     /// Smoothed inter-arrival jitter in milliseconds (RFC 3550 §A.8 style EMA).
     private(set) var jitterMs: Double = 0
@@ -20,6 +39,15 @@ final class JitterBuffer: @unchecked Sendable {
     func enqueue(_ frame: AudioFrame) {
         lock.lock()
         defer { lock.unlock() }
+        if !hasReceivedFrame {
+            // Adopt the sender's numbering instead of assuming it starts at 0.
+            hasReceivedFrame = true
+            nextExpected = frame.seq
+        } else if !hasDequeued, frame.seq < nextExpected {
+            // Startup burst arrived out of order — rewind to the oldest frame
+            // as long as nothing has been played yet.
+            nextExpected = frame.seq
+        }
         buffer[frame.seq] = frame
         updateJitter()
     }
@@ -30,6 +58,7 @@ final class JitterBuffer: @unchecked Sendable {
         guard let frame = buffer[nextExpected] else { return nil }
         buffer.removeValue(forKey: nextExpected)
         nextExpected &+= 1
+        hasDequeued = true
         return frame
     }
 
@@ -42,7 +71,11 @@ final class JitterBuffer: @unchecked Sendable {
     func advanceOnConceal() {
         lock.lock()
         defer { lock.unlock() }
+        // Nothing has ever been received: there is no stream to conceal, so
+        // don't let the drain timer run the counter away from the sender.
+        guard hasReceivedFrame else { return }
         nextExpected &+= 1
+        resyncIfStalledLocked()
     }
 
     func reset() {
@@ -50,12 +83,25 @@ final class JitterBuffer: @unchecked Sendable {
         defer { lock.unlock() }
         buffer.removeAll()
         nextExpected = 0
+        hasReceivedFrame = false
+        hasDequeued = false
         jitterMs = 0
         lastArrivalMs = 0
         depthMs = 60
     }
 
     // MARK: - Private
+
+    /// Concealing one or two lost packets is normal. But when the buffer holds
+    /// only frames far away from `nextExpected` — sender restarted numbering,
+    /// or we concealed through a long stall — snap to the oldest frame we
+    /// actually hold instead of counting into the void one tick at a time.
+    private func resyncIfStalledLocked() {
+        guard buffer[nextExpected] == nil, let oldest = buffer.keys.min() else { return }
+        let distance = Int64(oldest) - Int64(nextExpected)
+        guard distance < 0 || distance > Self.maxConcealGap else { return }
+        nextExpected = oldest
+    }
 
     private func currentMs() -> Double {
         if timebaseInfo.denom == 0 { mach_timebase_info(&timebaseInfo) }

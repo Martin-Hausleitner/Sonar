@@ -10,7 +10,14 @@ import Foundation
 /// Converters are created lazily and reused; creating one per frame would add
 /// ~2 ms of setup overhead to every encode/decode call.
 final class OpusCoder {
-    enum CodecError: Error { case notConfigured, encodeFailed, decodeFailed }
+    enum CodecError: Error, Equatable {
+        case notConfigured
+        case encodeFailed
+        case decodeFailed
+        /// The PCM buffer handed to `encode` is not exactly the encoder's
+        /// format / frame size. Feed it through `CaptureFrameConformer` first.
+        case inputFormatMismatch
+    }
 
     /// Apple's AVAudioConverter Opus encoder does not expose libopus'
     /// OPUS_SET_INBAND_FEC / OPUS_SET_PACKET_LOSS_PERC controls.
@@ -66,7 +73,19 @@ final class OpusCoder {
 
     // MARK: - Encode (PCM Float32 → Opus bytes)
 
+    /// The exact PCM format `encode` accepts: 48 kHz / mono / Float32,
+    /// deinterleaved. Exposed so capture-side components can conform to it.
+    var encoderInputFormat: AVAudioFormat { pcmFormat }
+
     func encode(_ buffer: AVAudioPCMBuffer) throws -> Data {
+        // AVAudioConverter silently errors out when the source buffer is not in
+        // the format the converter was created with, or when it does not hold a
+        // whole Opus frame. Reject it up front with a diagnosable error instead
+        // of letting it look like a generic encode failure.
+        guard buffer.format == pcmFormat, Int(buffer.frameLength) == samplesPerFrame else {
+            throw CodecError.inputFormatMismatch
+        }
+
         let enc = try encoder()
 
         // 512 bytes is comfortably above the Opus packet ceiling at 24 kbps / 10 ms (~30 B).
@@ -117,6 +136,12 @@ final class OpusCoder {
             mStartOffset: 0, mVariableFramesInPacket: 0, mDataByteSize: UInt32(data.count)
         )
 
+        // The converter writes `frameLength` itself, but only ever *up to*
+        // `frameCapacity`. Reset it first so a recycled output buffer can never
+        // be mistaken for freshly decoded audio when the conversion yields
+        // nothing.
+        buffer.frameLength = 0
+
         var provided = false
         var convErr: NSError?
         let status = dec.convert(to: buffer, error: &convErr) { _, outStatus in
@@ -128,6 +153,9 @@ final class OpusCoder {
             return inp
         }
         guard status != .error, convErr == nil else { throw CodecError.decodeFailed }
+        // Zero decoded frames means the packet produced no audio — scheduling
+        // that buffer would be an inaudible no-op, so surface it as an error.
+        guard buffer.frameLength > 0 else { throw CodecError.decodeFailed }
     }
 
     // MARK: - Private

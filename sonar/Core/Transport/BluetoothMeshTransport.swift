@@ -354,7 +354,10 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
         }
         peripheral.delegate = self
         peripheral.discoverServices([Self.serviceUUID])
-        connectedSubject.send(true)
+        // NOT connected yet: `send(_:)` drops every frame until a writable
+        // characteristic is registered, so announcing "verbunden" here made the
+        // UI claim a live link over a path that could not carry a single byte.
+        // The signal moves to didDiscoverCharacteristicsFor.
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?) {
@@ -369,14 +372,20 @@ extension BluetoothMeshTransport: CBCentralManagerDelegate {
             discoveredPeripherals.removeValue(forKey: key)
             liveSubject.send(Array(discoveredPeripheralCache.values))
         }
-        if connectedPeripherals.isEmpty { connectedSubject.send(false) }
+        // No peripheral left that we can actually write audio to ⇒ not connected.
+        if connectedPeripherals.isEmpty || writableCharacteristics.isEmpty {
+            connectedSubject.send(false)
+        }
     }
 }
 
 extension BluetoothMeshTransport: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
         guard acceptsPeerCallback(from: peripheral) else { return }
-        guard let services = peripheral.services else { return }
+        guard error == nil, let services = peripheral.services else {
+            failUsablePath(peripheral)
+            return
+        }
         for service in services where service.uuid == Self.serviceUUID {
             peripheral.discoverCharacteristics([Self.audioCharUUID], for: service)
         }
@@ -384,7 +393,10 @@ extension BluetoothMeshTransport: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
         guard acceptsPeerCallback(from: peripheral) else { return }
-        guard let chars = service.characteristics else { return }
+        guard error == nil, let chars = service.characteristics else {
+            failUsablePath(peripheral)
+            return
+        }
         for char in chars where char.uuid == Self.audioCharUUID {
             if char.properties.contains(.notify) {
                 peripheral.setNotifyValue(true, for: char)
@@ -393,6 +405,19 @@ extension BluetoothMeshTransport: CBPeripheralDelegate {
                 writableCharacteristics[peripheral.identifier] = char
             }
         }
+        // Only now can `send(_:)` actually put a frame on this path.
+        if writableCharacteristics[peripheral.identifier] != nil {
+            connectedSubject.send(true)
+        } else {
+            failUsablePath(peripheral)
+        }
+    }
+
+    /// The link came up but carries no writable audio characteristic — treat it
+    /// as not connected instead of advertising a dead path to the bonder/UI.
+    private func failUsablePath(_ peripheral: CBPeripheral) {
+        writableCharacteristics.removeValue(forKey: peripheral.identifier)
+        if writableCharacteristics.isEmpty { connectedSubject.send(false) }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {

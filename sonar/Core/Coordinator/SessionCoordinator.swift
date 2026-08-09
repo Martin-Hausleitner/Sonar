@@ -45,6 +45,27 @@ final class SessionCoordinator: ObservableObject {
     private let encoder = OpusCoder()
     private let decoder = OpusCoder()
 
+    /// Mic tap delivers hardware-format buffers of arbitrary length; the Opus
+    /// encoder only accepts 48 kHz mono Float32 in exact 10 ms frames. This
+    /// converts + slices between the two.
+    private let captureConformer = CaptureFrameConformer()
+
+    /// Rate limiters so a permanently failing codec logs once per second
+    /// instead of 100×/s (and, crucially, does not fail *silently*).
+    private let encodeErrorThrottle = AudioLogThrottle()
+    private let decodeErrorThrottle = AudioLogThrottle()
+
+    /// Capture buffers must reach the conformer/encoder **in order and one at a
+    /// time** — `DispatchQueue.global()` is concurrent, so Combine could run two
+    /// tap buffers in parallel and scramble the 10 ms framing.
+    private let captureQueue = DispatchQueue(label: "app.sonar.ios.capture", qos: .userInteractive)
+
+    /// Send-chain health counters (both mutated only on `captureQueue`).
+    /// A non-zero drop count with a zero encode count is the signature of the
+    /// v0.2.19 "connected but silent" bug.
+    private var encodedFrameCount: UInt64 = 0
+    private var droppedFrameCount: UInt64 = 0
+
     // Smart audio processing
     private let preCaptureBuffer = PreCaptureBuffer()
     private let whisperDetector = WhisperDetector()
@@ -133,6 +154,7 @@ final class SessionCoordinator: ObservableObject {
         // bonder, which would log spurious errors and leak frames.
         cancellables.removeAll()
         audioEngine.stop()
+        captureConformer.reset()
         transcription.stop()
         _ = recorder.stopSession()
         spatialMixer.stopRemotePlayer()
@@ -356,10 +378,15 @@ final class SessionCoordinator: ObservableObject {
                 .store(in: &cancellables)
         }
 
-        // MARK: SEND CHAIN: mic → pre-processing → Opus encode → bonder → transports.
+        // MARK: SEND CHAIN: mic → pre-processing → conform → Opus encode → bonder → transports.
+
+        // Fresh route ⇒ fresh resampler state, no leftovers from a previous run.
+        captureConformer.reset()
+        encodedFrameCount = 0
+        droppedFrameCount = 0
 
         audioEngine.captured
-            .receive(on: DispatchQueue.global(qos: .userInteractive))
+            .receive(on: captureQueue)
             .sink { [weak self] _, buffer in
                 guard let self else { return }
                 let rms = MicrophoneMonitor.rms(buffer)
@@ -384,9 +411,7 @@ final class SessionCoordinator: ObservableObject {
                 }
                 recorder.append(buffer)
                 wakeWord.feed(buffer)
-                if let data = try? encoder.encode(buffer) {
-                    Task { await self.bonder.send(opusData: data) }
-                }
+                encodeAndSend(buffer)
             }
             .store(in: &cancellables)
 
@@ -400,14 +425,19 @@ final class SessionCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         // Drain the jitter buffer at the audio frame rate and schedule decoded PCM.
-        playbackTimer = Timer.scheduledTimer(
-            withTimeInterval: Double(LatencyBudget.audioFrameMs) / 1000.0,
+        // Must run in `.common` modes: a `scheduledTimer` lands in `.default`
+        // only, so playback stalled for as long as the user scrolled or held a
+        // slider (UITrackingRunLoopMode).
+        let timer = Timer(
+            timeInterval: Double(LatencyBudget.audioFrameMs) / 1000.0,
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.drainJitterBuffer()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        playbackTimer = timer
 
         // MARK: Battery tier → bonder mode + appState.
 
@@ -767,6 +797,37 @@ final class SessionCoordinator: ObservableObject {
         return String(cleaned.suffix(6)).uppercased()
     }
 
+    // MARK: - Send chain: conform → encode → bonder
+
+    /// Turn one raw mic-tap buffer into 0…n Opus packets on the wire.
+    ///
+    /// Pre-fix this was `if let data = try? encoder.encode(buffer)`, which fed
+    /// the encoder a hardware-format buffer (e.g. 44.1 kHz stereo, 1024 frames).
+    /// `AVAudioConverter` rejected every single one and `try?` threw the error
+    /// away — the peers connected, but not one audio frame was ever sent.
+    private func encodeAndSend(_ buffer: AVAudioPCMBuffer) {
+        for frame in captureConformer.conform(buffer) {
+            do {
+                let data = try encoder.encode(frame)
+                encodedFrameCount &+= 1
+                Task { await self.bonder.send(opusData: data) }
+            } catch {
+                droppedFrameCount &+= 1
+                logThrottled(
+                    encodeErrorThrottle,
+                    "Opus encode failed: \(error) — dropped \(droppedFrameCount) of \(droppedFrameCount + encodedFrameCount) capture frames"
+                )
+            }
+        }
+    }
+
+    private nonisolated func logThrottled(_ throttle: AudioLogThrottle, _ message: String) {
+        guard let suppressed = throttle.shouldLog() else { return }
+        Log.audio.error(
+            "\(message, privacy: .public) (\(suppressed, privacy: .public) similar errors suppressed)"
+        )
+    }
+
     // MARK: - Jitter buffer drain (runs on main thread via Timer)
 
     private func drainJitterBuffer() {
@@ -783,11 +844,20 @@ final class SessionCoordinator: ObservableObject {
     }
 
     private func decodeAndSchedule(_ frame: AudioFrame) {
+        // Apple's Opus decoder may emit a different internal frame size than the
+        // 10 ms we encode with (e.g. 7.5 ms sub-frames plus priming), so give the
+        // output buffer 2× headroom instead of letting the conversion truncate.
         guard let buf = AVAudioPCMBuffer(
             pcmFormat: pcmPlaybackFormat,
-            frameCapacity: AVAudioFrameCount(decoder.samplesPerFrame)
+            frameCapacity: AVAudioFrameCount(decoder.samplesPerFrame * 2)
         ) else { return }
-        guard (try? decoder.decode(frame.payload, into: buf)) != nil else { return }
+        do {
+            try decoder.decode(frame.payload, into: buf)
+        } catch {
+            logThrottled(decodeErrorThrottle, "Opus decode failed: \(error)")
+            return
+        }
+        guard buf.frameLength > 0 else { return }
         spatialMixer.scheduleBuffer(buf)
     }
 

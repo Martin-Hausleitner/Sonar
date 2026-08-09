@@ -98,13 +98,81 @@ final class JitterBufferTests: XCTestCase {
 
     func testAdvanceOnConcealSkipsSeq() {
         let jb = JitterBuffer()
-        // seq 0 is missing; enqueue seq 1
-        jb.enqueue(makeFrame(seq: 1))
+        // Establish the stream first — the buffer adopts the sender's numbering
+        // from the first frame it ever sees, so a "missing seq 0" only exists
+        // once playback is under way.
+        jb.enqueue(makeFrame(seq: 10))
+        XCTAssertEqual(jb.dequeue()?.seq, 10) // nextExpected = 11
+
+        jb.enqueue(makeFrame(seq: 12)) // seq 11 lost in flight
         XCTAssertTrue(jb.needsConcealment)
 
-        jb.advanceOnConceal() // skip seq 0, nextExpected = 1
-        let result = jb.dequeue()
-        XCTAssertEqual(result?.seq, 1)
+        jb.advanceOnConceal() // conceal seq 11, nextExpected = 12
+        XCTAssertEqual(jb.dequeue()?.seq, 12)
+    }
+
+    // MARK: - Sender/receiver sequence alignment (live-audio regression)
+
+    /// The playback timer starts draining at session start, long before MPC is
+    /// connected, while the sender's first sequence number is 1. Pre-fix,
+    /// `advanceOnConceal()` free-ran `nextExpected` far past anything the peer
+    /// would ever send, so `dequeue()` returned nil forever — connected peers,
+    /// permanent silence.
+    func testEmptyDrainTicksDoNotDesyncFromSenderStartingAtSeqOne() {
+        let jb = JitterBuffer()
+
+        // 500 empty playback ticks (5 s) while the transport is still connecting.
+        for _ in 0 ..< 500 {
+            XCTAssertNil(jb.dequeue())
+            if jb.needsConcealment { jb.advanceOnConceal() }
+        }
+
+        // Peer connects; MultipathBonder numbers its first frame seq = 1.
+        for seq in UInt32(1) ... 10 {
+            jb.enqueue(makeFrame(seq: seq))
+        }
+
+        for seq in UInt32(1) ... 10 {
+            XCTAssertEqual(jb.dequeue()?.seq, seq, "frame \(seq) must reach playback")
+        }
+    }
+
+    func testFirstFrameAdoptsSenderSequenceNumber() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 5000))
+        XCTAssertFalse(jb.needsConcealment)
+        XCTAssertEqual(jb.dequeue()?.seq, 5000)
+    }
+
+    /// A long conceal run must not strand playback when the buffer holds frames
+    /// far ahead (e.g. the transport stalled and resumed with a new burst).
+    func testResyncSnapsToOldestBufferedFrameAfterLongGap() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 1))
+        XCTAssertEqual(jb.dequeue()?.seq, 1) // nextExpected = 2
+
+        // Stream resumes 1 000 frames later.
+        jb.enqueue(makeFrame(seq: 1002))
+        jb.enqueue(makeFrame(seq: 1003))
+
+        XCTAssertTrue(jb.needsConcealment)
+        jb.advanceOnConceal() // one conceal tick is enough to resync
+        XCTAssertEqual(jb.dequeue()?.seq, 1002)
+        XCTAssertEqual(jb.dequeue()?.seq, 1003)
+    }
+
+    func testResetReturnsToUnsyncedState() {
+        let jb = JitterBuffer()
+        jb.enqueue(makeFrame(seq: 7))
+        _ = jb.dequeue()
+        jb.reset()
+
+        for _ in 0 ..< 100 {
+            XCTAssertNil(jb.dequeue())
+            if jb.needsConcealment { jb.advanceOnConceal() }
+        }
+        jb.enqueue(makeFrame(seq: 1))
+        XCTAssertEqual(jb.dequeue()?.seq, 1, "after reset the next sender's numbering is adopted again")
     }
 
     func testMultipleAdvancesSkipMultipleSeqs() {
