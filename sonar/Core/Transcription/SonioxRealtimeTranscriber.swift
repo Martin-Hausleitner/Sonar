@@ -282,8 +282,13 @@ struct SonioxTranscriptAccumulator: Equatable {
             }
         }
 
+        // On a `finished` frame the committed text is flushed as final below;
+        // emitting it here first as a non-final segment would duplicate it in
+        // the transcript (partial "Ende" immediately followed by final "Ende").
         let liveText = committedText + tailText
-        if !liveText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !message.finished,
+           !liveText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             emissions.append(
                 Emission(text: liveText, speakerID: committedSpeaker ?? tailSpeaker, isFinal: false)
             )

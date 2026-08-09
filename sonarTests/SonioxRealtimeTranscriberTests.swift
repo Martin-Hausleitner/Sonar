@@ -405,7 +405,10 @@ final class SonioxLiveTranscriptionEngineTests: XCTestCase {
                 transcriber.onSegment = onSegment
                 return transcriber
             },
-            sonioxConfigurationProvider: { configuration }
+            sonioxConfigurationProvider: { configuration },
+            // Never touch the real speech-auth prompt: it never resolves in a
+            // headless simulator, so the unconfigured-fallback case would hang.
+            speechAuthorizer: { false }
         )
     }
 

@@ -66,6 +66,12 @@ final class LiveTranscriptionEngine: ObservableObject {
     private let sonioxFactory: SonioxFactory
     private let sonioxConfigurationProvider: @MainActor () -> SonioxConfiguration
 
+    /// Speech-recognition authorization gate. Injectable so tests never block
+    /// on the system permission prompt (`SFSpeechRecognizer.requestAuthorization`
+    /// never resolves in a headless simulator, which otherwise hangs any test
+    /// whose engine selection falls back to Apple Speech).
+    private let speechAuthorizer: () async -> Bool
+
     init(
         localTranscriberFactory: @escaping LocalTranscriberFactory = LiveTranscriptionEngine.makeLocalTranscriber,
         parakeetChunkSender: @escaping ParakeetChunkSender = { apiKey, pcm16LE, sampleRate, languageCode in
@@ -86,10 +92,18 @@ final class LiveTranscriptionEngine: ObservableObject {
         },
         sonioxConfigurationProvider: @escaping @MainActor () -> SonioxConfiguration = {
             SonioxConfiguration.resolved()
+        },
+        speechAuthorizer: @escaping () async -> Bool = {
+            await withCheckedContinuation { cont in
+                SFSpeechRecognizer.requestAuthorization { status in
+                    cont.resume(returning: status == .authorized)
+                }
+            }
         }
     ) {
         self.sonioxFactory = sonioxFactory
         self.sonioxConfigurationProvider = sonioxConfigurationProvider
+        self.speechAuthorizer = speechAuthorizer
         self.localTranscriberFactory = localTranscriberFactory
         self.parakeetFactory = parakeetFactory ?? { apiKey, onSegment in
             ParakeetTranscriber(
@@ -115,7 +129,7 @@ final class LiveTranscriptionEngine: ObservableObject {
         currentEngine = pickEngine(language: language, allowCloud: !PrivacyMode.shared.isActive)
         switch currentEngine {
         case .appleSpeech:
-            let authorized = await requestAuthorization()
+            let authorized = await speechAuthorizer()
             guard authorized else { return }
             currentEngine = .appleSpeech
             try startAppleSpeech(language: language)
@@ -127,7 +141,7 @@ final class LiveTranscriptionEngine: ObservableObject {
                 let seg = Segment(text: text, speakerID: nil, timestamp: Date(), isFinal: true)
                 self.transcript.append(seg)
             }) else {
-                let authorized = await requestAuthorization()
+                let authorized = await speechAuthorizer()
                 guard authorized else { return }
                 currentEngine = .appleSpeech
                 try startAppleSpeech(language: language)
@@ -321,13 +335,6 @@ final class LiveTranscriptionEngine: ObservableObject {
         }
     }
 
-    private func requestAuthorization() async -> Bool {
-        await withCheckedContinuation { cont in
-            SFSpeechRecognizer.requestAuthorization { status in
-                cont.resume(returning: status == .authorized)
-            }
-        }
-    }
 }
 
 protocol CloudTranscribing: AnyObject {
