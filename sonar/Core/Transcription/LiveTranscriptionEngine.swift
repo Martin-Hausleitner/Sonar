@@ -19,6 +19,9 @@ final class LiveTranscriptionEngine: ObservableObject {
 
     @Published private(set) var transcript: [Segment] = []
     @Published private(set) var currentEngine: Engine = .appleSpeech
+    /// Live quality/cost record of the Soniox engine (Soniox Beta). Reset on
+    /// every `start()`/`stop()`; stays at its initial value for other engines.
+    @Published private(set) var sonioxMetrics = SonioxQualityMetrics()
 
     private var recognitionTask: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
@@ -126,6 +129,7 @@ final class LiveTranscriptionEngine: ObservableObject {
     func start(language: Locale = .current) async throws {
         guard !SonarTestIdentity.current().isSimulatorRelayEnabled else { return }
 
+        sonioxMetrics = SonioxQualityMetrics()
         currentEngine = pickEngine(language: language, allowCloud: !PrivacyMode.shared.isActive)
         switch currentEngine {
         case .appleSpeech:
@@ -185,6 +189,11 @@ final class LiveTranscriptionEngine: ObservableObject {
                 guard isCurrentCloudCallback(generation) else { return }
                 applySonioxSegment(text: text, speakerID: speakerID, isFinal: isFinal)
             }
+            soniox?.onMetricsChange = { [weak self] metrics in
+                guard let self else { return }
+                guard isCurrentCloudCallback(generation) else { return }
+                sonioxMetrics = metrics
+            }
             soniox?.connect()
         }
     }
@@ -235,6 +244,7 @@ final class LiveTranscriptionEngine: ObservableObject {
         openAIRealtime = nil
         soniox?.finish()
         soniox = nil
+        sonioxMetrics = SonioxQualityMetrics()
         clearTranscript()
     }
 
@@ -280,6 +290,7 @@ final class LiveTranscriptionEngine: ObservableObject {
         openAIRealtime = nil
         soniox?.abort()
         soniox = nil
+        sonioxMetrics = SonioxQualityMetrics()
         if Self.isCloudEngine(currentEngine) {
             currentEngine = .appleSpeech
         }
@@ -334,7 +345,6 @@ final class LiveTranscriptionEngine: ObservableObject {
             }
         }
     }
-
 }
 
 protocol CloudTranscribing: AnyObject {

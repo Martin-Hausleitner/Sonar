@@ -225,7 +225,11 @@ final class SonioxRealtimeTranscriberTests: XCTestCase {
             model: "stt-rt-v5",
             languageHints: ["de"],
             enableSpeakerDiarization: true,
-            enableEndpointDetection: true
+            enableEndpointDetection: true,
+            silenceStopSeconds: SonioxConfiguration.defaultSilenceStopSeconds,
+            preRollSeconds: SonioxConfiguration.defaultPreRollSeconds,
+            voiceOnThreshold: SonioxConfiguration.defaultVoiceOnThreshold,
+            voiceOffThreshold: SonioxConfiguration.defaultVoiceOffThreshold
         )
         let message = configuration.startMessage(apiKey: "temp-key", sampleRate: 16000)
 
@@ -386,6 +390,39 @@ final class SonioxLiveTranscriptionEngineTests: XCTestCase {
         XCTAssertEqual(fake.abortCount, 1)
     }
 
+    func testEnginePublishesSonioxQualityMetrics() async throws {
+        let fake = FakeSonioxTranscriber()
+        let engine = makeEngine(configuration: configured(), transcriber: fake)
+        try await engine.start()
+        XCTAssertEqual(engine.sonioxMetrics, SonioxQualityMetrics(), "Metrics start empty")
+
+        var metrics = SonioxQualityMetrics()
+        metrics.recordStreamedAudio(seconds: 12)
+        metrics.recordSuppressedSilence(seconds: 108)
+        fake.emitMetrics(metrics)
+
+        XCTAssertEqual(engine.sonioxMetrics.streamedAudioSeconds, 12)
+        XCTAssertEqual(engine.sonioxMetrics.suppressionRatio, 0.9, accuracy: 0.0001)
+
+        engine.stop()
+        XCTAssertEqual(engine.sonioxMetrics, SonioxQualityMetrics(), "stop() resets the metrics")
+    }
+
+    func testMetricsAfterPrivacyAbortAreDiscardedAndNotRepopulated() async throws {
+        let fake = FakeSonioxTranscriber()
+        let engine = makeEngine(configuration: configured(), transcriber: fake)
+        try await engine.start()
+
+        PrivacyMode.shared.activate()
+        await Task.yield()
+
+        var metrics = SonioxQualityMetrics()
+        metrics.recordStreamedAudio(seconds: 30)
+        fake.emitMetrics(metrics)
+
+        XCTAssertEqual(engine.sonioxMetrics, SonioxQualityMetrics())
+    }
+
     func testSonioxIsClassifiedAsCloudEngine() {
         XCTAssertTrue(LiveTranscriptionEngine.isCloudEngine(.soniox))
         XCTAssertTrue(LiveTranscriptionEngine.isCloudEngine(.openAIRealtime))
@@ -433,12 +470,20 @@ final class SonioxLiveTranscriptionEngineTests: XCTestCase {
     }
 }
 
-private final class FakeSonioxTranscriber: SonioxRealtimeTranscribing {
+final class FakeSonioxTranscriber: SonioxRealtimeTranscribing {
     var connectCount = 0
     var appendCount = 0
     var finishCount = 0
     var abortCount = 0
     var onSegment: ((String, String?, Bool) -> Void)?
+    var qualityMetrics = SonioxQualityMetrics()
+    var onMetricsChange: ((SonioxQualityMetrics) -> Void)?
+
+    /// Simulates a metrics update coming from the real transcriber.
+    func emitMetrics(_ metrics: SonioxQualityMetrics) {
+        qualityMetrics = metrics
+        onMetricsChange?(metrics)
+    }
 
     func connect() {
         connectCount += 1

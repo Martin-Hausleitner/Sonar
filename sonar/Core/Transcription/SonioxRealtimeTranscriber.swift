@@ -38,9 +38,22 @@ struct SonioxConfiguration: Equatable {
     var languageHints: [String]
     var enableSpeakerDiarization: Bool
     var enableEndpointDetection: Bool
+    /// Silence (in seconds) after which the streaming session is suspended to
+    /// stop paying for dead air. `<= 0` disables suspension entirely.
+    var silenceStopSeconds: Double
+    /// Audio retained while suspended and replayed on resume, so the first word
+    /// after a pause is not clipped.
+    var preRollSeconds: Double
+    /// RMS thresholds with hysteresis, matching `sonar/Core/AI/VAD.swift`.
+    var voiceOnThreshold: Float
+    var voiceOffThreshold: Float
 
     static let defaultWebsocketURL = "wss://stt-rt.soniox.com/transcribe-websocket"
     static let defaultModel = "stt-rt-v5"
+    static let defaultSilenceStopSeconds: Double = 120
+    static let defaultPreRollSeconds: Double = 1.0
+    static let defaultVoiceOnThreshold: Float = 0.018
+    static let defaultVoiceOffThreshold: Float = 0.010
 
     /// Sample rate Soniox is configured with. Capture runs at 48 kHz
     /// (`LatencyBudget.audioSampleRate`) and is downsampled before sending.
@@ -52,6 +65,10 @@ struct SonioxConfiguration: Equatable {
     static let modelDefaultsKey = "sonar.soniox.model"
     static let languageHintsDefaultsKey = "sonar.soniox.languageHints"
     static let diarizationDefaultsKey = "sonar.soniox.diarization"
+    static let silenceStopDefaultsKey = "sonar.soniox.silenceStopSec"
+    static let preRollDefaultsKey = "sonar.soniox.preRollSec"
+    static let voiceOnDefaultsKey = "sonar.soniox.vadOn"
+    static let voiceOffDefaultsKey = "sonar.soniox.vadOff"
 
     /// True when the engine has something it can authenticate with.
     var isConfigured: Bool {
@@ -76,6 +93,16 @@ struct SonioxConfiguration: Equatable {
             return fallback
         }
 
+        func number(_ env: String, _ key: String, default fallback: Double) -> Double {
+            if let raw = environment[env], let value = Double(raw) {
+                return value
+            }
+            if defaults.object(forKey: key) != nil {
+                return defaults.double(forKey: key)
+            }
+            return fallback
+        }
+
         let hintsRaw = string("SONAR_SONIOX_LANGUAGE_HINTS", languageHintsDefaultsKey, default: "")
         let hints = hintsRaw
             .split(separator: ",")
@@ -89,8 +116,25 @@ struct SonioxConfiguration: Equatable {
             model: string("SONAR_SONIOX_MODEL", modelDefaultsKey, default: defaultModel),
             languageHints: hints,
             enableSpeakerDiarization: flag("SONAR_SONIOX_DIARIZATION", diarizationDefaultsKey, default: true),
-            enableEndpointDetection: true
+            enableEndpointDetection: true,
+            silenceStopSeconds: number(
+                "SONAR_SONIOX_SILENCE_STOP_SEC",
+                silenceStopDefaultsKey,
+                default: defaultSilenceStopSeconds
+            ),
+            preRollSeconds: max(0, number("SONAR_SONIOX_PREROLL_SEC", preRollDefaultsKey, default: defaultPreRollSeconds)),
+            voiceOnThreshold: Float(
+                number("SONAR_SONIOX_VAD_ON", voiceOnDefaultsKey, default: Double(defaultVoiceOnThreshold))
+            ),
+            voiceOffThreshold: Float(
+                number("SONAR_SONIOX_VAD_OFF", voiceOffDefaultsKey, default: Double(defaultVoiceOffThreshold))
+            )
         )
+    }
+
+    /// `false` when suspension is switched off (non-positive threshold).
+    var isSilenceSuspensionEnabled: Bool {
+        silenceStopSeconds > 0
     }
 
     /// The single JSON text frame Soniox expects before any audio.
@@ -393,6 +437,10 @@ struct SonioxTemporaryKey: Equatable {
 
 protocol SonioxRealtimeTranscribing: CloudTranscribing {
     func connect()
+    /// Current quality/cost record. Safe to read from any thread.
+    var qualityMetrics: SonioxQualityMetrics { get }
+    /// Called on the main queue whenever the metrics change.
+    var onMetricsChange: ((SonioxQualityMetrics) -> Void)? { get set }
 }
 
 /// Streams live PCM to Soniox `stt-rt-v5` over a WebSocket and surfaces
@@ -402,6 +450,9 @@ protocol SonioxRealtimeTranscribing: CloudTranscribing {
 /// is re-sent; `finish()` terminates cleanly with the empty-frame terminator;
 /// `abort()` (Privacy Mode) kills the socket immediately, drops all buffered
 /// audio and silences every further callback.
+///
+/// Cost control (Soniox Beta): a `SonioxSessionGovernor` suspends the session
+/// after sustained silence and resumes it — pre-roll first — on the next word.
 final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Sendable {
     /// (text, speakerID, isFinal) — always delivered on the main queue.
     typealias SegmentHandler = (String, String?, Bool) -> Void
@@ -411,6 +462,8 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
     private let session: URLSession
     private let maxReconnectAttempts: Int
     private let queue = DispatchQueue(label: "sonar.soniox", qos: .userInitiated)
+    private let governor: SonioxSessionGovernor
+    private let monotonicNow: () -> TimeInterval
 
     private var wsTask: URLSessionWebSocketTask?
     private var accumulator = SonioxTranscriptAccumulator()
@@ -419,10 +472,17 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
     private var reconnectAttempt = 0
     private var isConnecting = false
     private var isStreaming = false
+    /// Set when audio was sent but no token has come back yet — the anchor of
+    /// the first-token latency measurement.
+    private var awaitingFirstTokenSince: TimeInterval?
+    /// Guards against sending more than one terminator per suspend.
+    private var terminatorSent = false
 
     private let lifecycleLock = NSLock()
     private var aborted = false
     private var finishing = false
+    private var metrics = SonioxQualityMetrics()
+    private var metricsObserver: ((SonioxQualityMetrics) -> Void)?
     /// Mirror of `wsTask` guarded by `lifecycleLock` so `abort()` can kill the
     /// socket immediately without hopping onto (and waiting for) `queue`.
     private var abortableSocket: URLSessionWebSocketTask?
@@ -436,12 +496,59 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
         configuration: SonioxConfiguration,
         session: URLSession = .shared,
         maxReconnectAttempts: Int = 3,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        governor: SonioxSessionGovernor? = nil,
         onSegment: @escaping SegmentHandler
     ) {
         self.configuration = configuration
         self.session = session
         self.maxReconnectAttempts = maxReconnectAttempts
+        monotonicNow = now
+        self.governor = governor ?? SonioxSessionGovernor(configuration: configuration, now: now)
         self.onSegment = onSegment
+    }
+
+    // MARK: Metrics
+
+    var qualityMetrics: SonioxQualityMetrics {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        return metrics
+    }
+
+    var onMetricsChange: ((SonioxQualityMetrics) -> Void)? {
+        get {
+            lifecycleLock.lock()
+            defer { lifecycleLock.unlock() }
+            return metricsObserver
+        }
+        set {
+            lifecycleLock.lock()
+            metricsObserver = newValue
+            lifecycleLock.unlock()
+        }
+    }
+
+    /// Current governor state, for diagnostics and the beta report.
+    var sessionState: SonioxSessionGovernor.State {
+        governor.state
+    }
+
+    /// Test hook: runs `block` once everything already queued on the private
+    /// serial queue has finished, so tests observe settled state without sleeps.
+    func performForTesting(_ block: @escaping () -> Void) {
+        queue.async(execute: block)
+    }
+
+    private func mutateMetrics(_ body: (inout SonioxQualityMetrics) -> Void) {
+        lifecycleLock.lock()
+        body(&metrics)
+        let snapshot = metrics
+        let observer = metricsObserver
+        let isAborted = aborted
+        lifecycleLock.unlock()
+        guard let observer, !isAborted else { return }
+        DispatchQueue.main.async { observer(snapshot) }
     }
 
     // MARK: Lifecycle
@@ -464,10 +571,34 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
         queue.async { [weak self] in
             guard let self, !isAborted else { return }
             captureSampleRate = rate
-            pendingSamples.append(contentsOf: samples)
-            trimOverflowLocked()
-            drainChunks()
+            let seconds = Double(samples.count) / rate
+
+            switch governor.process(samples: samples, sampleRate: rate) {
+            case let .send(chunk):
+                enqueue(chunk, seconds: seconds)
+
+            case .hold:
+                // Suspended: the samples live on only in the pre-roll ring buffer.
+                mutateMetrics { $0.recordSuppressedSilence(seconds: seconds) }
+
+            case .suspend:
+                mutateMetrics { $0.recordSuppressedSilence(seconds: seconds) }
+                suspendSession()
+
+            case let .resume(preRoll):
+                let preRollSeconds = Double(preRoll.count) / rate
+                enqueue(preRoll, seconds: preRollSeconds)
+                resumeSession()
+            }
         }
+    }
+
+    private func enqueue(_ samples: [Float], seconds: Double) {
+        guard !samples.isEmpty else { return }
+        mutateMetrics { $0.recordStreamedAudio(seconds: seconds) }
+        pendingSamples.append(contentsOf: samples)
+        trimOverflowLocked()
+        drainChunks()
     }
 
     /// Clean end of stream: flush the tail, send the empty-frame terminator and
@@ -479,14 +610,7 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
 
         queue.async { [weak self] in
             guard let self, !isAborted else { return }
-            flushPendingChunk()
-            wsTask?.send(.string("")) { _ in }
-            let emissions = accumulator.flush()
-            deliver(emissions)
-            // Give the server a moment for its `finished` frame, then tear down.
-            queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.closeSocket(code: .normalClosure)
-            }
+            terminateSession(cause: .user, flushTail: true)
         }
     }
 
@@ -504,9 +628,61 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
             wsTask = nil
             isStreaming = false
             isConnecting = false
+            terminatorSent = true
+            awaitingFirstTokenSince = nil
             pendingSamples.removeAll(keepingCapacity: false)
             accumulator = SonioxTranscriptAccumulator()
+            governor.reset()
         }
+    }
+
+    // MARK: Session governing (suspend / resume)
+
+    /// The one place that speaks Soniox' end-of-stream contract: flush, send the
+    /// empty text frame exactly once, commit the transcript, then close after a
+    /// short grace period so the server's `finished` frame can still arrive.
+    /// Shared by the user stop and the silence suspend — no duplicated policy.
+    private func terminateSession(cause: SonioxQualityMetrics.SessionEndCause, flushTail: Bool) {
+        if flushTail { flushPendingChunk() }
+        let closing = wsTask
+        let wasOpen = isStreaming && closing != nil
+
+        if wasOpen, !terminatorSent {
+            terminatorSent = true
+            closing?.send(.string("")) { _ in }
+        }
+        // Stop the send path immediately; the socket itself lingers briefly.
+        isStreaming = false
+        wsTask = nil
+        awaitingFirstTokenSince = nil
+        pendingSamples.removeAll(keepingCapacity: true)
+        deliver(accumulator.flush())
+
+        if wasOpen {
+            mutateMetrics { $0.recordSessionEnded(cause: cause) }
+        }
+        queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            closing?.cancel(with: .normalClosure, reason: nil)
+            lifecycleLock.lock()
+            if abortableSocket === closing { abortableSocket = nil }
+            lifecycleLock.unlock()
+        }
+    }
+
+    /// Silence threshold reached: stop paying for dead air.
+    private func suspendSession() {
+        guard isStreaming || wsTask != nil else { return }
+        Log.ai.notice("Soniox: suspending session after sustained silence")
+        terminateSession(cause: .silence, flushTail: false)
+    }
+
+    /// Speech is back: reuse the normal connect path (broker + backoff).
+    private func resumeSession() {
+        guard !isAborted, !isFinishing else { return }
+        Log.ai.notice("Soniox: resuming session on speech onset")
+        reconnectAttempt = 0
+        openSocket()
     }
 
     // MARK: Connection
@@ -571,6 +747,9 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
         lifecycleLock.unlock()
         task.resume()
         isStreaming = true
+        terminatorSent = false
+        governor.markSessionOpened()
+        mutateMetrics { $0.recordSessionStarted() }
 
         let start = configuration.startMessage(
             apiKey: credential.apiKey,
@@ -609,6 +788,7 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
         let attempt = reconnectAttempt
         let delay = pow(2.0, Double(attempt - 1)) * 0.5 // 0.5 s, 1 s, 2 s
         Log.ai.notice("Soniox: reconnecting (attempt \(attempt, privacy: .public))")
+        mutateMetrics { $0.recordReconnect() }
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self else { return }
             isStreaming = false
@@ -650,6 +830,8 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
     private func send(_ samples: [Float], on task: URLSessionWebSocketTask) {
         let data = SonioxAudioConverter.convert(samples, from: captureSampleRate)
         guard !data.isEmpty else { return }
+        // Anchor for the first-token latency of this session.
+        if awaitingFirstTokenSince == nil { awaitingFirstTokenSince = monotonicNow() }
         task.send(.data(data)) { [weak self] error in
             guard let error else { return }
             self?.handleTransportFailure(error)
@@ -685,16 +867,32 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
         if let reason = decoded.redactedErrorDescription {
             // Application errors (auth, quota, bad config) are fatal — never retried.
             Log.ai.error("Soniox: \(reason, privacy: .public)")
+            mutateMetrics {
+                $0.recordError(reason)
+                $0.recordSessionEnded(cause: .error)
+            }
             closeSocket(code: .normalClosure)
             return
         }
 
         // A frame arrived, so the connection is healthy again.
         reconnectAttempt = 0
+        recordTokenMetrics(for: decoded)
         deliver(accumulator.ingest(decoded))
 
         if decoded.finished {
             closeSocket(code: .normalClosure)
+        }
+    }
+
+    private func recordTokenMetrics(for message: SonioxServerMessage) {
+        guard !message.tokens.isEmpty else { return }
+        let latency = awaitingFirstTokenSince.map { monotonicNow() - $0 }
+        awaitingFirstTokenSince = nil
+        let tokens = message.tokens
+        mutateMetrics { metrics in
+            metrics.recordTokens(tokens)
+            if let latency { metrics.recordFirstTokenLatency(latency) }
         }
     }
 
@@ -706,7 +904,13 @@ final class SonioxRealtimeTranscriber: SonioxRealtimeTranscribing, @unchecked Se
             guard let self, !isAborted else { return }
             // Committed text survives the drop; only the volatile tail is lost.
             deliver(accumulator.flush())
+            let wasOpen = isStreaming
+            awaitingFirstTokenSince = nil
             closeSocket(code: .abnormalClosure)
+            mutateMetrics {
+                $0.recordError(reason)
+                if wasOpen { $0.recordSessionEnded(cause: .error) }
+            }
             scheduleReconnect()
         }
     }
