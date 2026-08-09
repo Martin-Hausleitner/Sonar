@@ -1,35 +1,47 @@
 ## 1. Loop fixes
 
-- [ ] 1.1 Add `_sonar-mpc._udp` to `NSBonjourServices` in
+- [x] 1.1 Add `_sonar-mpc._udp` to `NSBonjourServices` in
       `sonar/Resources/Info.plist` alongside the existing
       `_sonar-mpc._tcp` entry.
-- [ ] 1.2 Verify `NearTransport`'s `serviceType` / advertiser / browser setup
+- [x] 1.2 Verify `NearTransport`'s `serviceType` / advertiser / browser setup
       reaches `MCSessionState.connected` on both peers (add logging if
       needed to confirm during manual testing).
-- [ ] 1.3 Add `.defaultToSpeaker` (or documented equivalent) to
+- [x] 1.3 Add `.defaultToSpeaker` (or documented equivalent) to
       `AudioSessionPolicy.categoryOptions` in
       `sonar/Core/Audio/AudioEngine.swift` so remote audio is audible by
       default without headphones/AirPods.
-- [ ] 1.4 Replace the silent `try? encoder.encode(buffer)` in
+- [x] 1.4 Replace the silent `try? encoder.encode(buffer)` in
       `sonar/Core/Coordinator/SessionCoordinator.swift:387` with explicit
       error handling (log via `os.Logger` + metrics counter on failure).
-- [ ] 1.5 Reconcile the mic tap's input buffer format
+- [x] 1.5 Reconcile the mic tap's input buffer format
       (`AudioEngine.prepare()`, `engine.inputNode.inputFormat(forBus: 0)`)
       with `OpusCoder`'s expected PCM format/frame size, either via format
       conversion before encode or by constructing the encoder to match the
       tap's actual negotiated hardware format.
 
+- [x] 1.6 Wire the real audio chain into simulator-relay mode:
+      `startSimulatorRelayPipeline()` (`sonar/Core/Coordinator/
+      SessionCoordinator.swift:500-559`) currently skips
+      `audioEngine.prepare()`, the mic→Opus send chain and the
+      inbound→jitter→playback receive chain, and only sends a synthetic
+      `"sonar-simulator-relay-frame"` keepalive (lines 549-555) — so the
+      two-simulator relay E2E can never carry real audio. Verified
+      2026-08-10: all 369 relayed frames were the 27-byte keepalive
+      (`evidence/logs/2026-08-10-sim-relay-wiretap.json`). Once wired,
+      `scripts/e2e/run-audio-proof.sh` must pass (tone injection +
+      Opus decode + receiver playback log).
+
 ## 2. Unit tests
 
-- [ ] 2.1 Add/extend a test asserting `Info.plist` `NSBonjourServices`
+- [x] 2.1 Add/extend a test asserting `Info.plist` `NSBonjourServices`
       contains both `_sonar-mpc._tcp` and `_sonar-mpc._udp` and matches
       `NearTransport`'s configured service type.
-- [ ] 2.2 Add/extend `AudioSessionPolicy` tests asserting
+- [x] 2.2 Add/extend `AudioSessionPolicy` tests asserting
       `categoryOptions` includes `.defaultToSpeaker`.
-- [ ] 2.3 Add/extend `OpusCoder` tests covering encode/decode round-trip
+- [x] 2.3 Add/extend `OpusCoder` tests covering encode/decode round-trip
       using a buffer built with the same format the mic tap installs
       (`AudioEngine.prepare()`), not just the coder's idealized format.
-- [ ] 2.4 Run the full `sonarTests` suite and confirm all tests (existing +
+- [x] 2.4 Run the full `sonarTests` suite and confirm all tests (existing +
       new) pass.
 
 ## 3. Build + install on both devices
