@@ -1,0 +1,25 @@
+== Sonar Device-Install Preflight (2026-08-10 00:29) ==
+
+-- 1. Xcode-Account (Apple-ID) --
+🔴 Kein Apple-Account in Xcode gefunden (IDEProvisioningTeams leer).
+   → Operator: Xcode öffnen → Menü 'Xcode' → 'Settings…' → Tab 'Accounts'
+     → '+' unten links → 'Apple Account' → Apple-ID + Passwort eingeben.
+     (Für Felix' Gerät zusätzlich Felix' Apple-ID auf gleiche Weise hinzufügen.)
+
+-- 2. Signing-Identity im Keychain --
+✅ Apple-Development-Identity vorhanden:
+       1) F2D0014E9A80AE8BB033389D6E7C304B5558855E "Apple Development: martin.hausleitner@icloud.com (H2768P4284)"
+
+-- 3. Geräte (devicectl) --
+✅ iPhone 17 Pro (7C62FC1E-FD1A-5EF1-B385-6FB189B54AD9) available (paired), Transport: localNetwork.
+🟠 Felix' iPhone (F2BB4110-7FDA-5381-868C-09032A89A4D6) NICHT sichtbar (bekannter Stand, s. evidence/ios-install/felix-blocker.md).
+   → Operator: Felix' iPhone per USB anstecken (ggf. iPhone 8 abstecken),
+     entsperren, 'Vertrauen' tippen, Entwicklermodus aktivieren
+     (Einstellungen → Datenschutz & Sicherheit → Entwicklermodus → an → Neustart).
+
+-- 4. iOS-Plattform / SDK --
+✅ iphoneos-SDK installiert: iOS 26.5 -sdk iphoneos26.5
+
+== 🔴 PREFLIGHT NICHT BESTANDEN — Install aktuell NICHT möglich. ==
+   Erst die oben genannten Operator-Schritte ausführen, dann erneut:
+   scripts/ios-install/preflight.sh
