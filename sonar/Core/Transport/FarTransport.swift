@@ -10,6 +10,16 @@ import UIKit
 /// entirely under our control and matching the NearTransport wire format.
 @MainActor
 final class FarTransport: Transport, BondedPath {
+    struct Configuration: Equatable {
+        let liveKitURL: String
+        let tokenServerURL: String
+        let roomName: String
+
+        var isStartable: Bool {
+            !liveKitURL.isEmpty && !tokenServerURL.isEmpty && !roomName.isEmpty
+        }
+    }
+
     let kind: TransportKind = .far
     let id: MultipathBonder.PathID = .mpquic
     var estimatedCostPerByte: Double { 1.0 }
@@ -28,6 +38,18 @@ final class FarTransport: Transport, BondedPath {
     private var lkServerURL: String = ""
     private var tokenProvider: RoomTokenProviding?
     private var roomName: String = "sonar-main"
+
+    func configure(_ configuration: Configuration) {
+        guard configuration.isStartable else {
+            lkServerURL = ""
+            tokenProvider = nil
+            roomName = configuration.roomName
+            return
+        }
+        lkServerURL = configuration.liveKitURL
+        tokenProvider = SonarTokenProvider(serverURL: configuration.tokenServerURL)
+        roomName = configuration.roomName
+    }
 
     func configure(
         serverURL: String,

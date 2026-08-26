@@ -2,8 +2,10 @@ import Combine
 import Foundation
 import Network
 
-/// Cellular transport via MPQUIC / Multipath TCP on Network.framework. §2.2 Pfad 3.
-/// Uses NWConnection with .multipath service type for iOS 17+ MPQUIC support (RFC 9440).
+/// Experimental raw QUIC path.
+/// Not wired into SessionCoordinator. Production internet transport is FarTransport
+/// via LiveKit data channel because it provides room membership, NAT traversal,
+/// and a server-side token flow.
 final class MPQUICTransport: BondedPath {
     let id: MultipathBonder.PathID = .mpquic
 

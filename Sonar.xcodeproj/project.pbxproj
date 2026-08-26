@@ -13,6 +13,7 @@
 		056065961D1B90A8A3997101 /* SonarLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E486678599970E2EF1039A /* SonarLiveActivity.swift */; };
 		09DCB9B813C993A95A299764 /* TransportMultiplexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B4F91834DE15ADA7077AA7 /* TransportMultiplexer.swift */; };
 		0B3AFEFA4BCD5FADC727A9E9 /* AppStateConnectionTypeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20EE50C160AE1D3FA6290EF /* AppStateConnectionTypeTests.swift */; };
+		0C6F1234B93F4F2B8C69D111 /* BluetoothMeshTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E8C1AAB93F4F2B8C69D111 /* BluetoothMeshTransportTests.swift */; };
 		0B8C10B868073FB91DEBE9EB /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C353C77E5334CCDD06BD3E /* ProfileManager.swift */; };
 		0BC37D014FB6AE6E8AF86015 /* ConnectionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6761FAB5F4F570C10E4DA2 /* ConnectionGuideView.swift */; };
 		10438DF75F477ADA36D13187 /* SonarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97EA532D84F4045327993287 /* SonarUITests.swift */; };
@@ -230,6 +231,7 @@
 		AE221BB1FB7391C8745FDB3E /* FrameDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDeduplicator.swift; sourceTree = "<group>"; };
 		AFF7F2B267C3BFDC0833ECEC /* MultipathBonderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipathBonderTests.swift; sourceTree = "<group>"; };
 		B815576B42E78AB3812E5917 /* PairingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingService.swift; sourceTree = "<group>"; };
+		B1E8C1AAB93F4F2B8C69D111 /* BluetoothMeshTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothMeshTransportTests.swift; sourceTree = "<group>"; };
 		B83CADCFFE5DBA523547DF46 /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
 		B97A2A95D4BE19F68D6DC7D1 /* SimulatorRelayTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorRelayTransport.swift; sourceTree = "<group>"; };
 		BA71890A5E11D3D250947842 /* BluetoothMeshTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothMeshTransport.swift; sourceTree = "<group>"; };
@@ -503,6 +505,7 @@
 				441CE153FE6D034F426564AB /* AppStateTests.swift */,
 				531E5EBE78DB82A92DDDD0E5 /* AudioFrameTests.swift */,
 				F7E11EFEFCC15B5595CB104B /* BatteryManagerTests.swift */,
+				B1E8C1AAB93F4F2B8C69D111 /* BluetoothMeshTransportTests.swift */,
 				51E6C5A791CE84A442548816 /* DeviceCapabilitiesTests.swift */,
 				39EEA5A644EF1884CDF4FF67 /* DistancePublisherTests.swift */,
 				F1ECD22A35A027429EE2D4D7 /* DuplicateVoiceSuppressorMathTests.swift */,
@@ -721,6 +724,7 @@
 				DAF45BA53AF5D9656E448D76 /* AppStateTests.swift in Sources */,
 				A0139A132A1123A3C481C776 /* AudioFrameTests.swift in Sources */,
 				670045A35E369058ED49E9F1 /* BatteryManagerTests.swift in Sources */,
+				0C6F1234B93F4F2B8C69D111 /* BluetoothMeshTransportTests.swift in Sources */,
 				00E10B7A796B02458F8EF813 /* DeviceCapabilitiesTests.swift in Sources */,
 				FA9B1B60F0E4853952089034 /* DistancePublisherTests.swift in Sources */,
 				C48607665FDFCD350287FCC5 /* DuplicateVoiceSuppressorMathTests.swift in Sources */,

@@ -68,6 +68,7 @@ class RelayState:
                 "serverSeq": self.server_seq,
                 "devices": list(self.devices.values()),
                 "frameCount": len(self.frames),
+                "frames": self.frames[-50:],
                 "eventCount": len(self.events),
                 "events": self.events[-50:],
             }

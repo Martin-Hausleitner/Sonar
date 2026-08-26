@@ -61,11 +61,9 @@ final class AppState: ObservableObject {
     // Connection type shown in status
     @Published var connectionType: ConnectionType = .none
 
-    // QR-code pairing — populated by `PairingView`'s scan tab. SessionCoordinator
-    // (or a future PairingService) can react to this to attempt a connection
-    // using the token's `host`/`tsIP`/`ble` hints. For MVP the UI layer also
-    // mirrors `name`/`id` into `peerName`/`peerID` and flips `peerOnline = true`
-    // so the existing connection chrome shows the pairing.
+    // QR-code pairing intent from `PairingView`'s scan tab. `PairingService`
+    // records the target name/id and routes token hints to transports; real
+    // online state stays behind active transport paths.
     @Published var pendingPairing: PairingToken? = nil
 
     enum ConnectionType {
@@ -107,6 +105,7 @@ final class AppState: ObservableObject {
 
         guard !paths.isEmpty else {
             peerOnline = false
+            peerLastSeen = nil
             connectionType = .none
             return
         }

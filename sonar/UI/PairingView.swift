@@ -215,10 +215,6 @@ struct PairingView: View {
 
     private func applyPairing(_ token: PairingToken) {
         appState.pendingPairing = token
-        appState.peerID         = token.id
-        appState.peerName       = token.name
-        appState.peerLastSeen   = Date()
-        appState.peerOnline     = true
     }
 }
 

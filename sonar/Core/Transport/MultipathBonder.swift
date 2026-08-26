@@ -27,7 +27,7 @@ final class MultipathBonder: ObservableObject {
     enum PathID: String, Hashable, Sendable, CaseIterable {
         case multipeer   // WLAN / Bonjour AWDL
         case bluetooth   // CoreBluetooth GATT Mesh
-        case mpquic      // Cellular via MPQUIC
+        case mpquic      // Internet path ID: LiveKit FarTransport in production
         case tailscale   // Optional WireGuard P2P
         case simulatorRelay // Local Mac relay for two-simulator E2E tests
     }

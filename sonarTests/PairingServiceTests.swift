@@ -40,7 +40,7 @@ final class PairingServiceTests: XCTestCase {
 
     // MARK: - Fresh, valid token
 
-    func testFreshTokenSetsPeerOnlineAndName() {
+    func testFreshTokenDoesNotMarkPeerOnlineBeforeTransportConnects() {
         let appState = AppState()
         let service = makeService()
         service.bind(appState: appState)
@@ -52,11 +52,10 @@ final class PairingServiceTests: XCTestCase {
         appState.pendingPairing = token
         drainMain()
 
-        XCTAssertTrue(appState.peerOnline)
+        XCTAssertFalse(appState.peerOnline)
         XCTAssertEqual(appState.peerName, "Alex iPhone")
         XCTAssertEqual(appState.peerID, "peer-A")
-        XCTAssertNotNil(appState.peerLastSeen)
-        XCTAssertEqual(appState.peerLastSeen?.timeIntervalSince1970, now.timeIntervalSince1970)
+        XCTAssertNil(appState.peerLastSeen)
     }
 
     // MARK: - Expired token (>5 min)
@@ -77,6 +76,26 @@ final class PairingServiceTests: XCTestCase {
         XCTAssertNil(appState.pendingPairing, "service should clear an expired token")
     }
 
+    func testExpiredTokenClearsStalePeerUI() {
+        let appState = AppState()
+        let service = makeService()
+        service.bind(appState: appState)
+
+        appState.peerOnline = true
+        appState.peerName = "Stale Peer"
+        appState.peerID = "stale-id"
+        appState.peerLastSeen = now
+
+        appState.pendingPairing = makeToken(ageSeconds: 6 * 60)
+        drainMain()
+
+        XCTAssertFalse(appState.peerOnline)
+        XCTAssertNil(appState.peerName)
+        XCTAssertNil(appState.peerID)
+        XCTAssertNil(appState.peerLastSeen)
+        XCTAssertNil(appState.pendingPairing)
+    }
+
     func testTokenAtTTLBoundaryIsAccepted() {
         let appState = AppState()
         let service = makeService()
@@ -87,7 +106,7 @@ final class PairingServiceTests: XCTestCase {
         appState.pendingPairing = onTheDot
         drainMain()
 
-        XCTAssertTrue(appState.peerOnline)
+        XCTAssertFalse(appState.peerOnline)
     }
 
     // MARK: - Nil pendingPairing must not crash
@@ -106,13 +125,13 @@ final class PairingServiceTests: XCTestCase {
         // After a valid token, clearing back to nil also must not crash.
         appState.pendingPairing = makeToken(ageSeconds: 1)
         drainMain()
-        XCTAssertTrue(appState.peerOnline)
+        XCTAssertFalse(appState.peerOnline)
 
         appState.pendingPairing = nil
         drainMain()
         // peerOnline stays true — disconnect is the transport layer's job, not
         // the pairing service's. We only verify "no crash".
-        XCTAssertTrue(appState.peerOnline)
+        XCTAssertFalse(appState.peerOnline)
     }
 
     // MARK: - Bonjour hint notification

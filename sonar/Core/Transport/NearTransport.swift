@@ -74,7 +74,8 @@ final class NearTransport: NSObject, Transport, BondedPath {
         let peerID: MCPeerID
         let discoveryInfo: [String: String]?
     }
-    private var discoveredPeers: [String: DiscoveredPeer] = [:]
+    private var discoveredPeers: [MCPeerID: DiscoveredPeer] = [:]
+    private var invitedPeerIDs = Set<MCPeerID>()
 
     private lazy var session: MCSession = {
         MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
@@ -120,6 +121,7 @@ final class NearTransport: NSObject, Transport, BondedPath {
         browser.stopBrowsingForPeers()
         session.disconnect()
         discoveredPeers.removeAll()
+        invitedPeerIDs.removeAll()
         connectedSubject.send(false)
     }
 
@@ -152,6 +154,15 @@ final class NearTransport: NSObject, Transport, BondedPath {
         var msg = Data([Msg.niToken.rawValue])
         msg.append(tokenData)
         try? session.send(msg, toPeers: peers, with: .reliable)
+    }
+
+    static func shouldAcceptInvitation(
+        currentPairingHint: PairingHint?,
+        displayName: String,
+        discoveryInfo: [String: String]?
+    ) -> Bool {
+        guard let currentPairingHint else { return true }
+        return currentPairingHint.matches(displayName: displayName, discoveryInfo: discoveryInfo)
     }
 }
 
@@ -194,7 +205,13 @@ extension NearTransport: MCSessionDelegate {
 
 extension NearTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        invitationHandler(true, session)
+        let discoveryInfo = discoveredPeers[peerID]?.discoveryInfo
+        let accept = Self.shouldAcceptInvitation(
+            currentPairingHint: currentPairingHint,
+            displayName: peerID.displayName,
+            discoveryInfo: discoveryInfo
+        )
+        invitationHandler(accept, accept ? session : nil)
     }
 }
 
@@ -202,11 +219,11 @@ extension NearTransport: MCNearbyServiceAdvertiserDelegate {
 
 extension NearTransport: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        discoveredPeers[peerID.displayName] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
+        discoveredPeers[peerID] = DiscoveredPeer(peerID: peerID, discoveryInfo: info)
         inviteIfAllowed(peerID, discoveryInfo: info)
     }
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        discoveredPeers.removeValue(forKey: peerID.displayName)
+        discoveredPeers.removeValue(forKey: peerID)
     }
 
     private func inviteIfAllowed(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
@@ -214,6 +231,8 @@ extension NearTransport: MCNearbyServiceBrowserDelegate {
            !hint.matches(displayName: peerID.displayName, discoveryInfo: discoveryInfo) {
             return
         }
+        guard !invitedPeerIDs.contains(peerID) else { return }
+        invitedPeerIDs.insert(peerID)
         browser.invitePeer(peerID, to: session, withContext: nil, timeout: 10)
     }
 }

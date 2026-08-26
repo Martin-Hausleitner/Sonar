@@ -182,4 +182,30 @@ final class AppStateConnectionTypeTests: XCTestCase {
             XCTFail("tailscale path should surface as Tailscale, got \(state.connectionType)")
         }
     }
+
+    @MainActor
+    func testNoActivePathsClearsConnectionButKeepsPairingIntentName() {
+        let state = AppState()
+        state.peerName = "Alex iPhone"
+        state.peerID = "peer-A"
+        state.peerOnline = true
+        state.peerLastSeen = Date(timeIntervalSince1970: 1_700_000_000)
+
+        state.applyActiveTransportPaths([])
+
+        XCTAssertFalse(state.peerOnline)
+        XCTAssertEqual(state.connectionType, .none)
+        XCTAssertNil(state.peerLastSeen)
+        XCTAssertEqual(state.peerName, "Alex iPhone")
+        XCTAssertEqual(state.peerID, "peer-A")
+    }
+
+    @MainActor
+    func testActivePathPriorityPrefersLocalOverInternet() {
+        let state = AppState()
+        state.applyActiveTransportPaths([.mpquic, .tailscale, .multipeer])
+
+        XCTAssertTrue(state.peerOnline)
+        XCTAssertEqual(state.connectionType, .awdl)
+    }
 }

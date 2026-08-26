@@ -2,6 +2,23 @@ import AVFoundation
 import XCTest
 @testable import Sonar
 
+@MainActor
+final class FarTransportConfigurationTests: XCTestCase {
+    func testMissingConfigurationIsNotStartable() {
+        let config = FarTransport.Configuration(liveKitURL: "", tokenServerURL: "", roomName: "sonar-main")
+        XCTAssertFalse(config.isStartable)
+    }
+
+    func testCompleteConfigurationIsStartable() {
+        let config = FarTransport.Configuration(
+            liveKitURL: "wss://livekit.example.test",
+            tokenServerURL: "https://token.example.test",
+            roomName: "room-a"
+        )
+        XCTAssertTrue(config.isStartable)
+    }
+}
+
 // MARK: - RoomTokenProvider
 
 final class SonarTokenProviderTests: XCTestCase {

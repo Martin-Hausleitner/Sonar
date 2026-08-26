@@ -180,7 +180,12 @@ final class SessionCoordinator: ObservableObject {
         bonder.addPath(near)
         bonder.addPath(bluetooth)
         bonder.addPath(tailscalePath)
-        bonder.addPath(far)
+        let farConfig = farConfiguration()
+        far.configure(farConfig)
+        if farConfig.isStartable {
+            Task { try? await far.start() }
+            bonder.addPath(far)
+        }
 
         // Tailscale presence is advertised in the QR token. The UI only flips
         // to "Tailscale" after the TCP path itself is actually connected.
@@ -421,6 +426,24 @@ final class SessionCoordinator: ObservableObject {
             if case .near = phase { phase = .far }
             if case .near = appState?.phase ?? .idle { appState?.phase = .far }
         }
+    }
+
+    private func farConfiguration() -> FarTransport.Configuration {
+        let env = ProcessInfo.processInfo.environment
+        let liveKitURL = env["SONAR_LIVEKIT_URL"]
+            ?? UserDefaults.standard.string(forKey: "sonar.livekit.url")
+            ?? ""
+        let tokenServerURL = env["SONAR_TOKEN_SERVER_URL"]
+            ?? UserDefaults.standard.string(forKey: "sonar.tokenServer.url")
+            ?? ""
+        let roomName = env["SONAR_LIVEKIT_ROOM"]
+            ?? UserDefaults.standard.string(forKey: "sonar.livekit.room")
+            ?? "sonar-main"
+        return FarTransport.Configuration(
+            liveKitURL: liveKitURL,
+            tokenServerURL: tokenServerURL,
+            roomName: roomName
+        )
     }
 
     private var activeProfile: SessionProfile? {

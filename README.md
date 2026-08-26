@@ -46,8 +46,7 @@ Sonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:
 | MultipeerConnectivity / AWDL | Lokale Direktverbindung (wie AirDrop) | ~30 m |
 | CoreBluetooth GATT | Bluetooth-Fallback | ~10 m |
 | NearbyInteraction (UWB) | Zentimetergenaue Entfernung + Richtung | ~10 m |
-| Network.framework QUIC | Internet-Pfad (Multi-Path) | global |
-| LiveKit WebRTC | Cloud Audio Relay | global |
+| LiveKit WebRTC | Internet-Pfad via `FarTransport` data channel | global |
 | SFSpeechRecognizer | Live-Transkription, on-device | lokal |
 | AVAudioEngine + VoiceProcessing | Spatial Mixer, AEC, Rauschunterdrückung | lokal |
 | Opus | Audio-Codec (32 kBit/s, ±20 ms Frames) | — |
@@ -77,7 +76,7 @@ Sonar kombiniert dafür mehrere Apple-Technologien zu einer Einheit:
   │          MultipathBonder                                        │
   │        ┌──────────────────────────────────────┐                │
   │        │  NearTransport    │  FarTransport    │                │
-  │        │  (MPC / AWDL)     │  (QUIC + LiveKit)│                │
+  │        │  (MPC / AWDL)     │  (LiveKit data)  │                │
   │        └──────────────────────────────────────┘                │
   │        ┌──────────────────────────────────────┐                │
   │        │  BluetoothMeshTransport (GATT BLE)   │                │
@@ -156,7 +155,7 @@ Sonar baut keinen einzelnen Kanal auf, sondern **vier parallele Pfade**, die nac
 | 1 | **AWDL** (MPC) | ~3 ms | ~30 m | WLAN an, gleiches AWDL-Mesh |
 | 2 | **BLE GATT** | ~30 ms | ~10 m | Bluetooth an |
 | 3 | **Tailscale** | ~50 ms | global | beide im selben Tailnet |
-| 4 | **MPQUIC** + LiveKit | ~80 ms | global | Internet erreichbar |
+| 4 | **Internet** (LiveKit) | ~80 ms | global | `SONAR_LIVEKIT_URL` + `SONAR_TOKEN_SERVER_URL` |
 
 ### Transport-Schichten
 
@@ -168,7 +167,7 @@ flowchart LR
     Bonder -.->|"~3 ms"| Near["NearTransport<br/><i>MPC / AWDL</i>"]
     Bonder -.->|"~30 ms"| BLE["BluetoothMesh<br/><i>GATT 512 B Notify</i>"]
     Bonder -.->|"~50 ms"| TS["FarTransport<br/><i>Tailscale 100.x</i>"]
-    Bonder -.->|"~80 ms"| Far["FarTransport<br/><i>MPQUIC + LiveKit</i>"]
+    Bonder -.->|"~80 ms"| Far["FarTransport<br/><i>LiveKit data channel</i>"]
 
     Near & BLE & TS & Far --> Peer(("Peer"))
 
@@ -205,7 +204,7 @@ sequenceDiagram
     rect rgb(45,30,80)
     Note over A,B: ② Pairing-Filter — optional, via QR
     A->>A: PairingService.handle(token)<br/>TTL ≤ 5 min · applyPairingToken()
-    A->>A: peerOnline = true (optimistic UI)
+    A->>A: pairing intent recorded<br/>peerOnline waits for transport
     A->>B: invitePeer(...)  ← nur wenn hint matches
     B->>B: didReceiveInvitationFromPeer<br/>invitationHandler(true, session)
     end
@@ -254,7 +253,7 @@ stateDiagram-v2
     end note
 
     note right of far
-      Pfade aktiv: AWDL · BLE · TS · MPQUIC
+      Pfade aktiv: AWDL · BLE · Tailscale · Internet
       MultipathBonder verteilt Frames
     end note
 
@@ -290,7 +289,7 @@ flowchart TD
     Targeted --> MCS["MCSession connect<br/>(TLS)"]
     MCS --> NI["NIDiscoveryToken<br/>austauschen (0x02)"]
     NI --> Audio["Audio-Pfad offen<br/>0x01 frames, .unreliable"]
-    Audio --> More["MultipathBonder nimmt<br/>BLE / Tailscale / MPQUIC<br/>als weitere Pfade dazu"]
+    Audio --> More["MultipathBonder nimmt<br/>BLE / Tailscale / Internet<br/>als weitere Pfade dazu"]
 
     classDef ok fill:#14532d,stroke:#22c55e,color:#fff
     classDef bad fill:#7f1d1d,stroke:#ef4444,color:#fff
@@ -372,6 +371,7 @@ flowchart LR
 Tiefere Details zu Stolperfallen, Diagnose-Checkliste und Wire-Format-Edge-Cases:
 
 - [`docs/connection-guide.md`](docs/connection-guide.md) — Pfad-Prioritäten, Bonjour/NIToken-Austausch, Tailscale-Walkthrough, WLAN-Hotspot, reines BLE, Diagnose-Checkliste.
+- [`docs/hardware-connection-verification.md`](docs/hardware-connection-verification.md) — physische iPhone-Checkliste für AWDL, QR-Targeting, BLE, Tailscale und LiveKit.
 - [`docs/pairing.md`](docs/pairing.md) — manuelles QR-Pairing über die TopBar, `PairingToken`-Schema und Sicherheits-Implikationen.
 
 ---
@@ -517,7 +517,7 @@ sonar/
 │   │
 │   ├── Transport/
 │   │   ├── NearTransport.swift         MPC / AWDL, NIToken-Exchange
-│   │   ├── FarTransport.swift          MPQUIC + LiveKit WebRTC
+│   │   ├── FarTransport.swift          LiveKit data channel
 │   │   ├── BluetoothMeshTransport.swift GATT BLE, Fallback
 │   │   └── MultipathBonder.swift       Pfad-Aggregation, Dedup
 │   │
@@ -564,8 +564,8 @@ sonar/
 │  AVFoundation    Audio-Engine, VoiceProcessing, SpatialAudio    │
 │  Opus            Sprach-Codec, FEC, 32 kBit/s / 20 ms           │
 │  MultipeerConn.  AWDL-Direktverbindung (wie AirDrop)            │
-│  Network.fw      QUIC Multi-Path Internet-Transport             │
-│  LiveKit         WebRTC Cloud Audio Relay                        │
+│  Network.fw      Experimental raw QUIC code (not default path)  │
+│  LiveKit         WebRTC data-channel Internet path               │
 │  CoreBluetooth   GATT BLE Service (Fallback-Pfad)               │
 │  NearbyInteract. UWB Ranging (U1/U2 Chip, ~5 cm Genauigkeit)   │
 │  SFSpeechRecogn. On-device Transkription                        │
